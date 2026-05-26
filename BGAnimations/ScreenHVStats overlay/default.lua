@@ -124,16 +124,191 @@ overallSubviewTabs = {
 }
 breakdownSubviewTabs = {
 	JudgeBreakdown = 1,
-	SkillPrediction = 2
+	SkillPrediction = 2,
+	PerHandBreakdown = 3
 }
 skillPredictionModes = {
 	Ssr = 1,
 	AaProbability = 2
 }
+perHandModes = {
+	Ratio = 1,
+	Graph = 2
+}
 statsOverlayTab = statsOverlayTabs.Sessions
 overallSubviewTab = overallSubviewTabs.WifeTimeline
 breakdownSubviewTab = breakdownSubviewTabs.JudgeBreakdown
 skillPredictionMode = skillPredictionModes.Ssr
+perHandMode = perHandModes.Ratio
+
+perHandOverallLeftRatio = 50
+perHandOverallRightRatio = 50
+perHandOverallDelta = 0
+perHandValidScoreCount = 0
+perHandMsdPointsForDisplay = {}
+perHandMaxMsd = 1
+perHandMaxDelta = 1
+perHandDeltaCache = {}
+
+function isCurrentKeymodeOdd()
+	local steps = GAMESTATE:GetCurrentSteps()
+	if not steps then return false end
+	local cols = steps:GetNumColumns() or 4
+	return (cols % 2 ~= 0)
+end
+
+function getDeltaScoreForScore(score, steps)
+	if not score or type(score.HasReplayData) ~= "function" then return nil end
+	local hasReplay = false
+	local okHas, errHas = pcall(function() hasReplay = score:HasReplayData() end)
+	if not okHas or not hasReplay then return nil end
+
+	if type(score.GetReplay) ~= "function" then return nil end
+	local replay = score:GetReplay()
+	if not replay then return nil end
+	local okLoad = pcall(function() replay:LoadAllData() end)
+	if not okLoad then return nil end
+
+	local okDvt, dvt = pcall(function() return replay:GetOffsetVector() end)
+	local okCtt, ctt = pcall(function() return replay:GetTrackVector() end)
+	if not okDvt or not okCtt or type(dvt) ~= "table" or type(ctt) ~= "table" then
+		return nil
+	end
+
+	local okTvt, tvt = pcall(function() return replay:GetTapNoteTypeVector() end)
+	local filteredDvt = {}
+	local filteredCtt = {}
+	if okTvt and type(tvt) == "table" and #tvt > 0 then
+		for i = 1, #dvt do
+			local ty = tvt[i]
+			if ty == "TapNoteType_Tap" or ty == "TapNoteType_HoldHead" or ty == "TapNoteType_Lift" then
+				filteredDvt[#filteredDvt + 1] = dvt[i]
+				filteredCtt[#filteredCtt + 1] = ctt[i]
+			end
+		end
+	else
+		filteredDvt = dvt
+		filteredCtt = ctt
+	end
+
+	if #filteredDvt == 0 or #filteredCtt == 0 then return nil end
+
+	local columns = steps and steps:GetNumColumns() or 4
+	local middleColumn = (columns - 1) / 2.0
+
+	local leftPts, rightPts = 0, 0
+	local leftTaps, rightTaps = 0, 0
+
+	for i = 1, math.min(#filteredDvt, #filteredCtt) do
+		local offset = filteredDvt[i]
+		local col = filteredCtt[i]
+		if offset and col then
+			local pts = wife3(math.abs(offset), 1.0)
+			if col < middleColumn then
+				leftPts = leftPts + pts
+				leftTaps = leftTaps + 1
+			elseif col > middleColumn then
+				rightPts = rightPts + pts
+				rightTaps = rightTaps + 1
+			end
+		end
+	end
+
+	local leftScore = leftTaps > 0 and (leftPts / (leftTaps * 2)) or 0
+	local rightScore = rightTaps > 0 and (rightPts / (rightTaps * 2)) or 0
+
+	return (leftScore - rightScore) * 100
+end
+
+function calculatePerHandBreakdownData()
+	perHandOverallLeftRatio = 50
+	perHandOverallRightRatio = 50
+	perHandOverallDelta = 0
+	perHandValidScoreCount = 0
+	perHandMsdPointsForDisplay = {}
+	perHandMaxMsd = 1
+	perHandMaxDelta = 1
+
+	local msdBuckets = {}
+	local totalDelta = 0
+	local validCount = 0
+
+	for _, entry in ipairs(overallLocalScoreEntries or {}) do
+		local score = entry.score
+		local steps = entry.steps
+
+		local scoreKey = score:GetDate() .. "_" .. score:GetChartKey()
+		local delta = perHandDeltaCache[scoreKey]
+		if delta == nil then
+			delta = getDeltaScoreForScore(score, steps)
+			if delta ~= nil then
+				perHandDeltaCache[scoreKey] = delta
+			else
+				perHandDeltaCache[scoreKey] = false
+			end
+		end
+
+		if delta and delta ~= false then
+			totalDelta = totalDelta + delta
+			validCount = validCount + 1
+
+			local rate = score and score.GetMusicRate and score:GetMusicRate() or 1
+			local chartMsd = steps and steps.GetMSD and steps:GetMSD(rate, 1) or 0
+			if chartMsd and chartMsd > 0 then
+				perHandMaxMsd = math.max(perHandMaxMsd, chartMsd)
+				local intervalStart = math.floor(chartMsd / 0.5) * 0.5
+				local bucketKey = string.format("%.1f", intervalStart)
+				if not msdBuckets[bucketKey] then
+					msdBuckets[bucketKey] = {start = intervalStart, total = 0, count = 0}
+				end
+				msdBuckets[bucketKey].total = msdBuckets[bucketKey].total + delta
+				msdBuckets[bucketKey].count = msdBuckets[bucketKey].count + 1
+			end
+		end
+	end
+
+	perHandValidScoreCount = validCount
+	if validCount > 0 then
+		perHandOverallDelta = totalDelta / validCount
+		perHandOverallLeftRatio = 50 + (perHandOverallDelta / 2)
+		perHandOverallRightRatio = 50 - (perHandOverallDelta / 2)
+	end
+
+	for _, bucket in pairs(msdBuckets) do
+		if bucket.count > 0 then
+			local avgDelta = bucket.total / bucket.count
+			perHandMsdPointsForDisplay[#perHandMsdPointsForDisplay + 1] = {
+				x = bucket.start + 0.25,
+				y = avgDelta,
+				count = bucket.count
+			}
+			perHandMaxDelta = math.max(perHandMaxDelta, math.abs(avgDelta))
+		end
+	end
+
+	table.sort(perHandMsdPointsForDisplay, function(a, b)
+		return a.x < b.x
+	end)
+
+	perHandMsdPointsForDisplay = smoothSkillPredictionPoints(perHandMsdPointsForDisplay, 1)
+
+	perHandMaxDelta = 1
+	for _, pt in ipairs(perHandMsdPointsForDisplay) do
+		perHandMaxDelta = math.max(perHandMaxDelta, math.abs(pt.y))
+	end
+
+	perHandMaxMsd = math.max(1, math.ceil(perHandMaxMsd * 2) / 2)
+	perHandMaxDelta = math.max(0.5, math.ceil(perHandMaxDelta * 10) / 10)
+end
+
+function setPerHandMode(mode)
+	if not mode then return end
+	if perHandMode == mode then return end
+	perHandMode = mode
+	MESSAGEMAN:Broadcast("StatsOverlayPerHandModeChanged", {mode = mode})
+	MESSAGEMAN:Broadcast("StatsOverlayDataChanged")
+end
+
 statsOverlayTabTop = 0
 statsOverlayTabHeight = 56
 statsOverlayTabButtons = {
@@ -166,12 +341,204 @@ overallSubviewButtons = {
 }
 breakdownSubviewButtons = {
 	{tab = breakdownSubviewTabs.JudgeBreakdown, left = 16, top = 88, width = 240, label = "Judge Breakdown"},
-	{tab = breakdownSubviewTabs.SkillPrediction, left = 16, top = 116, width = 240, label = "Skill Prediction"}
+	{tab = breakdownSubviewTabs.SkillPrediction, left = 16, top = 116, width = 240, label = "Skill Prediction"},
+	{tab = breakdownSubviewTabs.PerHandBreakdown, left = 16, top = 144, width = 240, label = "Per-hand Breakdown"}
 }
 skillPredictionModeButtons = {
 	{mode = skillPredictionModes.Ssr, left = sessionPanelX + 16, top = sessionPanelY + 46, width = 132, label = "SSR vs MSD"},
 	{mode = skillPredictionModes.AaProbability, left = sessionPanelX + 164, top = sessionPanelY + 46, width = 220, label = "AA Probability vs MSD"}
 }
+perHandModeButtons = {
+	{mode = perHandModes.Ratio, left = sessionPanelX + 16, top = sessionPanelY + 46, width = 180, label = "Hand Distribution"},
+	{mode = perHandModes.Graph, left = sessionPanelX + 208, top = sessionPanelY + 46, width = 180, label = "Distribution by MSD"}
+}
+function getPerHandModeAtPosition(mouseX, mouseY)
+	if not isStatsOverlayBreakdownSubview(breakdownSubviewTabs.PerHandBreakdown) then return nil end
+	for _, button in ipairs(perHandModeButtons) do
+		if pointInRect(mouseX, mouseY, button.left, button.top, button.width, 24) then
+			return button.mode
+		end
+	end
+	return nil
+end
+
+function mapPerHandY(delta)
+	local maxDelta = math.max(0.1, perHandMaxDelta)
+	local clamped = math.max(-maxDelta, math.min(delta or 0, maxDelta))
+	local normalized = (clamped + maxDelta) / (2 * maxDelta)
+	return skillPredictionGraphTop + skillPredictionGraphHeight - (normalized * skillPredictionGraphHeight)
+end
+
+function perHandModeButton(button)
+	return Def.ActorFrame {
+		Name = "PerHandModeButton" .. tostring(button.mode),
+		InitCommand = function(self)
+			self:xy(button.left, button.top):visible(false)
+		end,
+		SetCommand = function(self)
+			local activeTab = isStatsOverlayBreakdownSubview(breakdownSubviewTabs.PerHandBreakdown)
+			local activeMode = perHandMode == button.mode
+			self:visible(activeTab)
+			self:GetChild("BG"):diffusealpha(activeMode and 0.26 or 0.1)
+			self:GetChild("Border"):diffusealpha(activeMode and 0.55 or 0.2)
+			self:GetChild("Label"):diffuse(activeMode and color("#FFFFFF") or color("#B8B8B8"))
+		end,
+		StatsOverlayTabChangedMessageCommand = function(self) self:playcommand("Set") end,
+		StatsOverlayBreakdownSubviewChangedMessageCommand = function(self) self:playcommand("Set") end,
+		StatsOverlayPerHandModeChangedMessageCommand = function(self) self:playcommand("Set") end,
+		Def.Quad {
+			Name = "BG",
+			InitCommand = function(self)
+				self:halign(0):valign(0):zoomto(button.width, 24):diffuse(getMainColor("highlight")):diffusealpha(0.1)
+			end
+		},
+		Def.Quad {
+			Name = "Border",
+			InitCommand = function(self)
+				self:halign(0):valign(0):zoomto(button.width, 1):diffuse(getMainColor("highlight")):diffusealpha(0.2)
+			end
+		},
+		LoadFont("Common Normal") .. {
+			Name = "Label",
+			InitCommand = function(self)
+				self:xy(8, 12):halign(0):valign(0.5):zoom(0.28):settext(button.label)
+			end
+		}
+	}
+end
+
+function perHandCenterLine()
+	return Def.Quad {
+		Name = "PerHandCenterLine",
+		InitCommand = function(self)
+			self:halign(0):valign(0.5):zoomto(skillPredictionGraphWidth, 1.5):diffuse(color("#FFFFFF")):diffusealpha(0.3):visible(false)
+		end,
+		SetCommand = function(self)
+			local active = isStatsOverlayBreakdownSubview(breakdownSubviewTabs.PerHandBreakdown) and perHandMode == perHandModes.Graph
+			self:visible(active)
+			if not active then return end
+			self:xy(skillPredictionGraphLeft, mapPerHandY(0))
+		end,
+		StatsOverlayTabChangedMessageCommand = function(self) self:playcommand("Set") end,
+		StatsOverlayBreakdownSubviewChangedMessageCommand = function(self) self:playcommand("Set") end,
+		StatsOverlayPerHandModeChangedMessageCommand = function(self) self:playcommand("Set") end,
+		StatsOverlayDataChangedMessageCommand = function(self) self:playcommand("Set") end
+	}
+end
+
+function perHandCurveLine()
+	return Def.ActorMultiVertex {
+		Name = "PerHandCurveLine",
+		InitCommand = function(self)
+			self:visible(false)
+		end,
+		SetCommand = function(self)
+			local points = perHandMsdPointsForDisplay
+			local active = isStatsOverlayBreakdownSubview(breakdownSubviewTabs.PerHandBreakdown) and perHandMode == perHandModes.Graph and #points > 1
+			if not active then
+				self:visible(false)
+				self:SetVertices({})
+				self:SetDrawState {Mode = "DrawMode_LineStrip", First = 1, Num = 0}
+				return
+			end
+			local verts = {}
+			for _, point in ipairs(points) do
+				local lineColor = getMainColor("highlight")
+				verts[#verts + 1] = {{mapSkillPredictionX(point.x), mapPerHandY(point.y), 0}, lineColor}
+			end
+			self:visible(true)
+			self:SetVertices(verts)
+			self:SetDrawState {Mode = "DrawMode_LineStrip", First = 1, Num = #verts}
+		end,
+		StatsOverlayTabChangedMessageCommand = function(self) self:playcommand("Set") end,
+		StatsOverlayBreakdownSubviewChangedMessageCommand = function(self) self:playcommand("Set") end,
+		StatsOverlayPerHandModeChangedMessageCommand = function(self) self:playcommand("Set") end,
+		StatsOverlayDataChangedMessageCommand = function(self) self:playcommand("Set") end
+	}
+end
+
+function perHandHorizontalGridline(i)
+	return Def.Quad {
+		Name = "PerHandHorizontalGridline" .. i,
+		InitCommand = function(self)
+			self:halign(0):valign(0.5):zoomto(skillPredictionGraphWidth, 1):diffuse(color("#FFFFFF")):diffusealpha(0.06):visible(false)
+		end,
+		SetCommand = function(self)
+			local active = isStatsOverlayBreakdownSubview(breakdownSubviewTabs.PerHandBreakdown) and perHandMode == perHandModes.Graph
+			self:visible(active)
+			if not active then return end
+			local fraction = (i - 1) / math.max(1, skillPredictionAxisTickCount - 1)
+			self:xy(skillPredictionGraphLeft, skillPredictionGraphTop + (skillPredictionGraphHeight * fraction))
+		end,
+		StatsOverlayTabChangedMessageCommand = function(self) self:playcommand("Set") end,
+		StatsOverlayBreakdownSubviewChangedMessageCommand = function(self) self:playcommand("Set") end,
+		StatsOverlayPerHandModeChangedMessageCommand = function(self) self:playcommand("Set") end
+	}
+end
+
+function perHandVerticalGridline(i)
+	return Def.Quad {
+		Name = "PerHandVerticalGridline" .. i,
+		InitCommand = function(self)
+			self:halign(0.5):valign(0):zoomto(1, skillPredictionGraphHeight):diffuse(color("#FFFFFF")):diffusealpha(0.06):visible(false)
+		end,
+		SetCommand = function(self)
+			local active = isStatsOverlayBreakdownSubview(breakdownSubviewTabs.PerHandBreakdown) and perHandMode == perHandModes.Graph
+			self:visible(active)
+			if not active then return end
+			local fraction = (i - 1) / math.max(1, skillPredictionAxisTickCount - 1)
+			self:xy(skillPredictionGraphLeft + (skillPredictionGraphWidth * fraction), skillPredictionGraphTop)
+		end,
+		StatsOverlayTabChangedMessageCommand = function(self) self:playcommand("Set") end,
+		StatsOverlayBreakdownSubviewChangedMessageCommand = function(self) self:playcommand("Set") end,
+		StatsOverlayPerHandModeChangedMessageCommand = function(self) self:playcommand("Set") end
+	}
+end
+
+function perHandYAxisLabel(i)
+	return LoadFont("Common Normal") .. {
+		Name = "PerHandYAxisLabel" .. i,
+		InitCommand = function(self)
+			self:halign(1):valign(0.5):zoom(0.3):diffuse(color("#9A9A9A")):visible(false)
+		end,
+		SetCommand = function(self)
+			local active = isStatsOverlayBreakdownSubview(breakdownSubviewTabs.PerHandBreakdown) and perHandMode == perHandModes.Graph
+			self:visible(active)
+			if not active then return end
+			local fraction = (i - 1) / math.max(1, skillPredictionAxisTickCount - 1)
+			local yValue = perHandMaxDelta * (1 - 2 * fraction)
+			self:xy(skillPredictionGraphLeft - 8, skillPredictionGraphTop + (skillPredictionGraphHeight * fraction))
+			self:settext(string.format("%+.2f%%", yValue))
+		end,
+		StatsOverlayTabChangedMessageCommand = function(self) self:playcommand("Set") end,
+		StatsOverlayBreakdownSubviewChangedMessageCommand = function(self) self:playcommand("Set") end,
+		StatsOverlayPerHandModeChangedMessageCommand = function(self) self:playcommand("Set") end,
+		StatsOverlayDataChangedMessageCommand = function(self) self:playcommand("Set") end
+	}
+end
+
+function perHandXAxisLabel(i)
+	return LoadFont("Common Normal") .. {
+		Name = "PerHandXAxisLabel" .. i,
+		InitCommand = function(self)
+			self:halign(0.5):valign(0):zoom(0.3):diffuse(color("#9A9A9A")):visible(false)
+		end,
+		SetCommand = function(self)
+			local active = isStatsOverlayBreakdownSubview(breakdownSubviewTabs.PerHandBreakdown) and perHandMode == perHandModes.Graph
+			self:visible(active)
+			if not active then return end
+			local fraction = (i - 1) / math.max(1, skillPredictionAxisTickCount - 1)
+			local xValue = perHandMaxMsd * fraction
+			self:xy(skillPredictionGraphLeft + (skillPredictionGraphWidth * fraction), skillPredictionGraphTop + skillPredictionGraphHeight + 8)
+			self:settext(string.format("%.1f", xValue))
+		end,
+		StatsOverlayTabChangedMessageCommand = function(self) self:playcommand("Set") end,
+		StatsOverlayBreakdownSubviewChangedMessageCommand = function(self) self:playcommand("Set") end,
+		StatsOverlayPerHandModeChangedMessageCommand = function(self) self:playcommand("Set") end,
+		StatsOverlayDataChangedMessageCommand = function(self) self:playcommand("Set") end
+	}
+end
+
 musicWheelDisplayOptions = {
 	{key = "OnlyShowGrades", label = "Only show grades:"},
 	{key = "ShowPBTimestamps", label = "Show PB timestamps:"},
@@ -1152,6 +1519,9 @@ function getOverallBestScores()
 end
 
 function refreshLeaderboardData()
+	if isCurrentKeymodeOdd() and breakdownSubviewTab == breakdownSubviewTabs.PerHandBreakdown then
+		breakdownSubviewTab = breakdownSubviewTabs.JudgeBreakdown
+	end
 	leaderboardEntriesForDisplay = {}
 	leaderboardSelectedScoreCount = 0
 	skillPredictionSsrPointsForDisplay = {}
@@ -1346,6 +1716,7 @@ function refreshLeaderboardData()
 		title = string.format("%s scores", breakdownSelectedJudge),
 		detail = string.format("%d scores - %.2f%% average - showing %d to %d", #selected.scores, selected.total / math.max(1, #selected.scores), firstVisible, lastVisible)
 	}
+	calculatePerHandBreakdownData()
 end
 
 function skillPredictionModeButton(button)
@@ -2143,17 +2514,26 @@ function input(event)
 				elseif isStatsOverlayLeaderboardsTab() then
 					local breakdownSubview = getBreakdownSubviewTabAtPosition(mouseX, mouseY)
 					if breakdownSubview then
-						setBreakdownSubviewTab(breakdownSubview)
+						if breakdownSubview == breakdownSubviewTabs.PerHandBreakdown and isCurrentKeymodeOdd() then
+							-- Disabled for odd keymodes
+						else
+							setBreakdownSubviewTab(breakdownSubview)
+						end
 					else
 						local predictionMode = getSkillPredictionModeAtPosition(mouseX, mouseY)
 						if predictionMode then
 							setSkillPredictionMode(predictionMode)
 						else
-							local selectedJudge = getBreakdownJudgeAtPosition(mouseX, mouseY)
-							if selectedJudge and selectedJudge ~= breakdownSelectedJudge then
-								breakdownSelectedJudge = selectedJudge
-								leaderboardScoreOffset = 0
-								MESSAGEMAN:Broadcast("StatsOverlayDataChanged")
+							local phMode = getPerHandModeAtPosition(mouseX, mouseY)
+							if phMode then
+								setPerHandMode(phMode)
+							else
+								local selectedJudge = getBreakdownJudgeAtPosition(mouseX, mouseY)
+								if selectedJudge and selectedJudge ~= breakdownSelectedJudge then
+									breakdownSelectedJudge = selectedJudge
+									leaderboardScoreOffset = 0
+									MESSAGEMAN:Broadcast("StatsOverlayDataChanged")
+								end
 							end
 						end
 					end
@@ -3512,6 +3892,33 @@ local statsOverlay = Def.ActorFrame {
 			for i = 1, leaderboardRowCount do
 				self:GetChild("LeaderboardRow" .. i):playcommand("Set")
 			end
+
+			rightPaneLeaderboards:GetChild("PerHandHeader"):playcommand("Set")
+			for i = 1, #perHandModeButtons do
+				rightPaneLeaderboards:GetChild("PerHandModeButton" .. tostring(perHandModeButtons[i].mode)):playcommand("Set")
+			end
+			rightPaneLeaderboards:GetChild("PerHandRatioTitle"):playcommand("Set")
+			rightPaneLeaderboards:GetChild("PerHandRatioDesc"):playcommand("Set")
+			rightPaneLeaderboards:GetChild("RatioBarBackdrop"):playcommand("Set")
+			rightPaneLeaderboards:GetChild("LeftHandFill"):playcommand("Set")
+			rightPaneLeaderboards:GetChild("RightHandFill"):playcommand("Set")
+			rightPaneLeaderboards:GetChild("PerfectEvenLine"):playcommand("Set")
+			rightPaneLeaderboards:GetChild("RatioSplitLine"):playcommand("Set")
+			rightPaneLeaderboards:GetChild("LeftHandPercentage"):playcommand("Set")
+			rightPaneLeaderboards:GetChild("RightHandPercentage"):playcommand("Set")
+			rightPaneLeaderboards:GetChild("PerHandDeltaText"):playcommand("Set")
+			rightPaneLeaderboards:GetChild("PerHandGraphBackdrop"):playcommand("Set")
+			rightPaneLeaderboards:GetChild("PerHandYAxisTitle"):playcommand("Set")
+			rightPaneLeaderboards:GetChild("PerHandXAxisTitle"):playcommand("Set")
+
+			for i = 1, skillPredictionAxisTickCount do
+				self:GetChild("PerHandHorizontalGridline" .. i):playcommand("Set")
+				self:GetChild("PerHandVerticalGridline" .. i):playcommand("Set")
+				self:GetChild("PerHandYAxisLabel" .. i):playcommand("Set")
+				self:GetChild("PerHandXAxisLabel" .. i):playcommand("Set")
+			end
+			self:GetChild("PerHandCenterLine"):playcommand("Set")
+			self:GetChild("PerHandCurveLine"):playcommand("Set")
 		end
 		if not isStatsOverlaySessionTab() then
 			self:GetChild("EmptyState"):visible(false)
@@ -3947,6 +4354,227 @@ local statsOverlay = Def.ActorFrame {
 			StatsOverlaySkillPredictionModeChangedMessageCommand = function(self)
 				self:queuecommand("Set")
 			end
+		},
+		LoadFont("Common Large") .. {
+			Name = "PerHandHeader",
+			InitCommand = function(self)
+				self:xy(sessionPanelX + 16, sessionPanelY + 18):halign(0):zoom(0.34)
+			end,
+			SetCommand = function(self)
+				self:settext("Per-hand Breakdown")
+				self:visible(isStatsOverlayBreakdownSubview(breakdownSubviewTabs.PerHandBreakdown))
+			end,
+			StatsOverlayDataChangedMessageCommand = function(self)
+				self:queuecommand("Set")
+			end,
+			StatsOverlayBreakdownSubviewChangedMessageCommand = function(self)
+				self:queuecommand("Set")
+			end
+		},
+		perHandModeButton(perHandModeButtons[1]),
+		perHandModeButton(perHandModeButtons[2]),
+		LoadFont("Common Large") .. {
+			Name = "PerHandRatioTitle",
+			InitCommand = function(self)
+				self:xy(sessionPanelX + 32, sessionPanelY + 120):halign(0):zoom(0.4):diffuse(color("#FFFFFF"))
+			end,
+			SetCommand = function(self)
+				local active = isStatsOverlayBreakdownSubview(breakdownSubviewTabs.PerHandBreakdown) and perHandMode == perHandModes.Ratio
+				self:visible(active)
+				if not active then return end
+				self:settext("Overall Hand Accuracy Ratio")
+			end,
+			StatsOverlayTabChangedMessageCommand = function(self) self:playcommand("Set") end,
+			StatsOverlayBreakdownSubviewChangedMessageCommand = function(self) self:playcommand("Set") end,
+			StatsOverlayPerHandModeChangedMessageCommand = function(self) self:playcommand("Set") end,
+			StatsOverlayDataChangedMessageCommand = function(self) self:playcommand("Set") end
+		},
+		LoadFont("Common Normal") .. {
+			Name = "PerHandRatioDesc",
+			InitCommand = function(self)
+				self:xy(sessionPanelX + 32, sessionPanelY + 144):halign(0):zoom(0.3):diffuse(color("#AFAFAF"))
+			end,
+			SetCommand = function(self)
+				local active = isStatsOverlayBreakdownSubview(breakdownSubviewTabs.PerHandBreakdown) and perHandMode == perHandModes.Ratio
+				self:visible(active)
+				if not active then return end
+				self:settext(string.format("Calculated from the mean of Delta Scores across %d scores with replay data.", perHandValidScoreCount))
+			end,
+			StatsOverlayTabChangedMessageCommand = function(self) self:playcommand("Set") end,
+			StatsOverlayBreakdownSubviewChangedMessageCommand = function(self) self:playcommand("Set") end,
+			StatsOverlayPerHandModeChangedMessageCommand = function(self) self:playcommand("Set") end,
+			StatsOverlayDataChangedMessageCommand = function(self) self:playcommand("Set") end
+		},
+		Def.Quad {
+			Name = "RatioBarBackdrop",
+			InitCommand = function(self)
+				self:xy(sessionPanelX + (sessionPanelWidth / 2), sessionPanelY + 220):zoomto(424, 28):diffuse(color("#222222")):visible(false)
+			end,
+			SetCommand = function(self)
+				self:visible(isStatsOverlayBreakdownSubview(breakdownSubviewTabs.PerHandBreakdown) and perHandMode == perHandModes.Ratio)
+			end,
+			StatsOverlayTabChangedMessageCommand = function(self) self:playcommand("Set") end,
+			StatsOverlayBreakdownSubviewChangedMessageCommand = function(self) self:playcommand("Set") end,
+			StatsOverlayPerHandModeChangedMessageCommand = function(self) self:playcommand("Set") end
+		},
+		Def.Quad {
+			Name = "LeftHandFill",
+			InitCommand = function(self)
+				self:halign(0):valign(0.5):diffuse(color("#FF4B5C")):visible(false)
+			end,
+			SetCommand = function(self)
+				local active = isStatsOverlayBreakdownSubview(breakdownSubviewTabs.PerHandBreakdown) and perHandMode == perHandModes.Ratio
+				self:visible(active)
+				if not active then return end
+				local w = (perHandOverallLeftRatio / 100) * 420
+				self:xy(sessionPanelX + (sessionPanelWidth / 2) - 210, sessionPanelY + 220):zoomto(w, 24)
+			end,
+			StatsOverlayTabChangedMessageCommand = function(self) self:playcommand("Set") end,
+			StatsOverlayBreakdownSubviewChangedMessageCommand = function(self) self:playcommand("Set") end,
+			StatsOverlayPerHandModeChangedMessageCommand = function(self) self:playcommand("Set") end,
+			StatsOverlayDataChangedMessageCommand = function(self) self:playcommand("Set") end
+		},
+		Def.Quad {
+			Name = "RightHandFill",
+			InitCommand = function(self)
+				self:halign(1):valign(0.5):diffuse(color("#4B7CFF")):visible(false)
+			end,
+			SetCommand = function(self)
+				local active = isStatsOverlayBreakdownSubview(breakdownSubviewTabs.PerHandBreakdown) and perHandMode == perHandModes.Ratio
+				self:visible(active)
+				if not active then return end
+				local w = (perHandOverallRightRatio / 100) * 420
+				self:xy(sessionPanelX + (sessionPanelWidth / 2) + 210, sessionPanelY + 220):zoomto(w, 24)
+			end,
+			StatsOverlayTabChangedMessageCommand = function(self) self:playcommand("Set") end,
+			StatsOverlayBreakdownSubviewChangedMessageCommand = function(self) self:playcommand("Set") end,
+			StatsOverlayPerHandModeChangedMessageCommand = function(self) self:playcommand("Set") end,
+			StatsOverlayDataChangedMessageCommand = function(self) self:playcommand("Set") end
+		},
+		Def.Quad {
+			Name = "PerfectEvenLine",
+			InitCommand = function(self)
+				self:xy(sessionPanelX + (sessionPanelWidth / 2), sessionPanelY + 220):zoomto(2, 32):diffuse(color("#FFFFFF")):diffusealpha(0.6):visible(false)
+			end,
+			SetCommand = function(self)
+				self:visible(isStatsOverlayBreakdownSubview(breakdownSubviewTabs.PerHandBreakdown) and perHandMode == perHandModes.Ratio)
+			end,
+			StatsOverlayTabChangedMessageCommand = function(self) self:playcommand("Set") end,
+			StatsOverlayBreakdownSubviewChangedMessageCommand = function(self) self:playcommand("Set") end,
+			StatsOverlayPerHandModeChangedMessageCommand = function(self) self:playcommand("Set") end
+		},
+		Def.Quad {
+			Name = "RatioSplitLine",
+			InitCommand = function(self)
+				self:valign(0.5):zoomto(2, 28):diffuse(color("#FFFF00")):visible(false)
+			end,
+			SetCommand = function(self)
+				local active = isStatsOverlayBreakdownSubview(breakdownSubviewTabs.PerHandBreakdown) and perHandMode == perHandModes.Ratio
+				self:visible(active)
+				if not active then return end
+				local splitX = sessionPanelX + (sessionPanelWidth / 2) - 210 + (perHandOverallLeftRatio / 100) * 420
+				self:xy(splitX, sessionPanelY + 220)
+			end,
+			StatsOverlayTabChangedMessageCommand = function(self) self:playcommand("Set") end,
+			StatsOverlayBreakdownSubviewChangedMessageCommand = function(self) self:playcommand("Set") end,
+			StatsOverlayPerHandModeChangedMessageCommand = function(self) self:playcommand("Set") end,
+			StatsOverlayDataChangedMessageCommand = function(self) self:playcommand("Set") end
+		},
+		LoadFont("Common Large") .. {
+			Name = "LeftHandPercentage",
+			InitCommand = function(self)
+				self:xy(sessionPanelX + (sessionPanelWidth / 2) - 210, sessionPanelY + 188):halign(0):zoom(0.38):diffuse(color("#FF4B5C")):visible(false)
+			end,
+			SetCommand = function(self)
+				local active = isStatsOverlayBreakdownSubview(breakdownSubviewTabs.PerHandBreakdown) and perHandMode == perHandModes.Ratio
+				self:visible(active)
+				if not active then return end
+				self:settextf("Left Hand: %.2f%%", perHandOverallLeftRatio)
+			end,
+			StatsOverlayTabChangedMessageCommand = function(self) self:playcommand("Set") end,
+			StatsOverlayBreakdownSubviewChangedMessageCommand = function(self) self:playcommand("Set") end,
+			StatsOverlayPerHandModeChangedMessageCommand = function(self) self:playcommand("Set") end,
+			StatsOverlayDataChangedMessageCommand = function(self) self:playcommand("Set") end
+		},
+		LoadFont("Common Large") .. {
+			Name = "RightHandPercentage",
+			InitCommand = function(self)
+				self:xy(sessionPanelX + (sessionPanelWidth / 2) + 210, sessionPanelY + 188):halign(1):zoom(0.38):diffuse(color("#4B7CFF")):visible(false)
+			end,
+			SetCommand = function(self)
+				local active = isStatsOverlayBreakdownSubview(breakdownSubviewTabs.PerHandBreakdown) and perHandMode == perHandModes.Ratio
+				self:visible(active)
+				if not active then return end
+				self:settextf("Right Hand: %.2f%%", perHandOverallRightRatio)
+			end,
+			StatsOverlayTabChangedMessageCommand = function(self) self:playcommand("Set") end,
+			StatsOverlayBreakdownSubviewChangedMessageCommand = function(self) self:playcommand("Set") end,
+			StatsOverlayPerHandModeChangedMessageCommand = function(self) self:playcommand("Set") end,
+			StatsOverlayDataChangedMessageCommand = function(self) self:playcommand("Set") end
+		},
+		LoadFont("Common Large") .. {
+			Name = "PerHandDeltaText",
+			InitCommand = function(self)
+				self:xy(sessionPanelX + (sessionPanelWidth / 2), sessionPanelY + 264):halign(0.5):zoom(0.4):visible(false)
+			end,
+			SetCommand = function(self)
+				local active = isStatsOverlayBreakdownSubview(breakdownSubviewTabs.PerHandBreakdown) and perHandMode == perHandModes.Ratio
+				self:visible(active)
+				if not active then return end
+				local direction = perHandOverallDelta > 0 and "Left Hand Dominant" or (perHandOverallDelta < 0 and "Right Hand Dominant" or "Perfectly Balanced")
+				local sign = perHandOverallDelta > 0 and "+" or ""
+				self:settextf("Δ Hand: %s%.4f%% (%s)", sign, perHandOverallDelta, direction)
+				if perHandOverallDelta > 0 then
+					self:diffuse(color("#FF4B5C"))
+				elseif perHandOverallDelta < 0 then
+					self:diffuse(color("#4B7CFF"))
+				else
+					self:diffuse(color("#FFFFFF"))
+				end
+			end,
+			StatsOverlayTabChangedMessageCommand = function(self) self:playcommand("Set") end,
+			StatsOverlayBreakdownSubviewChangedMessageCommand = function(self) self:playcommand("Set") end,
+			StatsOverlayPerHandModeChangedMessageCommand = function(self) self:playcommand("Set") end,
+			StatsOverlayDataChangedMessageCommand = function(self) self:playcommand("Set") end
+		},
+		Def.Quad {
+			Name = "PerHandGraphBackdrop",
+			InitCommand = function(self)
+				self:xy(skillPredictionGraphLeft, skillPredictionGraphTop):halign(0):valign(0):zoomto(skillPredictionGraphWidth, skillPredictionGraphHeight):diffuse(color("#101010")):diffusealpha(0.9):visible(false)
+			end,
+			SetCommand = function(self)
+				self:visible(isStatsOverlayBreakdownSubview(breakdownSubviewTabs.PerHandBreakdown) and perHandMode == perHandModes.Graph)
+			end,
+			StatsOverlayTabChangedMessageCommand = function(self) self:playcommand("Set") end,
+			StatsOverlayBreakdownSubviewChangedMessageCommand = function(self) self:playcommand("Set") end,
+			StatsOverlayPerHandModeChangedMessageCommand = function(self) self:playcommand("Set") end
+		},
+		LoadFont("Common Normal") .. {
+			Name = "PerHandYAxisTitle",
+			InitCommand = function(self)
+				self:xy(skillPredictionGraphLeft - 28, skillPredictionGraphTop - 22):halign(0):zoom(0.32):diffuse(color("#B8B8B8")):visible(false)
+			end,
+			SetCommand = function(self)
+				local active = isStatsOverlayBreakdownSubview(breakdownSubviewTabs.PerHandBreakdown) and perHandMode == perHandModes.Graph
+				self:visible(active)
+				if not active then return end
+				self:settext("Delta score accuracy bias")
+			end,
+			StatsOverlayTabChangedMessageCommand = function(self) self:playcommand("Set") end,
+			StatsOverlayBreakdownSubviewChangedMessageCommand = function(self) self:playcommand("Set") end,
+			StatsOverlayPerHandModeChangedMessageCommand = function(self) self:playcommand("Set") end
+		},
+		LoadFont("Common Normal") .. {
+			Name = "PerHandXAxisTitle",
+			InitCommand = function(self)
+				self:xy(skillPredictionGraphLeft + skillPredictionGraphWidth, skillPredictionGraphTop + skillPredictionGraphHeight + 38):halign(1):zoom(0.32):diffuse(color("#B8B8B8")):settext("Chart MSD"):visible(false)
+			end,
+			SetCommand = function(self)
+				self:visible(isStatsOverlayBreakdownSubview(breakdownSubviewTabs.PerHandBreakdown) and perHandMode == perHandModes.Graph)
+			end,
+			StatsOverlayTabChangedMessageCommand = function(self) self:playcommand("Set") end,
+			StatsOverlayBreakdownSubviewChangedMessageCommand = function(self) self:playcommand("Set") end,
+			StatsOverlayPerHandModeChangedMessageCommand = function(self) self:playcommand("Set") end
 		}
 	},
 	Def.ActorFrame {
@@ -4015,13 +4643,27 @@ local statsOverlay = Def.ActorFrame {
 			self:GetChild("BreakdownSummary"):settext(leaderboardStatus.detail or "")
 			self:GetChild("ProbabilityTitle"):settext("")
 			self:GetChild("ProbabilityDetail"):settext("All values are estimate.")
-			local judgeMode = isStatsOverlayBreakdownSubview(breakdownSubviewTabs.JudgeBreakdown)
-			self:GetChild("JudgeSectionHeader"):visible(judgeMode)
-			self:GetChild("BreakdownSelectedJudge"):visible(judgeMode)
-			self:GetChild("BreakdownSummary"):visible(judgeMode)
-			self:GetChild("PredictionSectionHeader"):visible(not judgeMode)
-			self:GetChild("ProbabilityTitle"):visible(not judgeMode)
-			self:GetChild("ProbabilityDetail"):visible(not judgeMode)
+
+			local isPH = isStatsOverlayBreakdownSubview(breakdownSubviewTabs.PerHandBreakdown)
+			local isPred = isStatsOverlayBreakdownSubview(breakdownSubviewTabs.SkillPrediction)
+			local isJudge = isStatsOverlayBreakdownSubview(breakdownSubviewTabs.JudgeBreakdown)
+
+			self:GetChild("JudgeSectionHeader"):visible(isJudge)
+			self:GetChild("BreakdownSelectedJudge"):visible(isJudge)
+			self:GetChild("BreakdownSummary"):visible(isJudge)
+
+			self:GetChild("PredictionSectionHeader"):visible(isPred)
+			self:GetChild("ProbabilityTitle"):visible(isPred)
+			self:GetChild("ProbabilityDetail"):visible(isPred)
+
+			self:GetChild("PerHandSectionHeader"):visible(isPH)
+			self:GetChild("PerHandLeftRightLabel"):visible(isPH)
+			self:GetChild("PerHandLeftRightSummary"):visible(isPH)
+
+			if isPH then
+				self:GetChild("PerHandLeftRightLabel"):playcommand("Set")
+				self:GetChild("PerHandLeftRightSummary"):playcommand("Set")
+			end
 		end,
 		StatsOverlayTabChangedMessageCommand = function(self)
 			self:visible(isStatsOverlayLeaderboardsTab())
@@ -4038,10 +4680,11 @@ local statsOverlay = Def.ActorFrame {
 		end,
 		breakdownSubviewButton(breakdownSubviewButtons[1]),
 		breakdownSubviewButton(breakdownSubviewButtons[2]),
+		breakdownSubviewButton(breakdownSubviewButtons[3]),
 		LoadFont("Common Large") .. {
 			Name = "JudgeSectionHeader",
 			InitCommand = function(self)
-				self:xy(16, 164):halign(0):zoom(0.34):settext("JUDGE BREAKDOWN"):diffusealpha(0.6)
+				self:xy(16, 192):halign(0):zoom(0.34):settext("JUDGE BREAKDOWN"):diffusealpha(0.6)
 			end,
 			StatsOverlayBreakdownSubviewChangedMessageCommand = function(self)
 				self:visible(isStatsOverlayBreakdownSubview(breakdownSubviewTabs.JudgeBreakdown))
@@ -4050,19 +4693,19 @@ local statsOverlay = Def.ActorFrame {
 		LoadFont("Common Large") .. {
 			Name = "BreakdownSelectedJudge",
 			InitCommand = function(self)
-				self:xy(16, 198):halign(0):zoom(0.42):maxwidth(640)
+				self:xy(16, 226):halign(0):zoom(0.42):maxwidth(640)
 			end
 		},
 		LoadFont("Common Normal") .. {
 			Name = "BreakdownSummary",
 			InitCommand = function(self)
-				self:xy(16, 236):halign(0):zoom(0.29):diffuse(color("#DDDDDD")):maxwidth(900)
+				self:xy(16, 264):halign(0):zoom(0.29):diffuse(color("#DDDDDD")):maxwidth(900)
 			end
 		},
 		LoadFont("Common Large") .. {
 			Name = "PredictionSectionHeader",
 			InitCommand = function(self)
-				self:xy(16, 164):halign(0):zoom(0.34):settext("SKILL PREDICTION"):diffusealpha(0.6)
+				self:xy(16, 192):halign(0):zoom(0.34):settext("SKILL PREDICTION"):diffusealpha(0.6)
 			end,
 			StatsOverlayBreakdownSubviewChangedMessageCommand = function(self)
 				self:visible(isStatsOverlayBreakdownSubview(breakdownSubviewTabs.SkillPrediction))
@@ -4071,14 +4714,55 @@ local statsOverlay = Def.ActorFrame {
 		LoadFont("Common Normal") .. {
 			Name = "ProbabilityTitle",
 			InitCommand = function(self)
-				self:xy(16, 202):halign(0):zoom(0.32):diffuse(getMainColor("highlight")):maxwidth(900)
+				self:xy(16, 226):halign(0):zoom(0.32):diffuse(getMainColor("highlight")):maxwidth(900)
 			end
 		},
 		LoadFont("Common Normal") .. {
 			Name = "ProbabilityDetail",
 			InitCommand = function(self)
-				self:xy(16, 238):halign(0):zoom(0.26):diffuse(color("#AFAFAF")):maxwidth(900)
+				self:xy(16, 264):halign(0):zoom(0.26):diffuse(color("#AFAFAF")):maxwidth(900)
 			end
+		},
+		LoadFont("Common Large") .. {
+			Name = "PerHandSectionHeader",
+			InitCommand = function(self)
+				self:xy(16, 192):halign(0):zoom(0.34):settext("PER-HAND BREAKDOWN"):diffusealpha(0.6)
+			end,
+			StatsOverlayBreakdownSubviewChangedMessageCommand = function(self)
+				self:visible(isStatsOverlayBreakdownSubview(breakdownSubviewTabs.PerHandBreakdown))
+			end
+		},
+		LoadFont("Common Large") .. {
+			Name = "PerHandLeftRightLabel",
+			InitCommand = function(self)
+				self:xy(16, 226):halign(0):zoom(0.42):maxwidth(640)
+			end,
+			SetCommand = function(self)
+				local active = isStatsOverlayBreakdownSubview(breakdownSubviewTabs.PerHandBreakdown)
+				self:visible(active)
+				if not active then return end
+				self:settextf("L: %.2f%%  R: %.2f%%", perHandOverallLeftRatio, perHandOverallRightRatio)
+			end,
+			StatsOverlayTabChangedMessageCommand = function(self) self:playcommand("Set") end,
+			StatsOverlayBreakdownSubviewChangedMessageCommand = function(self) self:playcommand("Set") end,
+			StatsOverlayDataChangedMessageCommand = function(self) self:playcommand("Set") end
+		},
+		LoadFont("Common Normal") .. {
+			Name = "PerHandLeftRightSummary",
+			InitCommand = function(self)
+				self:xy(16, 264):halign(0):zoom(0.29):diffuse(color("#DDDDDD")):maxwidth(900)
+			end,
+			SetCommand = function(self)
+				local active = isStatsOverlayBreakdownSubview(breakdownSubviewTabs.PerHandBreakdown)
+				self:visible(active)
+				if not active then return end
+				local direction = perHandOverallDelta > 0 and "Left Hand Dominant" or (perHandOverallDelta < 0 and "Right Hand Dominant" or "Perfectly Balanced")
+				local sign = perHandOverallDelta > 0 and "+" or ""
+				self:settextf("Δ Hand: %s%.4f%%\n(%s)\nBased on %d scores", sign, perHandOverallDelta, direction, perHandValidScoreCount)
+			end,
+			StatsOverlayTabChangedMessageCommand = function(self) self:playcommand("Set") end,
+			StatsOverlayBreakdownSubviewChangedMessageCommand = function(self) self:playcommand("Set") end,
+			StatsOverlayDataChangedMessageCommand = function(self) self:playcommand("Set") end
 		}
 	},
 	LoadFont("Common Large") .. {
@@ -4291,6 +4975,16 @@ for i = 1, skillPredictionAxisTickCount do
 end
 
 statsOverlay[#statsOverlay + 1] = skillPredictionCurveLine()
+
+for i = 1, skillPredictionAxisTickCount do
+	statsOverlay[#statsOverlay + 1] = perHandHorizontalGridline(i)
+	statsOverlay[#statsOverlay + 1] = perHandVerticalGridline(i)
+	statsOverlay[#statsOverlay + 1] = perHandYAxisLabel(i)
+	statsOverlay[#statsOverlay + 1] = perHandXAxisLabel(i)
+end
+
+statsOverlay[#statsOverlay + 1] = perHandCenterLine()
+statsOverlay[#statsOverlay + 1] = perHandCurveLine()
 
 for i = 1, skillPredictionPointCount do
 	statsOverlay[#statsOverlay + 1] = skillPredictionPoint(i)

@@ -86,6 +86,20 @@ local function applyMinimalisticVisibility(self, baseVisible, enabled, instant)
 	animateGameplayHUDVisibility(self, minimalisticHUDVisible(baseVisible, enabled), instant)
 end
 
+local function getChartLastSecond(song, steps)
+	if steps then
+		local ok, len = pcall(function() return steps:GetLastSecond() end)
+		if ok and len and len > 0 then return len end
+	end
+	if song then
+		local ok, len = pcall(function() return song:GetLastSecond() end)
+		if ok and len and len > 0 then return len end
+		ok, len = pcall(function() return song:MusicLengthSeconds() end)
+		if ok and len and len > 0 then return len end
+	end
+	return 0
+end
+
 local function hideFallbackLifeBar()
 	local top = SCREENMAN and SCREENMAN:GetTopScreen()
 	if not top or not top.GetLifeMeter then return end
@@ -479,7 +493,8 @@ t[#t + 1] = Def.ActorFrame {
 		UpdateBarsCommand = function(self)
 			local song = GAMESTATE:GetCurrentSong()
 			if song then
-				local len = song:MusicLengthSeconds()
+				local steps = GAMESTATE:GetCurrentSteps()
+				local len = getChartLastSecond(song, steps)
 				if len > 0 then
 					local cur = GAMESTATE:GetSongPosition():GetMusicSeconds()
 					local pct = math.max(0, math.min(cur / len, 1))
@@ -498,7 +513,8 @@ t[#t + 1] = Def.ActorFrame {
 		UpdateBarsCommand = function(self)
 			local song = GAMESTATE:GetCurrentSong()
 			if song then
-				local songLen = song:MusicLengthSeconds()
+				local steps = GAMESTATE:GetCurrentSteps()
+				local songLen = getChartLastSecond(song, steps)
 				local curTime = GAMESTATE:GetSongPosition():GetMusicSeconds()
 				local remaining = math.max(0, songLen - curTime) / getCurRateValue()
 				local mins = math.floor(remaining / 60)
