@@ -121,7 +121,7 @@ local main_af = Def.ActorFrame {
 			DLMAN:RefreshUserData()
 		end
 
-		self:sleep(0.01):queuecommand("OpenPendingStatsScore")
+		self:sleep(0.01):queuecommand("OpenPendingStatsScore"):queuecommand("CheckFirstLaunchSSM")
 	end,
 	OpenPendingStatsScoreCommand = function(self)
 		local pending = getenv("HVPendingScoreFromStats")
@@ -133,6 +133,40 @@ local main_af = Def.ActorFrame {
 		elseif STATSMAN:GetCurStageStats() then
 			STATSMAN:GetCurStageStats():GetPlayerStageStats():SetHighScore(pending)
 			SCREENMAN:SetNewScreen("ScreenEvaluation")
+		end
+	end,
+	CheckFirstLaunchSSMCommand = function(self)
+		if PROFILEMAN:GetNumLocalProfiles() == 0 then
+			easyInputStringOKCancel(
+				THEME:GetString("ScreenTitleMenu", "CreateProfilePrompt"), 255, false,
+				function(name)
+					if name ~= "" then
+						local newProfile = PROFILEMAN:CreateDefaultProfile()
+						if newProfile then
+							newProfile:RenameProfile(name)
+							if PROFILEMAN:GetNumLocalProfiles() > 0 then
+								HV.TitleState = HV.TitleState or {}
+								HV.TitleState.selectedProfile = 0
+								ms.ok("Profile '" .. name .. "' created successfully!")
+								MESSAGEMAN:Broadcast("ThemePrefChanged", {Name = "HV_BGAnimIntensity"})
+							else
+								ms.ok("Failed to create profile. Please try again.")
+								self:sleep(0.5):queuecommand("CheckFirstLaunchSSM")
+							end
+						else
+							ms.ok("Failed to create default profile.")
+							self:sleep(0.5):queuecommand("CheckFirstLaunchSSM")
+						end
+					else
+						ms.ok("A local profile is required to save scores.")
+						self:sleep(0.5):queuecommand("CheckFirstLaunchSSM")
+					end
+				end,
+				function()
+					ms.ok("A local profile is required to save scores.")
+					self:sleep(0.5):queuecommand("CheckFirstLaunchSSM")
+				end
+			)
 		end
 	end,
 	EndCommand = function(self)

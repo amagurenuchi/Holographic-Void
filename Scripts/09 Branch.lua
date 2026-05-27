@@ -26,6 +26,9 @@ Branch.TitleMenu = function()
 end
 
 Branch.AfterTitleMenu = function()
+	if PROFILEMAN:GetNumLocalProfiles() == 0 then
+		return "ScreenSelectMusic"
+	end
 	return "ScreenSelectProfile"
 end
 
