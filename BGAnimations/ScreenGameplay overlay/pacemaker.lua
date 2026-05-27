@@ -16,17 +16,17 @@ end
 
 local notes = GAMESTATE:GetCurrentSteps(pn):GetRadarValues(pn):GetValue(0)
 local progress = 0
-local maxcombo = 0
-local percent = 0
+local curPct = 0
+local incPct = 0
 local passflag = 0
-local target1 = 0
-local target2 = tonumber(ThemePrefs.Get("HV_PacemakerTargetGoal")) or 93 -- Default Target Goal (AA)
+local targetWife = 0
+local wifePoints = 0
+local targetPoints = 0
 
 -- HV-themed colors
 local colour = {
 	Current = color("#00CFFF"),
-	Target1 = color("#00E87A"),
-	Target2 = color("#FF6B6B")
+	Target = color("#FF6B6B")
 }
 
 -- Grade table using HV's grade color system
@@ -41,21 +41,15 @@ local percent2grade = {
 	{percent = 99.9935,  grade = "AAAAA", tier = "Tier01"},
 }
 
--- Get best score for the current rate
-local function getBestScoreForCurrentRate()
-	local rtTable = getRateTable()
-	if rtTable == nil then return nil end
-	local curRate = getCurRateDisplayString()
-	if rtTable[curRate] and #rtTable[curRate] > 0 then
-		return rtTable[curRate][1]
+local function getGoalTrackerTargetWife()
+	local mode = ThemePrefs.Get("HV_PacemakerTargetType") or "Target"
+	if mode == "PB" or mode == "PBReplay" then
+		local best = GetDisplayScore()
+		if best then
+			return getJ4NormalizedPercentage(best)
+		end
 	end
-	-- Fallback: try common formats
-	local rv = getCurRateValue()
-	local key = string.format("%.1fx", rv)
-	if rtTable[key] and #rtTable[key] > 0 then
-		return rtTable[key][1]
-	end
-	return nil
+	return tonumber(ThemePrefs.Get("HV_PacemakerTargetGoal")) or 93
 end
 
 -- Abort completely if disabled via ThemePrefs
@@ -64,11 +58,102 @@ if not showPacemakerGraph then
 	return Def.ActorFrame {}
 end
 
-local score = nil
-
 -- Font zoom scaled up for HV visibility
 local fontZoom = (SCREEN_HEIGHT / 1000) * 1.3
 local fontZoomSmall = (SCREEN_HEIGHT / 1200) * 1.3
+local fontZoomBigNum = fontZoomSmall * 1.35
+local fontZoomSmallNum = fontZoomSmall * 0.95
+
+local function splitFloatText(v)
+	if v == nil then v = 0 end
+	local s = string.format("%.2f", v)
+	local whole, frac = s:match("^(%-?%d+)%.(%d+)$")
+	if not whole then
+		return s, ""
+	end
+	return whole, "." .. frac
+end
+
+local function updateSplitNumber(frame, value)
+	local whole, frac = splitFloatText(value)
+	local wholeActor = frame:GetChild("Whole")
+	local fracActor = frame:GetChild("Frac")
+	if not wholeActor or not fracActor then return end
+
+	wholeActor:settext(whole)
+	fracActor:settext(frac)
+
+	local fracWidth = 0
+	pcall(function()
+		local zoom = (fracActor.GetZoomX and fracActor:GetZoomX()) or 1
+		fracWidth = (fracActor:GetWidth() or 0) * zoom
+	end)
+	fracActor:xy(0, 0)
+	wholeActor:xy(-fracWidth, 0)
+end
+
+local function safeGetPlayerStageStats()
+	local ss = STATSMAN and STATSMAN:GetCurStageStats()
+	if not ss or not ss.GetPlayerStageStats then return nil end
+	return ss:GetPlayerStageStats(pn)
+end
+
+local function getCurrentWifePoints()
+	local pss = safeGetPlayerStageStats()
+	if pss and type(pss.GetWifePoints) == "function" then
+		local ok, value = pcall(pss.GetWifePoints, pss)
+		value = ok and tonumber(value) or nil
+		if value then return value end
+	end
+	return nil
+end
+
+local function computeCurrentMaxPoints()
+	if notes and notes > 0 then
+		local notesPassed = math.max(0, math.min(progress, notes))
+		return notesPassed * 2
+	end
+	return math.max(1, progress * 2)
+end
+
+local function computeTotalMaxPoints()
+	if notes and notes > 0 then
+		return notes * 2
+	end
+	return math.max(1, progress * 2)
+end
+
+local function recomputeScoresFromMessage(msg)
+	local current = getCurrentWifePoints()
+	if current == nil then
+		-- Fallback: derive from current % and taps passed
+		local maxPts = computeCurrentMaxPoints()
+		current = (tonumber(curPct) or 0) / 100 * maxPts
+	end
+	wifePoints = current
+
+	-- Prefer replay-based target differential when available (PBReplay live target).
+	local diff = nil
+	if msg and msg.WifePBDifferential ~= nil then
+		diff = tonumber(msg.WifePBDifferential)
+	elseif msg and msg.WifeDifferential ~= nil then
+		diff = tonumber(msg.WifeDifferential)
+	end
+	if diff == nil then diff = 0 end
+	targetPoints = current - diff
+
+	-- Current accuracy percent (normalized to passed notes)
+	local curMaxPts = computeCurrentMaxPoints()
+	if curMaxPts > 0 then
+		curPct = math.min((current / curMaxPts) * 100, 100)
+	end
+
+	-- Incremental percent (normalized to full chart points) for "Grade X cleared" thresholds.
+	local totalMaxPts = computeTotalMaxPoints()
+	if totalMaxPts > 0 then
+		incPct = math.min((current / totalMaxPts) * 100, 100)
+	end
+end
 
 local function animatePacemakerVisibility(self, visible)
 	self:stoptweening()
@@ -86,14 +171,21 @@ local t = Def.ActorFrame {
 		self:xy(SCREEN_CENTER_X + ((SCREEN_WIDTH - panelWidth) / 2 * panelPos), SCREEN_CENTER_Y)
 		self:visible(not HV.MinimalisticMode())
 		self:diffusealpha(HV.MinimalisticMode() and 0 or 1)
-		score = getBestScoreForCurrentRate()
-		if score then
-			target1 = score:GetWifeScore() * 100
-		end
-		self:queuecommand("Display")
+		targetWife = getGoalTrackerTargetWife()
+		self:queuecommand("RefreshTarget")
 	end,
 	HV_MinimalisticModeChangedMessageCommand = function(self, params)
 		animatePacemakerVisibility(self, not (params and params.Enabled))
+	end,
+	ThemePrefChangedMessageCommand = function(self, params)
+		if not params or not params.Name then return end
+		if params.Name == "HV_PacemakerTargetType" or params.Name == "HV_PacemakerTargetGoal" then
+			self:queuecommand("RefreshTarget")
+		end
+	end,
+	RefreshTargetCommand = function(self)
+		targetWife = getGoalTrackerTargetWife()
+		self:playcommand("Update")
 	end,
 	JudgmentMessageCommand = function(self, msg)
 		if msg.Judgment == "TapNoteScore_W1" or
@@ -103,11 +195,13 @@ local t = Def.ActorFrame {
 			msg.Judgment == "TapNoteScore_W5" or
 			msg.Judgment == "TapNoteScore_Miss" then
 			progress = progress + 1
-			percent = msg.WifePercent
+			curPct = msg.WifePercent
+			recomputeScoresFromMessage(msg)
 			self:playcommand("Update")
-			if progress / notes * percent >= percent2grade[passflag + 1].percent then
+			local nextGrade = percent2grade[passflag + 1]
+			if nextGrade and incPct >= nextGrade.percent then
 				for j = 1, #percent2grade do
-					if progress / notes * percent >= percent2grade[j].percent then
+					if incPct >= percent2grade[j].percent then
 						passflag = j
 					end
 				end
@@ -117,7 +211,7 @@ local t = Def.ActorFrame {
 	end,
 
 	-- Panel background
-	Def.Quad {
+			Def.Quad {
 		InitCommand = function(self)
 			self:zoomto(panelWidth, SCREEN_HEIGHT)
 			self:diffuse(0.03, 0.03, 0.03, 0.85)
@@ -127,127 +221,67 @@ local t = Def.ActorFrame {
 	-- Current score meter
 	Def.ActorFrame {
 		InitCommand = function(self)
-			self:xy(-0.33 * panelWidth * panelPos, baseline)
+			self:xy(-0.20 * panelWidth * panelPos, baseline)
 		end,
 		Def.Quad {
 			InitCommand = function(self)
 				self:align(0.5, 1)
-				self:zoomto(panelWidth * 0.22, 0)
+				self:zoomto(panelWidth * 0.30, 0)
 				self:diffuse(colour.Current)
 				self:diffusealpha(0.2)
 			end,
-			UpdateCommand = function(self, msg)
-				if percent < 0 then
-					self:zoomtoheight(0)
-				else
-					self:zoomtoheight(meterheight * percent / 100)
-				end
-			end
-		},
+				UpdateCommand = function(self)
+					local maxPts = computeTotalMaxPoints()
+					local p = (maxPts > 0) and (wifePoints / maxPts) or 0
+					self:zoomtoheight(meterheight * math.max(0, p))
+				end,
+			},
 		Def.Quad {
 			InitCommand = function(self)
 				self:align(0.5, 1)
-				self:zoomto(panelWidth * 0.22, 0)
+				self:zoomto(panelWidth * 0.30, 0)
 				self:diffuse(colour.Current)
 				self:diffusealpha(0.75)
 			end,
-			UpdateCommand = function(self, msg)
-				if percent < 0 then
-					self:zoomtoheight(0)
-				else
-					self:zoomtoheight(meterheight * percent / 100 * progress / notes)
-				end
-			end
+				UpdateCommand = function(self)
+					local maxPts = computeTotalMaxPoints()
+					local p = (maxPts > 0) and (wifePoints / maxPts) or 0
+					self:zoomtoheight(meterheight * math.max(0, p))
+				end,
+			},
 		},
-	},
 
-	-- Target 1 (Best Score)
+	-- Target score meter
 	Def.ActorFrame {
 		InitCommand = function(self)
-			self:xy(0, baseline)
+			self:xy(0.20 * panelWidth * panelPos, baseline)
 		end,
 		Def.Quad {
 			InitCommand = function(self)
 				self:align(0.5, 1)
-				self:zoomto(panelWidth * 0.22, 0)
-				self:diffuse(colour.Target1):diffusealpha(0.2)
+				self:zoomto(panelWidth * 0.30, 0)
+				self:diffuse(colour.Target):diffusealpha(0.2)
 			end,
-			DisplayCommand = function(self)
-				self:decelerate(1.5):zoomtoheight(meterheight * target1 / 100)
-			end,
-		},
+				UpdateCommand = function(self)
+					local maxPts = computeTotalMaxPoints()
+					local p = (maxPts > 0) and (targetPoints / maxPts) or 0
+					self:zoomtoheight(meterheight * math.max(0, p))
+				end,
+			},
 		Def.Quad {
 			InitCommand = function(self)
 				self:align(0.5, 1)
-				self:zoomto(panelWidth * 0.22, 0)
-				self:diffuse(colour.Target1)
+				self:zoomto(panelWidth * 0.30, 0)
+				self:diffuse(colour.Target)
 				self:diffusealpha(0.75)
 			end,
-			UpdateCommand = function(self)
-				self:zoomtoheight(meterheight * target1 / 100):croptop(1 - (progress / notes))
-			end,
+				UpdateCommand = function(self)
+					local maxPts = computeTotalMaxPoints()
+					local p = (maxPts > 0) and (targetPoints / maxPts) or 0
+					self:zoomtoheight(meterheight * math.max(0, p))
+				end,
+			},
 		},
-		LoadFont("Common Normal") .. {
-			DisplayCommand = function(self)
-				self:align(0.5, 1.1):zoom(fontZoomSmall):y(-10)
-				self:settext("Best")
-				self:decelerate(1.5):y(-(meterheight - 10) * target1 / 100 - 10)
-				self:sleep(1):linear(0.5):diffusealpha(0)
-			end,
-		},
-		LoadFont("Common Normal") .. {
-			DisplayCommand = function(self)
-				self:align(0.5, -0.1):zoom(fontZoomSmall):y(-10)
-				self:settextf("%2.2f", notes * target1 / 50):maxwidth(panelWidth * 0.22 / 0.35)
-				self:decelerate(1.5):y(-(meterheight - 10) * target1 / 100 - 10)
-				self:sleep(1):linear(0.5):diffusealpha(0)
-			end,
-		}
-	},
-
-	-- Target 2 (Goal)
-	Def.ActorFrame {
-		InitCommand = function(self)
-			self:xy(0.33 * panelWidth * panelPos, baseline)
-		end,
-		Def.Quad {
-			InitCommand = function(self)
-				self:align(0.5, 1)
-				self:zoomto(panelWidth * 0.22, 0)
-				self:diffuse(colour.Target2):diffusealpha(0.2)
-			end,
-			DisplayCommand = function(self)
-				self:decelerate(1.5):zoomtoheight(meterheight * target2 / 100)
-			end,
-		},
-		Def.Quad {
-			InitCommand = function(self)
-				self:align(0.5, 1)
-				self:zoomto(panelWidth * 0.22, 0)
-				self:diffuse(colour.Target2)
-				self:diffusealpha(0.75)
-			end,
-			UpdateCommand = function(self)
-				self:zoomtoheight(meterheight * target2 / 100):croptop(1 - (progress / notes))
-			end,
-		},
-		LoadFont("Common Normal") .. {
-			DisplayCommand = function(self)
-				self:align(0.5, 1.1):zoom(fontZoomSmall):y(-10)
-				self:settext("Goal"):maxwidth(panelWidth * 0.22 / 0.35)
-				self:decelerate(1.5):y(-(meterheight - 10) * target2 / 100 - 10)
-				self:sleep(1):linear(0.5):diffusealpha(0)
-			end,
-		},
-		LoadFont("Common Normal") .. {
-			DisplayCommand = function(self)
-				self:align(0.5, -0.1):zoom(fontZoomSmall):y(-10)
-				self:settextf("%2.2f", notes * target2 / 50):maxwidth(panelWidth * 0.22 / 0.35)
-				self:decelerate(1.5):y(-(meterheight - 10) * target2 / 100 - 10)
-				self:sleep(1):linear(0.5):diffusealpha(0)
-			end,
-		}
-	},
 
 	-- Top text (left side)
 	Def.ActorFrame {
@@ -257,14 +291,14 @@ local t = Def.ActorFrame {
 		LoadFont("Common Normal") .. {
 			InitCommand = function(self)
 				self:align(0, 1):zoom(fontZoomSmall)
-				self:settext("Timing Difficulty:"):y(-30)
+				self:settext("Current"):y(-30)
 				self:diffusealpha(0.5)
 			end,
 		},
 		LoadFont("Common Normal") .. {
 			InitCommand = function(self)
 				self:align(0, 1):zoom(fontZoomSmall)
-				self:settext("Life Difficulty:"):y(-16)
+				self:settext("Target"):y(-16)
 				self:diffusealpha(0.5)
 			end,
 		},
@@ -272,96 +306,65 @@ local t = Def.ActorFrame {
 			InitCommand = function(self)
 				self:align(0, 1):zoom(fontZoomSmall)
 				self:diffuse(colour.Current)
-				self:settext(DLMAN:IsLoggedIn() and DLMAN:GetUsername() or PROFILEMAN:GetPlayerName(pn))
+				self:settext("")
+				self:visible(false)
 			end,
 		},
-		LoadFont("Common Normal") .. {
-			InitCommand = function(self)
-				self:align(0, 1):zoom(fontZoomSmall):y(10)
-				self:settext("PS Best")
-				self:diffuse(colour.Target1)
-			end,
 		},
-		LoadFont("Common Normal") .. {
-			DisplayCommand = function(self)
-				self:align(0, 1):zoom(fontZoomSmall):y(20)
-				self:settext("PS " .. target2 .. "%")
-				self:diffuse(colour.Target2)
-			end,
-		},
-	},
 
 	-- Top text (right side)
 	Def.ActorFrame {
 		InitCommand = function(self)
 			self:xy(panelWidth * 0.48, -SCREEN_HEIGHT * 0.410)
 		end,
-		LoadFont("Common Normal") .. {
+		-- Current Wife number (big whole, smaller decimals)
+		Def.ActorFrame {
+			Name = "CurrentWife",
 			InitCommand = function(self)
-				self:align(1, 1):zoom(fontZoomSmall)
-				self:settext(GetTimingDifficulty()):y(-30)
-				self:diffusealpha(0.5)
+				self:y(-30):playcommand("Update")
 			end,
+			UpdateCommand = function(self)
+				updateSplitNumber(self, wifePoints)
+			end,
+			LoadFont("Common Normal") .. {
+				Name = "Whole",
+				InitCommand = function(self)
+					self:align(1, 1):zoom(fontZoomBigNum):diffuse(colour.Current):diffusealpha(0.85)
+				end,
+			},
+			LoadFont("Common Normal") .. {
+				Name = "Frac",
+				InitCommand = function(self)
+					self:align(1, 1):zoom(fontZoomSmallNum):diffuse(colour.Current):diffusealpha(0.75)
+				end,
+			},
 		},
-		LoadFont("Common Normal") .. {
+		-- Target Wife number (big whole, smaller decimals)
+		Def.ActorFrame {
+			Name = "TargetWife",
 			InitCommand = function(self)
-				self:align(1, 1):zoom(fontZoomSmall)
-				self:settext(GetLifeDifficulty()):y(-16)
-				self:diffusealpha(0.5)
+				self:y(-16):playcommand("Update")
 			end,
-		},
-		LoadFont("Common Normal") .. {
-			InitCommand = function(self)
-				self:align(1, 1):zoom(fontZoomSmall)
-				self:settextf("%2.2f", 0)
+			UpdateCommand = function(self)
+				updateSplitNumber(self, targetPoints)
 			end,
-			UpdateCommand = function(self, msg)
-				self:settextf("%2.2f", progress * percent / 50)
-			end
-		},
-		LoadFont("Common Normal") .. {
-			InitCommand = function(self)
-				self:align(1, 1):zoom(fontZoomSmall):y(10)
-				self:settextf("%2.2f", 0)
-			end,
-			UpdateCommand = function(self, msg)
-				self:settextf("%2.2f", progress * target1 / 50)
-			end
-		},
-		LoadFont("Common Normal") .. {
-			InitCommand = function(self)
-				self:align(1, 1):zoom(fontZoomSmall):y(20)
-				self:settextf("%2.2f", 0)
-			end,
-			UpdateCommand = function(self, msg)
-				self:settextf("%2.2f", progress * target2 / 50)
-			end
+			LoadFont("Common Normal") .. {
+				Name = "Whole",
+				InitCommand = function(self)
+					self:align(1, 1):zoom(fontZoomBigNum):diffuse(colour.Target):diffusealpha(0.85)
+				end,
+			},
+			LoadFont("Common Normal") .. {
+				Name = "Frac",
+				InitCommand = function(self)
+					self:align(1, 1):zoom(fontZoomSmallNum):diffuse(colour.Target):diffusealpha(0.75)
+				end,
+			},
 		},
 	},
 
 	-- Bottom text + Real-Time Grade Display
 	Def.ActorFrame {
-		LoadFont("Common Normal") .. {
-			InitCommand = function(self)
-				self:settext("Current Score")
-				self:diffuse(colour.Current):zoom(fontZoomSmall)
-				self:y(baseline + (SCREEN_HEIGHT * 0.02))
-			end
-		},
-		LoadFont("Common Normal") .. {
-			InitCommand = function(self)
-				self:settext("Best Score")
-				self:diffuse(colour.Target1):zoom(fontZoomSmall)
-				self:y(baseline + (SCREEN_HEIGHT * 0.042))
-			end
-		},
-		LoadFont("Common Normal") .. {
-			InitCommand = function(self)
-				self:settext("Target Score")
-				self:diffuse(colour.Target2):zoom(fontZoomSmall)
-				self:y(baseline + (SCREEN_HEIGHT * 0.064))
-			end
-		},
 		-- Real-time Grade (colored by HV grade colors)
 		LoadFont("Common Normal") .. {
 			Name = "PacemakerGrade",
@@ -381,7 +384,7 @@ local t = Def.ActorFrame {
 			end,
 			UpdateCommand = function(self)
 				-- Also update on every judgment in case the grade mapping changes
-				local wifePct = progress > 0 and (progress / notes * percent) or 0
+				local wifePct = math.max(0, incPct)
 				local gradeStr = "D"
 				for j = 1, #percent2grade do
 					if wifePct >= percent2grade[j].percent then
@@ -392,13 +395,46 @@ local t = Def.ActorFrame {
 				self:diffuse(HVColor.GetGradeColor(gradeStr))
 			end,
 		},
+		Def.ActorFrame {
+			Name = "TargetDiff",
+			InitCommand = function(self)
+				self:y(baseline + (SCREEN_HEIGHT * 0.064))
+				self:x(0.20 * panelWidth * panelPos)
+			end,
+			LoadFont("Common Normal") .. {
+				Name = "Label",
+				InitCommand = function(self)
+					self:align(1, 0):zoom(fontZoomSmall * 1.05)
+					self:settext("Target")
+					self:diffusealpha(0.5)
+					self:x(-6)
+				end
+			},
+			LoadFont("Common Normal") .. {
+				Name = "Value",
+				InitCommand = function(self)
+					self:align(0, 0):zoom(fontZoomSmall * 1.05)
+					self:settext("")
+					self:diffusealpha(0.9)
+				end,
+				UpdateCommand = function(self)
+					local diff = (tonumber(wifePoints) or 0) - (tonumber(targetPoints) or 0)
+					self:settextf("%+.2f", diff)
+					if diff >= 0 then
+						self:diffuse(HVColor.GetGoalTrackerColor("positive"))
+					else
+						self:diffuse(HVColor.GetGoalTrackerColor("negative"))
+					end
+				end,
+			},
+		},
 		Def.Quad {
 			InitCommand = function(self)
 				self:zoomto(panelWidth, 2):y(baseline):align(0.5, 0)
 				self:diffusealpha(0.3)
 			end,
 			UpdateCommand = function(self)
-				if progress / notes * percent > 0 then
+				if incPct > 0 then
 					self:diffuse(color("#00CFFF66"))
 				end
 			end

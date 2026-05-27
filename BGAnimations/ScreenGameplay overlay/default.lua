@@ -772,6 +772,8 @@ t[#t + 1] = Def.ActorFrame {
 				self.currWifePoints = 0
 				if statType == "J4" then
 					self:settext("100.0000%")
+				elseif statType == "MARatio" then
+					self:settext("0.00:1")
 				else
 					self:settext("0.00ms")
 				end
@@ -841,6 +843,16 @@ t[#t + 1] = Def.ActorFrame {
 					local dvt = pss:GetOffsetVector()
 					if dvt and #dvt > 0 then
 						self:settextf("%.2fms", wifeSd(dvt))
+					end
+				elseif self.statType == "MARatio" then
+					local marv = pss:GetTapNoteScores("TapNoteScore_W1") or 0
+					local perf = pss:GetTapNoteScores("TapNoteScore_W2") or 0
+					if perf > 0 then
+						self:settextf("%.2f:1", marv / perf)
+					elseif marv > 0 then
+						self:settext("∞")
+					else
+						self:settext("0.00:1")
 					end
 				else
 					local dvt = pss:GetOffsetVector()
