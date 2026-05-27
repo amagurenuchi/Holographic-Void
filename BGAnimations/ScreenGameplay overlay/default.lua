@@ -770,10 +770,18 @@ t[#t + 1] = Def.ActorFrame {
 				local statType = HV.GetNotefieldStat()
 				self.statType = statType
 				self.currWifePoints = 0
+				self.leftOffsetSumMs = 0
+				self.leftOffsetCount = 0
+				self.rightOffsetSumMs = 0
+				self.rightOffsetCount = 0
+				self.middleOffsetSumMs = 0
+				self.middleOffsetCount = 0
 				if statType == "J4" then
 					self:settext("100.0000%")
 				elseif statType == "MARatio" then
 					self:settext("0.00:1")
+				elseif statType == "DeltaHand" then
+					self:settext("0.0000%")
 				else
 					self:settext("0.00ms")
 				end
@@ -792,6 +800,33 @@ t[#t + 1] = Def.ActorFrame {
 							self.currWifePoints = self.currWifePoints - 7.0
 						elseif msg.TapNoteScore ~= "TapNoteScore_None" then
 							self.currWifePoints = self.currWifePoints + 2.0
+						end
+					end
+				elseif self.statType == "DeltaHand" then
+					if msg.TapNoteOffset and msg.TapNoteScore and msg.TapNoteScore ~= "TapNoteScore_AvoidMine" and msg.TapNoteScore ~= "TapNoteScore_CheckpointHit" then
+						local track = msg.FirstTrack
+						if track == nil then track = msg.Track end
+						if track ~= nil then
+							local judge = (PREFSMAN:GetPreference("SortBySSRNormPercent") and 4) or GetTimingDifficulty()
+							local ts = (ms.JudgeScalers and ms.JudgeScalers[judge]) or 1.0
+							local pts = wife3(math.abs(msg.TapNoteOffset) * 1000, ts, "Wife3")
+
+							local cols = 4
+							local style = GAMESTATE:GetCurrentStyle()
+							if style and style.ColumnsPerPlayer then cols = style:ColumnsPerPlayer() end
+							local middleColumn = (cols - 1) / 2.0
+
+							if track < middleColumn then
+								self.leftOffsetSumMs = self.leftOffsetSumMs + pts
+								self.leftOffsetCount = self.leftOffsetCount + 1
+							elseif track > middleColumn then
+								self.rightOffsetSumMs = self.rightOffsetSumMs + pts
+								self.rightOffsetCount = self.rightOffsetCount + 1
+							else
+								-- Middle column (odd keymodes)
+								self.middleOffsetSumMs = (self.middleOffsetSumMs or 0) + pts
+								self.middleOffsetCount = (self.middleOffsetCount or 0) + 1
+							end
 						end
 					end
 				end
@@ -854,6 +889,40 @@ t[#t + 1] = Def.ActorFrame {
 					else
 						self:settext("0.00:1")
 					end
+				elseif self.statType == "DeltaHand" then
+					local cols = 4
+					local style = GAMESTATE:GetCurrentStyle()
+					if style and style.ColumnsPerPlayer then cols = style:ColumnsPerPlayer() end
+					local oddColumns = (cols % 2) ~= 0
+
+					local leftTaps, rightTaps = self.leftOffsetCount or 0, self.rightOffsetCount or 0
+					local middleTaps = self.middleOffsetCount or 0
+					local leftScore = leftTaps > 0 and (self.leftOffsetSumMs / (leftTaps * 2)) or 0
+					local rightScore = rightTaps > 0 and (self.rightOffsetSumMs / (rightTaps * 2)) or 0
+					local middleScore = middleTaps > 0 and ((self.middleOffsetSumMs or 0) / (middleTaps * 2)) or 0
+
+					if oddColumns then
+						if leftTaps == 0 and rightTaps == 0 and middleTaps == 0 then
+							self:settext("0.0000%")
+						else
+							local scores = {L = leftScore, M = middleScore, R = rightScore}
+							local minScore = math.min(leftScore, middleScore, rightScore)
+							local maxScore = math.max(leftScore, middleScore, rightScore)
+							local delta = (maxScore - minScore) * 100
+							local sorted = {"L", "M", "R"}
+							table.sort(sorted, function(a, b) return scores[a] > scores[b] end)
+							local symbol = table.concat(sorted, ">")
+							self:settextf("%s %.4f%%", symbol, delta)
+						end
+					else
+						if leftTaps > 0 and rightTaps > 0 then
+							local delta = math.abs(leftScore - rightScore) * 100
+							local symbol = leftScore > rightScore and "> " or "< "
+							self:settextf("%s%.4f%%", symbol, delta)
+						else
+							self:settext("0.0000%")
+						end
+					end
 				else
 					local dvt = pss:GetOffsetVector()
 					if dvt and #dvt > 0 then
@@ -861,8 +930,20 @@ t[#t + 1] = Def.ActorFrame {
 					end
 				end
 			end,
-			PracticeModeResetMessageCommand = function(self) self.currWifePoints = 0; self:queuecommand("Update") end,
-			PracticeModeReloadMessageCommand = function(self) self.currWifePoints = 0; self:queuecommand("Update") end
+			PracticeModeResetMessageCommand = function(self)
+				self.currWifePoints = 0
+				self.leftOffsetSumMs, self.leftOffsetCount = 0, 0
+				self.rightOffsetSumMs, self.rightOffsetCount = 0, 0
+				self.middleOffsetSumMs, self.middleOffsetCount = 0, 0
+				self:queuecommand("Update")
+			end,
+			PracticeModeReloadMessageCommand = function(self)
+				self.currWifePoints = 0
+				self.leftOffsetSumMs, self.leftOffsetCount = 0, 0
+				self.rightOffsetSumMs, self.rightOffsetCount = 0, 0
+				self.middleOffsetSumMs, self.middleOffsetCount = 0, 0
+				self:queuecommand("Update")
+			end
 		
 		},
 		MovableBorder(100, 18, 1, 0, 0)

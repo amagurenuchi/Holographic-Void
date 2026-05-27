@@ -22,6 +22,13 @@ local passflag = 0
 local targetWife = 0
 local wifePoints = 0
 local targetPoints = 0
+local zoomMode = "none" -- none | AA | AAA | AAAA
+local zoomFloorPctDisplayed = 0
+local zoomFloorPctStart = 0
+local zoomFloorPctTarget = 0
+local zoomFloorAnimStart = 0
+local zoomFloorAnimDuration = 0.22
+local zoomFloorAnimating = false
 
 -- HV-themed colors
 local colour = {
@@ -155,6 +162,58 @@ local function recomputeScoresFromMessage(msg)
 	end
 end
 
+local AA_THRESHOLD = 93.00
+local AAA_THRESHOLD = 99.70
+local AAAA_THRESHOLD = 99.955
+
+local function getZoomMinPct()
+	if zoomMode == "AAAA" then return AAAA_THRESHOLD end
+	if zoomMode == "AAA" then return AAA_THRESHOLD end
+	if zoomMode == "AA" then return AA_THRESHOLD end
+	return 0
+end
+
+local function zoomActive()
+	return zoomMode ~= "none"
+end
+
+local function scalePctForMeter(pct)
+	local p = pct or 0
+	if not zoomActive() then
+		return math.max(0, math.min(1, p / 100))
+	end
+	local minPct = zoomFloorPctDisplayed
+	local clamped = math.max(minPct, math.min(100, p))
+	return (clamped - minPct) / (100 - minPct)
+end
+
+local function meterFillFromPoints(points)
+	local maxPts = computeTotalMaxPoints()
+	if maxPts <= 0 then return 0 end
+	local pct = (points / maxPts) * 100
+	return scalePctForMeter(pct)
+end
+
+local function tierVisibleInZoomMode(tierKey)
+	if not zoomActive() then return false end
+	if zoomMode == "AA" then
+		-- Show AA family mids, plus higher major tiers.
+		return tierKey == "Grade_Tier10" or tierKey == "Grade_Tier09" or tierKey == "Grade_Tier08"
+			or tierKey == "Grade_Tier07" or tierKey == "Grade_Tier04" or tierKey == "Grade_Tier01"
+	end
+	if zoomMode == "AAA" then
+		-- Show AAA family mids, plus higher major tiers.
+		return tierKey == "Grade_Tier07" or tierKey == "Grade_Tier06" or tierKey == "Grade_Tier05"
+			or tierKey == "Grade_Tier04" or tierKey == "Grade_Tier01"
+	end
+	if zoomMode == "AAAA" then
+		-- Show AAAA family mids and top tier.
+		return tierKey == "Grade_Tier04" or tierKey == "Grade_Tier03" or tierKey == "Grade_Tier02"
+			or tierKey == "Grade_Tier01"
+	end
+	return false
+end
+
 local function animatePacemakerVisibility(self, visible)
 	self:stoptweening()
 	if visible then
@@ -171,6 +230,23 @@ local t = Def.ActorFrame {
 		self:xy(SCREEN_CENTER_X + ((SCREEN_WIDTH - panelWidth) / 2 * panelPos), SCREEN_CENTER_Y)
 		self:visible(not HV.MinimalisticMode())
 		self:diffusealpha(HV.MinimalisticMode() and 0 or 1)
+		zoomFloorPctDisplayed = 0
+		zoomFloorPctStart = 0
+		zoomFloorPctTarget = 0
+		zoomFloorAnimating = false
+		self:SetUpdateFunction(function(actor, delta)
+			if not zoomFloorAnimating then return end
+			local elapsed = os.clock() - zoomFloorAnimStart
+			local alpha = math.min(1, elapsed / zoomFloorAnimDuration)
+			local eased = 1 - math.pow(1 - alpha, 3)
+			zoomFloorPctDisplayed = zoomFloorPctStart + (zoomFloorPctTarget - zoomFloorPctStart) * eased
+			actor:playcommand("Update")
+			actor:playcommand("UpdateGrade")
+			if alpha >= 1 then
+				zoomFloorAnimating = false
+				zoomFloorPctDisplayed = zoomFloorPctTarget
+			end
+		end)
 		targetWife = getGoalTrackerTargetWife()
 		self:queuecommand("RefreshTarget")
 	end,
@@ -194,12 +270,24 @@ local t = Def.ActorFrame {
 			msg.Judgment == "TapNoteScore_W4" or
 			msg.Judgment == "TapNoteScore_W5" or
 			msg.Judgment == "TapNoteScore_Miss" then
-			progress = progress + 1
-			curPct = msg.WifePercent
-			recomputeScoresFromMessage(msg)
-			self:playcommand("Update")
-			local nextGrade = percent2grade[passflag + 1]
-			if nextGrade and incPct >= nextGrade.percent then
+				progress = progress + 1
+				curPct = msg.WifePercent
+				recomputeScoresFromMessage(msg)
+				local newZoomMode = zoomMode
+				if incPct >= AAAA_THRESHOLD then
+					newZoomMode = "AAAA"
+				elseif incPct >= AAA_THRESHOLD then
+					newZoomMode = "AAA"
+				elseif incPct >= AA_THRESHOLD then
+					newZoomMode = "AA"
+				end
+				if newZoomMode ~= zoomMode then
+					zoomMode = newZoomMode
+					self:playcommand("ZoomModeChanged")
+				end
+				self:playcommand("Update")
+				local nextGrade = percent2grade[passflag + 1]
+				if nextGrade and incPct >= nextGrade.percent then
 				for j = 1, #percent2grade do
 					if incPct >= percent2grade[j].percent then
 						passflag = j
@@ -208,6 +296,16 @@ local t = Def.ActorFrame {
 				self:playcommand("UpdateGrade")
 			end
 		end
+	end,
+	ZoomModeChangedCommand = function(self)
+		-- Do not animate the whole graph container (avoids pop/jump).
+		self:stoptweening()
+		zoomFloorPctStart = zoomFloorPctDisplayed
+		zoomFloorPctTarget = getZoomMinPct()
+		zoomFloorAnimStart = os.clock()
+		zoomFloorAnimating = true
+		self:playcommand("Update")
+		self:playcommand("UpdateGrade")
 	end,
 
 	-- Panel background
@@ -231,9 +329,7 @@ local t = Def.ActorFrame {
 				self:diffusealpha(0.2)
 			end,
 				UpdateCommand = function(self)
-					local maxPts = computeTotalMaxPoints()
-					local p = (maxPts > 0) and (wifePoints / maxPts) or 0
-					self:zoomtoheight(meterheight * math.max(0, p))
+					self:zoomtoheight(meterheight * meterFillFromPoints(wifePoints))
 				end,
 			},
 		Def.Quad {
@@ -244,9 +340,7 @@ local t = Def.ActorFrame {
 				self:diffusealpha(0.75)
 			end,
 				UpdateCommand = function(self)
-					local maxPts = computeTotalMaxPoints()
-					local p = (maxPts > 0) and (wifePoints / maxPts) or 0
-					self:zoomtoheight(meterheight * math.max(0, p))
+					self:zoomtoheight(meterheight * meterFillFromPoints(wifePoints))
 				end,
 			},
 		},
@@ -263,9 +357,7 @@ local t = Def.ActorFrame {
 				self:diffuse(colour.Target):diffusealpha(0.2)
 			end,
 				UpdateCommand = function(self)
-					local maxPts = computeTotalMaxPoints()
-					local p = (maxPts > 0) and (targetPoints / maxPts) or 0
-					self:zoomtoheight(meterheight * math.max(0, p))
+					self:zoomtoheight(meterheight * meterFillFromPoints(targetPoints))
 				end,
 			},
 		Def.Quad {
@@ -276,9 +368,7 @@ local t = Def.ActorFrame {
 				self:diffusealpha(0.75)
 			end,
 				UpdateCommand = function(self)
-					local maxPts = computeTotalMaxPoints()
-					local p = (maxPts > 0) and (targetPoints / maxPts) or 0
-					self:zoomtoheight(meterheight * math.max(0, p))
+					self:zoomtoheight(meterheight * meterFillFromPoints(targetPoints))
 				end,
 			},
 		},
@@ -454,6 +544,9 @@ for i = 2, 5 do
 				self:align(0.5, 1)
 				self:diffusealpha(0.3)
 			end,
+			UpdateCommand = function(self)
+				self:visible(not zoomActive())
+			end,
 			UpdateGradeCommand = function(self)
 				if passflag >= i then
 					self:diffuse(color("#00CFFF66"))
@@ -468,6 +561,9 @@ for i = 2, 5 do
 				self:zoom(fontZoomSmall)
 				self:diffusealpha(0.3)
 			end,
+			UpdateCommand = function(self)
+				self:visible(not zoomActive())
+			end,
 			UpdateGradeCommand = function(self)
 				if passflag == i then
 					self:diffusealpha(0.7)
@@ -480,6 +576,65 @@ for i = 2, 5 do
 	}
 end
 
+	-- Zoom mode markers (AA -> 100%) including midgrades
+	do
+		local zoomTiers = {
+			"Grade_Tier10", -- AA
+		"Grade_Tier09", -- AA.
+		"Grade_Tier08", -- AA:
+		"Grade_Tier07", -- AAA
+		"Grade_Tier06", -- AAA.
+		"Grade_Tier05", -- AAA:
+		"Grade_Tier04", -- AAAA
+		"Grade_Tier03", -- AAAA.
+		"Grade_Tier02", -- AAAA:
+		"Grade_Tier01", -- AAAAA
+	}
+
+		for _, tierKey in ipairs(zoomTiers) do
+			local pct = (WifeTiers and WifeTiers[tierKey] or 0) * 100
+			t[#t + 1] = Def.ActorFrame {
+				Name = "ZoomTierMarker_" .. tierKey,
+				UpdateCommand = function(self)
+					local active = zoomActive() and tierVisibleInZoomMode(tierKey) and pct >= getZoomMinPct()
+					self:visible(active)
+					if not active then return end
+					self:y(baseline - (meterheight * scalePctForMeter(pct)))
+				end,
+			Def.Quad {
+				InitCommand = function(self)
+					self:zoomto(panelWidth, SCREEN_HEIGHT / 300)
+					self:align(0.5, 1)
+					self:diffusealpha(0.3)
+				end,
+			},
+			LoadFont("Common Normal") .. {
+				Name = "Label",
+				InitCommand = function(self)
+					self:xy(-panelWidth * 0.5 * panelPos, -2)
+					self:align((1 - panelPos) / 2, 1)
+					self:settext(HV.GetGradeName(tierKey))
+					self:zoom(fontZoomSmall)
+					self:diffusealpha(0.3)
+				end,
+					UpdateCommand = function(self)
+						if not (zoomActive() and tierVisibleInZoomMode(tierKey) and pct >= getZoomMinPct()) then
+							self:visible(false)
+							return
+						end
+						self:visible(true)
+						if incPct >= pct then
+							self:diffusealpha(0.7)
+							self:diffuse(HVColor.GetGradeColor(tierKey))
+						else
+							self:diffuse(color("#FFFFFF4D"))
+						end
+					end,
+				},
+			}
+		end
+	end
+
 -- Dynamic high-tier marker (AAA -> AAAA -> AAAAA)
 t[#t + 1] = Def.ActorFrame {
 	Name = "DynamicHighTier",
@@ -491,15 +646,15 @@ t[#t + 1] = Def.ActorFrame {
 			self:diffusealpha(0.3)
 			self:playcommand("UpdateGrade")
 		end,
-		UpdateGradeCommand = function(self)
-			local targetIdx = math.max(6, math.min(8, passflag))
-			local g = percent2grade[targetIdx]
-			self:y(baseline - (meterheight * g.percent / 100))
-			if passflag >= targetIdx then
-				self:diffuse(color("#00CFFF66"))
-			else
-				self:diffuse(color("#FFFFFF4D"))
-			end
+			UpdateGradeCommand = function(self)
+				local targetIdx = math.max(6, math.min(8, passflag))
+				local g = percent2grade[targetIdx]
+				self:y(baseline - (meterheight * scalePctForMeter(g.percent)))
+				if passflag >= targetIdx then
+					self:diffuse(color("#00CFFF66"))
+				else
+					self:diffuse(color("#FFFFFF4D"))
+				end
 		end
 	},
 	LoadFont("Common Normal") .. {
@@ -510,14 +665,14 @@ t[#t + 1] = Def.ActorFrame {
 			self:diffusealpha(0.3)
 			self:playcommand("UpdateGrade")
 		end,
-		UpdateGradeCommand = function(self)
-			local targetIdx = math.max(6, math.min(8, passflag))
-			local g = percent2grade[targetIdx]
-			self:xy(-panelWidth * 0.5 * panelPos, baseline - (meterheight * g.percent / 100) - 2)
-			self:settext(g.grade)
-			
-			if passflag >= targetIdx then
-				self:diffusealpha(0.7)
+			UpdateGradeCommand = function(self)
+				local targetIdx = math.max(6, math.min(8, passflag))
+				local g = percent2grade[targetIdx]
+				self:xy(-panelWidth * 0.5 * panelPos, baseline - (meterheight * scalePctForMeter(g.percent)) - 2)
+				self:settext(g.grade)
+				
+				if passflag >= targetIdx then
+					self:diffusealpha(0.7)
 				self:diffuse(HVColor.GetGradeColor(g.grade))
 			else
 				self:diffuse(color("#FFFFFF4D"))
