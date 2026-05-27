@@ -1,4 +1,6 @@
 # Holographic Void
+Note: This theme has some parts automated by AI (for screen building)
+---
 
 A futuristic, high-performance Etterna theme built for technical players who demand both aesthetics and precision. **Holographic Void** blends a minimalist "Void" backdrop with vibrant "Holographic" neon accents, creating a high-contrast environment optimized for focus and detailed metrics.
 
