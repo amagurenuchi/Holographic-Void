@@ -49,12 +49,22 @@ local percent2grade = {
 	{percent = 99.9935,  grade = "AAAAA", tier = "Tier01"},
 }
 
+local function getScoreFinalWifePercent(score)
+	if not score then return 0 end
+	if type(score.GetWifeScore) == "function" then
+		local ok, value = pcall(score.GetWifeScore, score)
+		value = ok and tonumber(value) or nil
+		if value then return value * 100 end
+	end
+	return getJ4NormalizedPercentage(score)
+end
+
 local function getGoalTrackerTargetWife()
 	local mode = ThemePrefs.Get("HV_PacemakerTargetType") or "Target"
 	if mode == "PB" or mode == "PBReplay" then
 		local best = GetDisplayScore()
 		if best then
-			return getJ4NormalizedPercentage(best)
+			return getScoreFinalWifePercent(best)
 		end
 	end
 	return tonumber(ThemePrefs.Get("HV_PacemakerTargetGoal")) or 93
@@ -132,14 +142,6 @@ local function computeTotalMaxPoints()
 end
 
 local function recomputeScoresFromMessage(msg)
-	if msg and msg.WifePBGoal ~= nil then
-		local mode = ThemePrefs.Get("HV_PacemakerTargetType") or "Target"
-		local pbGoal = tonumber(msg.WifePBGoal)
-		if pbGoal and (mode == "PB" or mode == "PBReplay") then
-			targetWife = pbGoal * 100
-		end
-	end
-
 	local current = getCurrentWifePoints()
 	if current == nil then
 		-- Fallback: derive from current % and taps passed
