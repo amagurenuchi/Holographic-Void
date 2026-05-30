@@ -33,7 +33,8 @@ local zoomFloorAnimating = false
 -- HV-themed colors
 local colour = {
 	Current = color("#00CFFF"),
-	Target = color("#FF6B6B")
+	Target = color("#FF6B6B"),
+	Potential = color("#B8B8B8")
 }
 
 -- Grade table using HV's grade color system
@@ -131,6 +132,14 @@ local function computeTotalMaxPoints()
 end
 
 local function recomputeScoresFromMessage(msg)
+	if msg and msg.WifePBGoal ~= nil then
+		local mode = ThemePrefs.Get("HV_PacemakerTargetType") or "Target"
+		local pbGoal = tonumber(msg.WifePBGoal)
+		if pbGoal and (mode == "PB" or mode == "PBReplay") then
+			targetWife = pbGoal * 100
+		end
+	end
+
 	local current = getCurrentWifePoints()
 	if current == nil then
 		-- Fallback: derive from current % and taps passed
@@ -192,6 +201,10 @@ local function meterFillFromPoints(points)
 	if maxPts <= 0 then return 0 end
 	local pct = (points / maxPts) * 100
 	return scalePctForMeter(pct)
+end
+
+local function meterFillFromPct(pct)
+	return scalePctForMeter(tonumber(pct) or 0)
 end
 
 local function tierVisibleInZoomMode(tierKey)
@@ -325,6 +338,17 @@ local t = Def.ActorFrame {
 			InitCommand = function(self)
 				self:align(0.5, 1)
 				self:zoomto(panelWidth * 0.30, 0)
+				self:diffuse(colour.Potential)
+				self:diffusealpha(0.24)
+			end,
+				UpdateCommand = function(self)
+					self:zoomtoheight(meterheight * meterFillFromPct(curPct))
+				end,
+			},
+		Def.Quad {
+			InitCommand = function(self)
+				self:align(0.5, 1)
+				self:zoomto(panelWidth * 0.30, 0)
 				self:diffuse(colour.Current)
 				self:diffusealpha(0.2)
 			end,
@@ -350,6 +374,17 @@ local t = Def.ActorFrame {
 		InitCommand = function(self)
 			self:xy(0.20 * panelWidth * panelPos, baseline)
 		end,
+		Def.Quad {
+			InitCommand = function(self)
+				self:align(0.5, 1)
+				self:zoomto(panelWidth * 0.30, 0)
+				self:diffuse(colour.Potential)
+				self:diffusealpha(0.24)
+			end,
+				UpdateCommand = function(self)
+					self:zoomtoheight(meterheight * meterFillFromPct(targetWife))
+				end,
+			},
 		Def.Quad {
 			InitCommand = function(self)
 				self:align(0.5, 1)
