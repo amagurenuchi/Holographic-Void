@@ -776,6 +776,14 @@ t[#t + 1] = Def.ActorFrame {
 				self.rightOffsetCount = 0
 				self.middleOffsetSumMs = 0
 				self.middleOffsetCount = 0
+				-- Implement mean like Rebirth does
+				self.meansum = 0
+				self.meancount = 0
+				-- Implement SD like Rebirth does
+				self.runningmean = 0
+				self.runningvariance = 0
+				self.tapcount = 0
+
 				if statType == "J4" then
 					self:settext("100.0000%")
 				elseif statType == "MARatio" then
@@ -802,6 +810,16 @@ t[#t + 1] = Def.ActorFrame {
 							self.currWifePoints = self.currWifePoints + 2.0
 						end
 					end
+				elseif self.statType == "StdDev" then
+			        if msg.TapNoteOffset ~= nil then
+			            local offset = msg.TapNoteOffset * 1000
+			            -- Implementation inspired by Rebirth's displaystddev.lua 
+			            self.tapcount = self.tapcount + 1
+			            local delta = offset - self.runningmean
+			            self.runningmean = self.runningmean + (delta / self.tapcount)
+			            local delta2 = offset - self.runningmean
+			            self.runningvariance = self.runningvariance + (delta * delta2)
+			        end
 				elseif self.statType == "DeltaHand" then
 					if msg.TapNoteOffset and msg.TapNoteScore and msg.TapNoteScore ~= "TapNoteScore_AvoidMine" and msg.TapNoteScore ~= "TapNoteScore_CheckpointHit" then
 						local track = msg.FirstTrack
@@ -828,6 +846,11 @@ t[#t + 1] = Def.ActorFrame {
 								self.middleOffsetCount = (self.middleOffsetCount or 0) + 1
 							end
 						end
+					elseif self.statType == "Mean" then
+					    if msg.TapNoteOffset ~= nil then
+					        self.meansum = self.meansum + msg.TapNoteOffset*1000
+					        self.meancount = self.meancount + 1
+					    end
 					end
 				end
 				self:queuecommand("Update")
@@ -875,10 +898,11 @@ t[#t + 1] = Def.ActorFrame {
 						self:settext("0.0000%")
 					end
 				elseif self.statType == "StdDev" then
-					local dvt = pss:GetOffsetVector()
-					if dvt and #dvt > 0 then
-						self:settextf("%.2fms", wifeSd(dvt))
-					end
+					if self.tapcount > 1 then
+						self:settextf("%.2fms", math.sqrt(self.runningvariance / (self.tapcount - 1)))
+				    else
+				        self:settext("0.00ms")
+				    end
 				elseif self.statType == "MARatio" then
 					local marv = pss:GetTapNoteScores("TapNoteScore_W1") or 0
 					local perf = pss:GetTapNoteScores("TapNoteScore_W2") or 0
@@ -923,11 +947,12 @@ t[#t + 1] = Def.ActorFrame {
 							self:settext("0.0000%")
 						end
 					end
-				else
-					local dvt = pss:GetOffsetVector()
-					if dvt and #dvt > 0 then
-						self:settextf("%.2fms", wifeMean(dvt))
-					end
+				else -- mean
+					if self.meancount > 0 then
+				        self:settextf("%.2fms", self.meansum / self.meancount)
+				    else
+				        self:settext("0.00ms")
+				    end
 				end
 			end,
 			PracticeModeResetMessageCommand = function(self)
@@ -935,6 +960,9 @@ t[#t + 1] = Def.ActorFrame {
 				self.leftOffsetSumMs, self.leftOffsetCount = 0, 0
 				self.rightOffsetSumMs, self.rightOffsetCount = 0, 0
 				self.middleOffsetSumMs, self.middleOffsetCount = 0, 0
+				self.tapcount = 0
+				self.runningmean = 0
+				self.runningvariance = 0
 				self:queuecommand("Update")
 			end,
 			PracticeModeReloadMessageCommand = function(self)
@@ -1716,22 +1744,43 @@ t[#t + 1] = Def.ActorFrame {
 			InitCommand = function(self)
 				self:halign(1):valign(0):x(65):y(64):zoom(0.34):diffuse(subText)
 				self:settext("0.00")
+				-- Optimization
+				self.runningmean = 0
+				self.runningvariance = 0
+				self.tapcount = 0
 			end,
-			JudgmentMessageCommand = function(self)
-				self:queuecommand("Update")
-			end,
-			UpdateCommand = function(self)
-				local pss = STATSMAN:GetCurStageStats():GetPlayerStageStats()
-				if pss then
-					local dvt = pss:GetOffsetVector()
-					if dvt and #dvt > 0 then
-						local sd = wifeSd(dvt)
-						self:settext(string.format("%.2f", sd))
-					end
+			JudgmentMessageCommand = function(self,msg)
+				if msg.TapNoteOffset ~= nil then
+		            local offset = msg.TapNoteOffset * 1000
+		            -- Implementation inspired by Rebirth's displaystddev.lua 
+		            self.tapcount = self.tapcount + 1
+		            local delta = offset - self.runningmean
+		            self.runningmean = self.runningmean + (delta / self.tapcount)
+		            local delta2 = offset - self.runningmean
+		            self.runningvariance = self.runningvariance + (delta * delta2)
+					self:queuecommand("Update")
 				end
 			end,
-			PracticeModeResetMessageCommand = function(self) self:settext("0.00") end,
-			PracticeModeReloadMessageCommand = function(self) self:settext("0.00") end
+			UpdateCommand = function(self)
+				if self.tapcount > 1 then
+					self:settextf("%.2f", math.sqrt(self.runningvariance / (self.tapcount - 1)))
+			    else
+			        self:settext("0.00ms")
+			    end
+			end,
+			PracticeModeResetMessageCommand = function(self)
+			    self.tapcount = 0
+			    self.runningmean = 0
+			    self.runningvariance = 0
+			    self:settext("0.00")
+			end,
+
+			PracticeModeReloadMessageCommand = function(self)
+			    self.tapcount = 0
+			    self.runningmean = 0
+			    self.runningvariance = 0
+			    self:settext("0.00")
+			end
 		},
 
 		-- Largest Offset
@@ -1746,22 +1795,26 @@ t[#t + 1] = Def.ActorFrame {
 			InitCommand = function(self)
 				self:halign(1):valign(0):x(65):y(80):zoom(0.34):diffuse(subText)
 				self:settext("0.00")
+				self.max = 0
 			end,
-			JudgmentMessageCommand = function(self)
-				self:queuecommand("Update")
+			JudgmentMessageCommand = function(self,msg)
+				    if msg.TapNoteOffset ~= nil then
+				        local offset = math.abs(msg.TapNoteOffset*1000)
+				        if offset <= 180 and offset > self.max then
+				            self.max = offset
+				            self:settextf("%.2f", self.max)
+				        end
+				    end
 			end,
-			UpdateCommand = function(self)
-				local pss = STATSMAN:GetCurStageStats():GetPlayerStageStats()
-				if pss then
-					local dvt = pss:GetOffsetVector()
-					if dvt and #dvt > 0 then
-						local max = wifeMax(dvt)
-						self:settext(string.format("%.2f", max))
-					end
-				end
+			PracticeModeResetMessageCommand = function(self)
+			    self.max = 0
+			    self:settext("0.00")
 			end,
-			PracticeModeResetMessageCommand = function(self) self:settext("0.00") end,
-			PracticeModeReloadMessageCommand = function(self) self:settext("0.00") end
+
+			PracticeModeReloadMessageCommand = function(self)
+			    self.max = 0
+			    self:settext("0.00")
+			end
 		}
 	}
 	,
