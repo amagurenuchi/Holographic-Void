@@ -349,9 +349,9 @@ local t = Def.ActorFrame {
 			MESSAGEMAN:Broadcast("HV_PointsUpdate")
 		end
 	end,
-	-- PlayingUpdateMessageCommand = function(self)
-	-- 	hideFallbackLifeBar()
-	-- end
+	PlayingUpdateMessageCommand = function(self)
+		hideFallbackLifeBar()
+	end
 }
 
 t[#t + 1] = Def.Actor {
