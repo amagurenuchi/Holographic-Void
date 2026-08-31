@@ -8,9 +8,9 @@ local firstSecond
 local lastSecond
 
 local function Update(self)
-	self.InitCommand = function(self)
-		self:SetUpdateFunction(Update)
-	end
+	-- self.InitCommand = function(self)
+	-- 	self:SetUpdateFunction(Update)
+	-- end
 	local curSecond = GAMESTATE:GetSongPosition():GetMusicSeconds()
 	if HV then
 		HV.LastPlayedSecond = curSecond

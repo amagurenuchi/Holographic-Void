@@ -744,7 +744,7 @@ t[#t + 1] = Def.ActorFrame {
 		SetCommand = function(self)
 			local song = HV.CurrentSongData.song
 			if song then
-				local bpms = song:GetDisplayBpms()
+				local bpms = song:GetDisplayBpms(true)
 				local rate = HV.CurrentSongData.rate
 				local b1 = bpms[1] * rate
 				local b2 = bpms[2] * rate
@@ -779,11 +779,12 @@ t[#t + 1] = Def.ActorFrame {
 			self:halign(0):valign(0):x(panelW * 0.35 + 56):zoom(0.4):diffuse(mainText)
 		end,
 		SetCommand = function(self)
-			local song = HV.CurrentSongData.song
+			local data = HV.CurrentSongData
+			local song = data.song
 			if song then
-				local len = GetPlayableChartSeconds(song, HV.CurrentSongData.steps)
-				local rate = HV.CurrentSongData.rate
-				if rate > 0 then len = len / rate end
+				local len = GetPlayableTime()-- Copied from rebirth GetPlayableChartSeconds(song, HV.CurrentSongData.steps) 
+				-- local rate = HV.CurrentSongData.rate
+				-- if rate > 0 then len = len / rate end
 				local mins = math.floor(len / 60)
 				local secs = math.floor(len % 60)
 				self:settext(string.format("%d:%02d", mins, secs))

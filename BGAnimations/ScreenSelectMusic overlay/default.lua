@@ -59,6 +59,10 @@ local footerOverlayTabs = {
 	GOALS = true,
 }
 
+-- discord rpc & nowplaying.txt
+updateDiscordStatusForMenus()
+updateNowPlaying()
+
 local function PlayWhooshOverlayOpen()
 	SOUND:PlayOnce(THEME:GetPathS("", "whoosh"))
 end
