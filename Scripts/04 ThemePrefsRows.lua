@@ -48,6 +48,13 @@ local HVPrefRows = {
 		Values = {1, 2, 3},
 	},
 
+	-- Song Select BGM
+	HV_SongSelectBGM = {
+		Default = true,
+		Choices = {"Off", "On"},
+		Values = {false, true},
+	},
+
 
 	-- Show MSD Ratings
 	HV_ShowMSD = {
@@ -491,7 +498,7 @@ function HVThemeOptionsLines()
 		
 		-- Music Select
 		-- Music Select
-		"HV_ShowMSD", "HV_ShowProfileStats", "HV_SongPreview", "HV_InstantSearch",
+		"HV_ShowMSD", "HV_ShowProfileStats", "HV_SongPreview", "HV_SongSelectBGM", "HV_InstantSearch",
 		
 		-- Gameplay HUD
 		"HV_MinimalisticMode", "HV_ShowJudgment", "HV_EmulateRidiculous", "HV_JudgmentAnimation", "HV_RecentJudgmentDisplay", "HV_PrioritizeLowerJudgements", "HV_DisplayLowerJudgementOffset", "HV_OffsetDisplayJudgement", "HV_ShowCombo", "HV_ComboAnimation", "HV_ShowCurrentWife",
@@ -518,8 +525,14 @@ local function HVThemePrefRow(name, title)
 	local row = ThemePrefRow(name, title)
 	local hvPref = HVPrefRows[name]
 	
-	-- Explicitly set choices and values if we have them in our local table
-	if hvPref then
+	if not row then
+		row = {
+			Name = name,
+			Title = title or name,
+			Choices = (hvPref and hvPref.Choices) or {"Off", "On"},
+			Values = (hvPref and hvPref.Values) or {false, true},
+		}
+	elseif hvPref then
 		row.Choices = hvPref.Choices
 		row.Values = hvPref.Values
 	end
@@ -567,6 +580,11 @@ function OptionRowSongPreview()
 end
 _G["OptionRowSongPreview"] = OptionRowSongPreview
 
+
+function OptionRowSongSelectBGM()
+	return HVThemePrefRow("HV_SongSelectBGM", "Song Select BGM")
+end
+_G["OptionRowSongSelectBGM"] = OptionRowSongSelectBGM
 
 function OptionRowShowMSD()
 	return HVThemePrefRow("HV_ShowMSD", "Show MSD Ratings")

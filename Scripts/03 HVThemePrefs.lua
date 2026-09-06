@@ -282,6 +282,13 @@ local HVPrefs = {
 		Values = {1, 2, 3}
 	},
 
+	-- Music Select: Play looping BGM track on ScreenSelectMusic (imported from Til Death)
+	HV_SongSelectBGM = {
+		Default = true,
+		Choices = {"Off", "On"},
+		Values = {false, true}
+	},
+
 	-- Gameplay: MSD Color Scale (HolographicVoid or TilDeath)
 	HV_MSDColorScaleV3 = {
 		Default = "Holographic",
@@ -948,6 +955,14 @@ end
 --- Get screen filter / lane cover opacity (0.0-1.0).
 function HV.GetScreenFilter()
 	return tonumber(ThemePrefs.Get("HV_ScreenFilter")) or 0.0
+end
+
+--- Check if Song Select BGM is enabled (imported from Til Death)
+function playSongSelectBGM()
+	if ThemePrefs and ThemePrefs.Get then
+		return ThemePrefs.Get("HV_SongSelectBGM") ~= false
+	end
+	return true
 end
 
 Trace("Holographic Void: 03 HVThemePrefs.lua loaded.")

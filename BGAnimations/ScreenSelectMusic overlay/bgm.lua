@@ -41,6 +41,9 @@ local function playMusic(self, delta)
 	local tscr = SCREENMAN:GetTopScreen()
 	if not tscr or tscr:GetName() ~= "ScreenSelectMusic" then return end
 
+	-- If no song is selected (e.g. group/pack header), native engine plays section music.
+	if curSong == nil then return end
+
 	local curPos = GAMESTATE:GetSongPosition():GetMusicSeconds()
 
 	-- If we are in the middle of the preview (part 1) and it's not looping,
@@ -112,7 +115,6 @@ local t = Def.ActorFrame{
 		musicNotPaused = 1
 		goNow = false
 		loops = 0
-		SOUND:StopMusic()
 		deltaSum = 0
 		bgmTrackStartTime = 0
 		curSong = GAMESTATE:GetCurrentSong()
@@ -125,14 +127,14 @@ local t = Def.ActorFrame{
 			sampleStart = curSong:GetSampleStart()
 			musicLength = curSong:MusicLengthSeconds()
 			startFromPreview = start == 0
-			-- Do NOT arm sampleEvent here — PlayingSampleMusic does it for normal
-			-- wheel navigation. For eval-return (where PlayingSampleMusic never
-			-- fires), the 0.4s fallback timer in playMusic handles it instead.
 			sampleEvent = false
 			if ThemePrefs.Get("HV_SongPreview") ~= 1 then
+				SOUND:StopMusic()
 				self:SetUpdateFunctionInterval(0.002)
 			end
 		else
+			-- No song selected (group header / section): DO NOT call SOUND:StopMusic()!
+			-- Etterna plays ScreenSelectMusic section music (quiver via _MENU_MUSIC) natively.
 			sampleEvent = false
 		end
 	end,

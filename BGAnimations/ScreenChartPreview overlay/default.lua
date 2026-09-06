@@ -23,17 +23,16 @@ local function getCurRateValue()
 end
 
 local function changeMusicRate(delta)
-	local ok, curRate = pcall(function()
-		return GAMESTATE:GetSongOptionsObject("ModsLevel_Preferred"):MusicRate()
-	end)
-	if not ok then return end
-	local newRate = math.max(0.7, math.min(2.0, curRate + delta))
+	local curRate = getCurRateValue()
+	-- Round to 2 dp to avoid floating-point drift (matches adjustRate in song select)
+	local newRate = math.floor((curRate + delta) * 100 + 0.5) / 100
+	newRate = math.max(0.05, math.min(3.0, newRate))
 	pcall(function()
 		GAMESTATE:GetSongOptionsObject("ModsLevel_Preferred"):MusicRate(newRate)
-		GAMESTATE:GetSongOptionsObject("ModsLevel_Stage"):MusicRate(newRate)
-		GAMESTATE:GetSongOptionsObject("ModsLevel_Preferred"):MusicRate(newRate)
+		GAMESTATE:GetSongOptionsObject("ModsLevel_Song"):MusicRate(newRate)
+		GAMESTATE:GetSongOptionsObject("ModsLevel_Current"):MusicRate(newRate)
 	end)
-	MESSAGEMAN:Broadcast("CurrentRateChanged")
+	MESSAGEMAN:Broadcast("CurrentRateChanged", {rate = newRate, oldRate = curRate})
 end
 
 -- References for sync
@@ -507,9 +506,20 @@ local function header()
 			LoadFont("Common Normal") .. {
 				Name = "BPM",
 				ReloadCommand = function(self)
-					local rate = getCurRateValue()
-					local bpms = steps:GetDisplayBpms()
-					self:settextf("%.0f BPM", bpms[2] * rate):y(18):zoom(0.25):diffuse(textDim)
+					local curSong = song or GAMESTATE:GetCurrentSong()
+					if curSong then
+						local rate = getCurRateValue()
+						local bpms = curSong:GetDisplayBpms(true)
+						local b1 = bpms[1] * rate
+						local b2 = bpms[2] * rate
+						if math.abs(b1 - b2) < 1 then
+							self:settext(string.format("%.0f BPM", b1)):y(18):zoom(0.25):diffuse(textDim)
+						else
+							self:settext(string.format("%.0f-%.0f BPM", b1, b2)):y(18):zoom(0.25):diffuse(textDim)
+						end
+					else
+						self:settext("--- BPM"):y(18):zoom(0.25):diffuse(textDim)
+					end
 				end
 			}
 		},

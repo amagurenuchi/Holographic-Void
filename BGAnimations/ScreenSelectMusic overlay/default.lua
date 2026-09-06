@@ -59,8 +59,7 @@ local footerOverlayTabs = {
 	GOALS = true,
 }
 
--- discord rpc & nowplaying.txt
-updateDiscordStatusForMenus()
+-- nowplaying.txt
 updateNowPlaying()
 
 local function PlayWhooshOverlayOpen()

@@ -36,8 +36,11 @@ function HVColor.RefreshAccent()
 			HVColor.Accent = color(hex)
 			-- Derive a dimmed version at 60% brightness
 			local hsv = ColorToHSV(HVColor.Accent)
-			hsv.Value = hsv.Value * 0.6
-			HVColor.AccentDim = HSVToColor(hsv)
+			if type(hsv) == "table" and hsv.Hue and hsv.Sat and hsv.Value then
+				HVColor.AccentDim = HSV(hsv.Hue, hsv.Sat, hsv.Value * 0.6)
+			else
+				HVColor.AccentDim = color("#2A6A9F")
+			end
 		end
 	end
 end

@@ -681,6 +681,55 @@ t[#t + 1] = Def.ActorFrame {
 	LoadFont("Common Normal") .. {
 		Text="by " .. themeAuthor,
 		InitCommand=function(self) self:y(25):zoom(0.4):diffuse(subText) end
+	},
+	-- 10th Anniversary Celebratory Subtitle
+	Def.ActorFrame {
+		InitCommand = function(self) self:y(42) end,
+		LoadFont("Common Normal") .. {
+			Name = "AnniversaryGlow",
+			Text = "Happy 10th Anniversary, Etterna!",
+			InitCommand = function(self)
+				self:zoom(0.42):diffuse(HVColor.Accent):diffusealpha(0)
+			end,
+			RefreshCommand = function(self)
+				self:diffuse(HVColor.Accent)
+				if tostring(ThemePrefs.Get("HV_EnableGlow")) == "true" then
+					self:diffusealpha(0.45):glow(HVColor.Accent)
+				else
+					self:diffusealpha(0)
+				end
+			end,
+			OnCommand = function(self)
+				self:playcommand("Refresh")
+			end,
+			ThemePrefChangedMessageCommand = function(self, params)
+				if params and (params.Name == "HV_EnableGlow" or params.Name == "HV_AccentColor") then
+					if params.Name == "HV_AccentColor" and HVColor.RefreshAccent then
+						HVColor.RefreshAccent()
+					end
+					self:playcommand("Refresh")
+				end
+			end
+		},
+		LoadFont("Common Normal") .. {
+			Name = "AnniversaryText",
+			Text = "Happy 10th Anniversary, Etterna!",
+			InitCommand = function(self)
+				self:zoom(0.42):diffuse(HVColor.Accent)
+					:pulse():effectmagnitude(1.03, 0.98, 1):effectperiod(3.0)
+			end,
+			RefreshCommand = function(self)
+				self:diffuse(HVColor.Accent)
+			end,
+			ThemePrefChangedMessageCommand = function(self, params)
+				if params and params.Name == "HV_AccentColor" then
+					if HVColor.RefreshAccent then
+						HVColor.RefreshAccent()
+					end
+					self:playcommand("Refresh")
+				end
+			end
+		}
 	}
 }
 
