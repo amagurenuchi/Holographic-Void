@@ -1,5 +1,6 @@
 # Holographic Void
-Happy 10th Anniversary, Etterna!
+Happy 10th Anniversary, Etterna! 
+
 Note: This theme has some parts automated by AI (for screen building)
 ---
 
