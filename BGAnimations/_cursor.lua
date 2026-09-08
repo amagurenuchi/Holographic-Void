@@ -27,7 +27,7 @@ end
 
 local t = Def.ActorFrame {
 	OnCommand = function(self)
-		self:draworder(10000)
+		self:draworder(20000)
 		self:SetUpdateFunction(UpdateLoop)
 		-- Match display refresh rate for smooth cursor tracking
 		local refreshRate = DISPLAY:GetDisplayRefreshRate()

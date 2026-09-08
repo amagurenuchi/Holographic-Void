@@ -36,8 +36,8 @@ quickMenuItemHeight = 38
 quickMenuItemGap = 14
 sessionRowCount = 12
 overallBestScoreRowCount = 16
-leaderboardRowCount = 16
-leaderboardScrollStep = 4
+leaderboardRowCount = 9
+leaderboardScrollStep = 9
 skillPredictionPointCount = 0
 skillPredictionAxisTickCount = 9
 overallMostPlayedRowsPerColumn = math.floor(overallBestScoreRowCount / 2)
@@ -3706,7 +3706,7 @@ end
 local statsOverlay = Def.ActorFrame {
 	Name = "StatsOverlay",
 	InitCommand = function(self)
-		self:diffusealpha(0):visible(false):draworder(11000)
+		self:diffusealpha(0):visible(false)
 		self:SetUpdateFunction(function(actor)
 			if not statsOverlayActive then return end
 			if isStatsOverlaySessionTab() then
@@ -5013,6 +5013,7 @@ local t = Def.ActorFrame {
 }
 
 t[#t + 1] = statsOverlay
+t[#t + 1] = LoadActor("../_cursor")
 
 return t
 
