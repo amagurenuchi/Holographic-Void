@@ -1867,18 +1867,18 @@ local function scoreBoard(pn)
 
 	-- Column 2: Note Types
 	local ntStartY = statsStartY + 20 + (7 * rowH)
-	local noteTypeLabels = {"Taps", "Holds", "Rolls", "Lifts", "Mines"}
-	local noteTypeRadars = {"RadarCategory_Notes", "RadarCategory_Holds", "RadarCategory_Rolls", "RadarCategory_Lifts", "RadarCategory_Mines"}
+	local noteTypeLabels = {"Holds", "Rolls", "Lifts", "Mines"}
+	local noteTypeRadars = {"RadarCategory_Holds", "RadarCategory_Rolls", "RadarCategory_Lifts", "RadarCategory_Mines"}
 	for ni, nlabel in ipairs(noteTypeLabels) do
 		local ny = ntStartY + (ni - 1) * 16
 		board[#board + 1] = LoadFont("Common Normal") .. {
-			InitCommand = function(self) self:halign(0):xy(col2X, ny - 7):zoom(0.32):diffuse(subText):settext(nlabel .. ":"):diffusealpha(0) end,
+			InitCommand = function(self) self:halign(0):xy(col2X, ny - 7):zoom(0.4):diffuse(subText):settext(nlabel .. ":"):diffusealpha(0) end,
 			OnCommand = function(self)
 				self:sleep(0.8 + ni * 0.03):linear(0.15):diffusealpha(1)
 			end
 		}
 		board[#board + 1] = LoadFont("Common Normal") .. {
-			InitCommand = function(self) self:halign(1):xy(frameW - pad, ny -7):zoom(0.35):diffuse(mainText):diffusealpha(0) end,
+			InitCommand = function(self) self:halign(1):xy(frameW - pad, ny -7):zoom(0.43):diffuse(mainText):diffusealpha(0) end,
 			OnCommand = function(self)
 				if steps then
 					local possible = steps:GetRadarValues(pn):GetValue(noteTypeRadars[ni])
