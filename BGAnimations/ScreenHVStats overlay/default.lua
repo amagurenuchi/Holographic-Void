@@ -125,8 +125,11 @@ overallSubviewTabs = {
 breakdownSubviewTabs = {
 	JudgeBreakdown = 1,
 	SkillPrediction = 2,
-	PerHandBreakdown = 3
+	PerHandBreakdown = 3,
+	Playcount = 4
 }
+playcountModes = { Overall = 1, MostActive = 2 }
+playcountMode = playcountModes.Overall
 skillPredictionModes = {
 	Ssr = 1,
 	AaProbability = 2
@@ -342,7 +345,8 @@ overallSubviewButtons = {
 breakdownSubviewButtons = {
 	{tab = breakdownSubviewTabs.JudgeBreakdown, left = 16, top = 88, width = 240, label = "Judge Breakdown"},
 	{tab = breakdownSubviewTabs.SkillPrediction, left = 16, top = 116, width = 240, label = "Skill Prediction"},
-	{tab = breakdownSubviewTabs.PerHandBreakdown, left = 16, top = 144, width = 240, label = "Per-hand Breakdown"}
+	{tab = breakdownSubviewTabs.PerHandBreakdown, left = 16, top = 144, width = 240, label = "Per-hand Breakdown"},
+	{tab = breakdownSubviewTabs.Playcount, left = 16, top = 172, width = 240, label = "Playcount over time"}
 }
 skillPredictionModeButtons = {
 	{mode = skillPredictionModes.Ssr, left = sessionPanelX + 16, top = sessionPanelY + 46, width = 132, label = "SSR vs MSD"},
@@ -1469,6 +1473,51 @@ function buildOverallMostPlayed(entries)
 	end)
 	return charts, folders
 end
+function setPlaycountMode(mode)
+	if mode and playcountMode ~= mode then playcountMode = mode; MESSAGEMAN:Broadcast("StatsOverlayDataChanged") end
+end
+
+playcountTimelineForDisplay = {}
+playcountActivityForDisplay = {}
+playcountMaxValue = 1
+playcountActivityMaxValue = 1
+playcountHoveredIndex = nil
+
+function buildPlaycountData(entries)
+	local months, activity = {}, {}
+	local minKey, maxKey
+	for day = 1, 7 do activity[day] = {}; for hour = 0, 23 do activity[day][hour] = 0 end end
+	for _, entry in ipairs(entries or {}) do
+		local t = parseScoreTime(entry.score)
+		if t then
+			local key = os.date("%Y-%m", t)
+			months[key] = (months[key] or 0) + 1
+			minKey = minKey and math.min(minKey, t) or t
+			maxKey = maxKey and math.max(maxKey, t) or t
+			local weekday = tonumber(os.date("%w", t)) -- Sunday first
+			local day = weekday == 0 and 7 or weekday
+			local hour = tonumber(os.date("%H", t))
+			activity[day][hour] = activity[day][hour] + 1
+		end
+	end
+	local timeline = {}
+	if minKey and maxKey then
+		local cursor = os.time({year=tonumber(os.date("%Y", minKey)), month=tonumber(os.date("%m", minKey)), day=1})
+		local last = os.time({year=tonumber(os.date("%Y", maxKey)), month=tonumber(os.date("%m", maxKey)), day=1})
+		while cursor <= last do
+			local key = os.date("%Y-%m", cursor)
+			timeline[#timeline+1] = {label=os.date("%b %Y", cursor), count=months[key] or 0}
+			local y, m = tonumber(os.date("%Y", cursor)), tonumber(os.date("%m", cursor))
+			cursor = os.time({year=y + (m == 12 and 1 or 0), month=(m == 12 and 1 or m + 1), day=1})
+		end
+	end
+	playcountTimelineForDisplay = timeline
+	playcountActivityForDisplay = activity
+	playcountMaxValue = 1
+	for _, point in ipairs(timeline) do playcountMaxValue = math.max(playcountMaxValue, point.count) end
+	playcountActivityMaxValue = 1
+	for day=1,7 do for hour=0,23 do playcountActivityMaxValue = math.max(playcountActivityMaxValue, activity[day][hour]) end end
+end
 
 function refreshOverallDerivedData()
 	if not overallDerivedDataDirty and overallLocalScoreEntries then return end
@@ -1479,6 +1528,7 @@ function refreshOverallDerivedData()
 	overallWifeTimelineDaysForDisplay = buildOverallWifeTimelineData(overallLocalScoreEntries)
 	overallMsdGradePointsForDisplay = buildOverallMsdGradePoints(overallLocalScoreEntries)
 	overallMostPlayedChartsForDisplay, overallMostPlayedFoldersForDisplay = buildOverallMostPlayed(overallLocalScoreEntries)
+	buildPlaycountData(overallLocalScoreEntries)
 	overallTimelineDaysForDisplay = overallRatingTimelineDaysForDisplay
 	if overallSubviewTab == overallSubviewTabs.WifeTimeline then
 		overallTimelineMinValue = 80
@@ -2520,6 +2570,11 @@ function input(event)
 							setBreakdownSubviewTab(breakdownSubview)
 						end
 					else
+						if isStatsOverlayBreakdownSubview(breakdownSubviewTabs.Playcount) and pointInRect(mouseX, mouseY, sessionPanelX + 36, sessionPanelY + 56, 180, 24) then
+							setPlaycountMode(playcountModes.Overall)
+						elseif isStatsOverlayBreakdownSubview(breakdownSubviewTabs.Playcount) and pointInRect(mouseX, mouseY, sessionPanelX + 228, sessionPanelY + 56, 180, 24) then
+							setPlaycountMode(playcountModes.MostActive)
+						end
 						local predictionMode = getSkillPredictionModeAtPosition(mouseX, mouseY)
 						if predictionMode then
 							setSkillPredictionMode(predictionMode)
@@ -2788,6 +2843,74 @@ function breakdownSubviewButton(button)
 				self:xy(0, 24):halign(0):valign(1):zoomto(button.width, 2):diffuse(color("#FFFFFF")):visible(false)
 			end
 		}
+	}
+end
+
+function playcountPanel()
+	local left, top, width, height = sessionPanelX + 36, sessionPanelY + 108, sessionPanelWidth - 72, 230
+	local grid = Def.ActorFrame { Name="ActivityGrid", InitCommand=function(self) self:xy(left,top+24) end }
+	grid[#grid+1] = Def.Quad { InitCommand=function(self) self:halign(0):valign(0):zoomto(width,7*18):diffuse(color("#101010")):diffusealpha(.9):visible(false) end, SetCommand=function(self) self:visible(isStatsOverlayBreakdownSubview(breakdownSubviewTabs.Playcount) and playcountMode == playcountModes.MostActive) end, StatsOverlayDataChangedMessageCommand=function(self) self:playcommand("Set") end }
+	for day=1,7 do for hour=0,23 do
+		grid[#grid+1] = Def.Quad { InitCommand=function(self) self:xy(hour*(width/24)+2,(day-1)*18+2):halign(0):valign(0):zoomto(width/24-3,15):visible(false) end,
+			SetCommand=function(self) local v=(playcountActivityForDisplay[day] and playcountActivityForDisplay[day][hour]) or 0; local a=v/playcountActivityMaxValue; self:diffuse(getMainColor("highlight")):diffusealpha(0.08+(a*0.8)):visible(isStatsOverlayBreakdownSubview(breakdownSubviewTabs.Playcount) and playcountMode == playcountModes.MostActive) end,
+			StatsOverlayDataChangedMessageCommand=function(self) self:playcommand("Set") end, StatsOverlayBreakdownSubviewChangedMessageCommand=function(self) self:playcommand("Set") end }
+	end end
+	local graphGrid = Def.ActorFrame { Name="PlaycountGraphGrid" }
+	for i=0,4 do graphGrid[#graphGrid+1] = Def.Quad { InitCommand=function(self) self:xy(left,top+height-(i/4)*(height-24)):halign(0):valign(.5):zoomto(width,1):diffuse(color("#FFFFFF")):diffusealpha(.08):visible(false) end, SetCommand=function(self) self:visible(isStatsOverlayBreakdownSubview(breakdownSubviewTabs.Playcount) and playcountMode == playcountModes.Overall) end, StatsOverlayDataChangedMessageCommand=function(self) self:playcommand("Set") end } end
+	for i=0,4 do graphGrid[#graphGrid+1] = Def.Quad { InitCommand=function(self) self:xy(left+(i/4)*width,top):halign(.5):valign(0):zoomto(1,height):diffuse(color("#FFFFFF")):diffusealpha(.06):visible(false) end, SetCommand=function(self) self:visible(isStatsOverlayBreakdownSubview(breakdownSubviewTabs.Playcount) and playcountMode == playcountModes.Overall) end, StatsOverlayDataChangedMessageCommand=function(self) self:playcommand("Set") end } end
+	graphGrid[#graphGrid+1] = Def.Quad { InitCommand=function(self) self:xy(left,top):halign(0):valign(0):zoomto(1,height):diffuse(color("#FFFFFF")):diffusealpha(.25):visible(false) end, SetCommand=function(self) self:visible(isStatsOverlayBreakdownSubview(breakdownSubviewTabs.Playcount) and playcountMode == playcountModes.Overall) end, StatsOverlayDataChangedMessageCommand=function(self) self:playcommand("Set") end }
+	graphGrid[#graphGrid+1] = Def.Quad { InitCommand=function(self) self:xy(left,top+height):halign(0):valign(1):zoomto(width,1):diffuse(color("#FFFFFF")):diffusealpha(.25):visible(false) end, SetCommand=function(self) self:visible(isStatsOverlayBreakdownSubview(breakdownSubviewTabs.Playcount) and playcountMode == playcountModes.Overall) end, StatsOverlayDataChangedMessageCommand=function(self) self:playcommand("Set") end }
+	for i=0,4 do graphGrid[#graphGrid+1] = LoadFont("Common Normal") .. { InitCommand=function(self) self:xy(left-8,top+height-(i/4)*(height-24)):halign(1):valign(.5):zoom(.28):diffuse(color("#AFAFAF")):visible(false) end, SetCommand=function(self) local active=isStatsOverlayBreakdownSubview(breakdownSubviewTabs.Playcount) and playcountMode==playcountModes.Overall; self:visible(active); self:settext(string.format("%d", math.floor(playcountMaxValue*(i/4)+.5))) end, StatsOverlayDataChangedMessageCommand=function(self) self:playcommand("Set") end } end
+	for i=0,4 do graphGrid[#graphGrid+1] = LoadFont("Common Normal") .. { InitCommand=function(self) self:xy(left+(i/4)*width,top+height+10):halign(.5):valign(0):zoom(.25):diffuse(color("#AFAFAF")):visible(false) end, SetCommand=function(self) local active=isStatsOverlayBreakdownSubview(breakdownSubviewTabs.Playcount) and playcountMode==playcountModes.Overall; local count=#playcountTimelineForDisplay; self:visible(active and count>0); local index=math.floor((count-1)*(i/4)+1.5); self:settext(count>0 and (playcountTimelineForDisplay[index] and playcountTimelineForDisplay[index].label or "") or "") end, StatsOverlayDataChangedMessageCommand=function(self) self:playcommand("Set") end } end
+	local axis = Def.ActorFrame { Name="ActivityAxisLabels" }
+	local weekdays={"Sun","Mon","Tue","Wed","Thu","Fri","Sat"}
+	for d=1,7 do axis[#axis+1]=LoadFont("Common Normal")..{InitCommand=function(self)self:xy(left-8,top+24+(d-1)*18+9):halign(1):zoom(.30):settext(weekdays[d]):visible(false)end,SetCommand=function(self)self:visible(isStatsOverlayBreakdownSubview(breakdownSubviewTabs.Playcount) and playcountMode==playcountModes.MostActive)end,StatsOverlayDataChangedMessageCommand=function(self)self:playcommand("Set")end} end
+	for h=0,23 do axis[#axis+1]=LoadFont("Common Normal")..{InitCommand=function(self)self:xy(left+((h+.5)/24)*width,top+24+7*18+8):halign(.5):zoom(.30):settext(string.format("%02d",h)):visible(false)end,SetCommand=function(self)self:visible(isStatsOverlayBreakdownSubview(breakdownSubviewTabs.Playcount) and playcountMode==playcountModes.MostActive)end,StatsOverlayDataChangedMessageCommand=function(self)self:playcommand("Set")end} end
+	return Def.ActorFrame {
+		Name = "PlaycountPanel",
+		InitCommand = function(self) self:visible(false) end,
+		SetCommand = function(self) self:visible(isStatsOverlayBreakdownSubview(breakdownSubviewTabs.Playcount)); self:GetChild("PlaycountLine"):playcommand("Set") end,
+		StatsOverlayTabChangedMessageCommand = function(self) self:playcommand("Set") end,
+		StatsOverlayBreakdownSubviewChangedMessageCommand = function(self) self:playcommand("Set") end,
+		StatsOverlayDataChangedMessageCommand = function(self) self:playcommand("Set") end,
+		Def.Quad { Name="PlaycountBackdrop", InitCommand=function(self) self:xy(left,top):halign(0):valign(0):zoomto(width,height):diffuse(color("#101010")):diffusealpha(0.9) end,
+			SetCommand=function(self) self:visible(isStatsOverlayBreakdownSubview(breakdownSubviewTabs.Playcount) and playcountMode == playcountModes.Overall) end,
+			StatsOverlayDataChangedMessageCommand=function(self) self:playcommand("Set") end,
+			StatsOverlayBreakdownSubviewChangedMessageCommand=function(self) self:playcommand("Set") end },
+		Def.ActorFrame { Name="PlaycountOverallButton", InitCommand=function(self) self:xy(left,top-52) end,
+			SetCommand=function(self) local a=playcountMode==playcountModes.Overall; self:GetChild("BG"):diffusealpha(a and .26 or .1); self:GetChild("Border"):diffusealpha(a and .55 or .2); self:GetChild("Label"):diffuse(a and color("#FFFFFF") or color("#B8B8B8")) end,
+			StatsOverlayDataChangedMessageCommand=function(self) self:playcommand("Set") end,
+			StatsOverlayBreakdownSubviewChangedMessageCommand=function(self) self:playcommand("Set") end,
+			Def.Quad{Name="BG",InitCommand=function(self)self:halign(0):valign(0):zoomto(180,24):diffuse(getMainColor("highlight")):diffusealpha(.1)end},
+			Def.Quad{Name="Border",InitCommand=function(self)self:halign(0):valign(0):zoomto(180,1):diffuse(getMainColor("highlight")):diffusealpha(.2)end},
+			LoadFont("Common Normal") .. {Name="Label",InitCommand=function(self)self:xy(8,12):halign(0):valign(.5):zoom(.28):settext("Overall")end}},
+		Def.ActorFrame { Name="PlaycountActiveButton", InitCommand=function(self) self:xy(left+192,top-52) end,
+			SetCommand=function(self) local a=playcountMode==playcountModes.MostActive; self:GetChild("BG"):diffusealpha(a and .26 or .1); self:GetChild("Border"):diffusealpha(a and .55 or .2); self:GetChild("Label"):diffuse(a and color("#FFFFFF") or color("#B8B8B8")) end,
+			StatsOverlayDataChangedMessageCommand=function(self) self:playcommand("Set") end,
+			StatsOverlayBreakdownSubviewChangedMessageCommand=function(self) self:playcommand("Set") end,
+			Def.Quad{Name="BG",InitCommand=function(self)self:halign(0):valign(0):zoomto(180,24):diffuse(getMainColor("highlight")):diffusealpha(.1)end},
+			Def.Quad{Name="Border",InitCommand=function(self)self:halign(0):valign(0):zoomto(180,1):diffuse(getMainColor("highlight")):diffusealpha(.2)end},
+			LoadFont("Common Normal") .. {Name="Label",InitCommand=function(self)self:xy(8,12):halign(0):valign(.5):zoom(.28):settext("Most active")end}},
+		Def.ActorMultiVertex { Name="PlaycountLine", InitCommand=function(self) self:visible(false) end,
+			SetCommand=function(self)
+				local pts=playcountTimelineForDisplay; local verts={}; local n=math.max(1,#pts-1)
+				for i,p in ipairs(pts) do verts[#verts+1]={{left+((i-1)/n)*width, top+height-(p.count/playcountMaxValue)*(height-24),0},getMainColor("highlight")} end
+				self:visible(isStatsOverlayBreakdownSubview(breakdownSubviewTabs.Playcount) and playcountMode == playcountModes.Overall and #verts>0)
+				self:SetVertices(verts)
+				self:SetDrawState{Mode="DrawMode_LineStrip",First=1,Num=#verts}
+			end,
+			StatsOverlayDataChangedMessageCommand=function(self) self:playcommand("Set") end,
+			StatsOverlayBreakdownSubviewChangedMessageCommand=function(self) self:playcommand("Set") end },
+		grid
+		,graphGrid, axis,
+		LoadFont("Common Normal") .. { Name="PlaycountHover", InitCommand=function(self) self:xy(left+8,top+8):halign(0):zoom(.3):visible(false) end,
+			SetCommand=function(self) local p=playcountTimelineForDisplay[playcountHoveredIndex or 0]; local active=p ~= nil and playcountMode == playcountModes.Overall; self:visible(active); self:settext(p and (p.label .. "  -  " .. p.count .. " plays") or ""); if active then local x=left+((playcountHoveredIndex-1)/math.max(1,#playcountTimelineForDisplay-1))*width; self:xy(x, top+math.max(18, height-(p.count/playcountMaxValue)*(height-24)-24)):halign(.5):valign(1) end end,
+			UpdateCommand=function(self) self:playcommand("Set") end,
+			StatsOverlayDataChangedMessageCommand=function(self) self:playcommand("Set") end }
+		,Def.Quad { Name="PlaycountHoverLine", InitCommand=function(self) self:halign(.5):valign(0):zoomto(1,height):diffuse(getMainColor("highlight")):diffusealpha(.55):visible(false) end,
+			SetCommand=function(self) local active=playcountHoveredIndex ~= nil and playcountMode == playcountModes.Overall; self:visible(active); if active then self:xy(left+((playcountHoveredIndex-1)/math.max(1,#playcountTimelineForDisplay-1))*width,top) end end,
+			UpdateCommand=function(self) self:playcommand("Set") end,
+			StatsOverlayDataChangedMessageCommand=function(self) self:playcommand("Set") end }
 	}
 end
 
@@ -3624,7 +3747,7 @@ function breakdownJudgeBar(i)
 		LoadFont("Common Normal") .. {
 			Name = "Label",
 			InitCommand = function(self)
-				self:xy(0, 0):halign(0):zoom(0.24):diffuse(color("#DDDDDD"))
+				self:xy(0, 6):halign(0):valign(0.5):zoom(0.36):diffuse(color("#DDDDDD"))
 			end
 		},
 		Def.Quad {
@@ -3636,13 +3759,13 @@ function breakdownJudgeBar(i)
 		LoadFont("Common Normal") .. {
 			Name = "Count",
 			InitCommand = function(self)
-				self:xy(240, 0):halign(1):zoom(0.24):diffuse(color("#FFFFFF"))
+				self:visible(false)
 			end
 		},
 		LoadFont("Common Normal") .. {
 			Name = "Average",
 			InitCommand = function(self)
-				self:xy(272, 0):halign(1):zoom(0.22):diffuse(color("#AFAFAF"))
+				self:visible(false)
 			end
 		}
 	}
@@ -3725,6 +3848,16 @@ local statsOverlay = Def.ActorFrame {
 				hoveredActivityDay = nil
 				actor:playcommand("Update")
 			end
+			if isStatsOverlayBreakdownSubview(breakdownSubviewTabs.Playcount) and playcountMode == playcountModes.Overall then
+				local mx, my = INPUTFILTER:GetMouseX(), INPUTFILTER:GetMouseY()
+				local left, top, width, height = sessionPanelX + 36, sessionPanelY + 108, sessionPanelWidth - 72, 230
+				local hovered = nil
+				if pointInRect(mx, my, left, top, width, height) and #playcountTimelineForDisplay > 0 then
+					local fraction = math.max(0, math.min(1, (mx-left)/width))
+					hovered = math.floor(fraction * (#playcountTimelineForDisplay-1) + 1.5)
+				end
+				if playcountHoveredIndex ~= hovered then playcountHoveredIndex = hovered; actor:playcommand("Update") end
+			elseif playcountHoveredIndex ~= nil then playcountHoveredIndex = nil; actor:playcommand("Update") end
 			if isStatsOverlayOverallTimelineSubview() then
 				local hoveredTimeline = getOverallTimelineHoverIndex(INPUTFILTER:GetMouseX(), INPUTFILTER:GetMouseY())
 				if overallTimelineHoveredIndex ~= hoveredTimeline then
@@ -3898,7 +4031,8 @@ local statsOverlay = Def.ActorFrame {
 				rightPaneLeaderboards:GetChild("PerHandModeButton" .. tostring(perHandModeButtons[i].mode)):playcommand("Set")
 			end
 			rightPaneLeaderboards:GetChild("PerHandRatioTitle"):playcommand("Set")
-			rightPaneLeaderboards:GetChild("PerHandRatioDesc"):playcommand("Set")
+			local perHandRatioDesc = rightPaneLeaderboards:GetChild("PerHandRatioDesc")
+			if perHandRatioDesc then perHandRatioDesc:playcommand("Set") end
 			rightPaneLeaderboards:GetChild("RatioBarBackdrop"):playcommand("Set")
 			rightPaneLeaderboards:GetChild("LeftHandFill"):playcommand("Set")
 			rightPaneLeaderboards:GetChild("RightHandFill"):playcommand("Set")
@@ -4656,9 +4790,9 @@ local statsOverlay = Def.ActorFrame {
 			self:GetChild("ProbabilityTitle"):visible(isPred)
 			self:GetChild("ProbabilityDetail"):visible(isPred)
 
-			self:GetChild("PerHandSectionHeader"):visible(isPH)
-			self:GetChild("PerHandLeftRightLabel"):visible(isPH)
-			self:GetChild("PerHandLeftRightSummary"):visible(isPH)
+			self:GetChild("PerHandSectionHeader"):visible(false)
+			self:GetChild("PerHandLeftRightLabel"):visible(false)
+			self:GetChild("PerHandLeftRightSummary"):visible(false)
 
 			if isPH then
 				self:GetChild("PerHandLeftRightLabel"):playcommand("Set")
@@ -4681,10 +4815,11 @@ local statsOverlay = Def.ActorFrame {
 		breakdownSubviewButton(breakdownSubviewButtons[1]),
 		breakdownSubviewButton(breakdownSubviewButtons[2]),
 		breakdownSubviewButton(breakdownSubviewButtons[3]),
+		breakdownSubviewButton(breakdownSubviewButtons[4]),
 		LoadFont("Common Large") .. {
 			Name = "JudgeSectionHeader",
 			InitCommand = function(self)
-				self:xy(16, 192):halign(0):zoom(0.34):settext("JUDGE BREAKDOWN"):diffusealpha(0.6)
+				self:xy(16, 220):halign(0):zoom(0.34):settext("JUDGE BREAKDOWN"):diffusealpha(0.6)
 			end,
 			StatsOverlayBreakdownSubviewChangedMessageCommand = function(self)
 				self:visible(isStatsOverlayBreakdownSubview(breakdownSubviewTabs.JudgeBreakdown))
@@ -4693,19 +4828,19 @@ local statsOverlay = Def.ActorFrame {
 		LoadFont("Common Large") .. {
 			Name = "BreakdownSelectedJudge",
 			InitCommand = function(self)
-				self:xy(16, 226):halign(0):zoom(0.42):maxwidth(640)
+				self:xy(16, 254):halign(0):zoom(0.42):maxwidth(640)
 			end
 		},
 		LoadFont("Common Normal") .. {
 			Name = "BreakdownSummary",
 			InitCommand = function(self)
-				self:xy(16, 264):halign(0):zoom(0.29):diffuse(color("#DDDDDD")):maxwidth(900)
+				self:xy(16, 280):halign(0):zoom(0.29):diffuse(color("#DDDDDD")):maxwidth(900)
 			end
 		},
 		LoadFont("Common Large") .. {
 			Name = "PredictionSectionHeader",
 			InitCommand = function(self)
-				self:xy(16, 192):halign(0):zoom(0.34):settext("SKILL PREDICTION"):diffusealpha(0.6)
+				self:xy(16, 220):halign(0):zoom(0.34):settext("SKILL PREDICTION"):diffusealpha(0.6)
 			end,
 			StatsOverlayBreakdownSubviewChangedMessageCommand = function(self)
 				self:visible(isStatsOverlayBreakdownSubview(breakdownSubviewTabs.SkillPrediction))
@@ -4714,31 +4849,31 @@ local statsOverlay = Def.ActorFrame {
 		LoadFont("Common Normal") .. {
 			Name = "ProbabilityTitle",
 			InitCommand = function(self)
-				self:xy(16, 226):halign(0):zoom(0.32):diffuse(getMainColor("highlight")):maxwidth(900)
+				self:xy(16, 254):halign(0):zoom(0.32):diffuse(getMainColor("highlight")):maxwidth(900)
 			end
 		},
 		LoadFont("Common Normal") .. {
 			Name = "ProbabilityDetail",
 			InitCommand = function(self)
-				self:xy(16, 264):halign(0):zoom(0.26):diffuse(color("#AFAFAF")):maxwidth(900)
+				self:xy(16, 292):halign(0):zoom(0.26):diffuse(color("#AFAFAF")):maxwidth(900)
 			end
 		},
 		LoadFont("Common Large") .. {
 			Name = "PerHandSectionHeader",
 			InitCommand = function(self)
-				self:xy(16, 192):halign(0):zoom(0.34):settext("PER-HAND BREAKDOWN"):diffusealpha(0.6)
+				self:xy(16, 220):halign(0):zoom(0.34):settext("PER-HAND BREAKDOWN"):diffusealpha(0.6)
 			end,
 			StatsOverlayBreakdownSubviewChangedMessageCommand = function(self)
-				self:visible(isStatsOverlayBreakdownSubview(breakdownSubviewTabs.PerHandBreakdown))
+				self:visible(false)
 			end
 		},
 		LoadFont("Common Large") .. {
 			Name = "PerHandLeftRightLabel",
 			InitCommand = function(self)
-				self:xy(16, 226):halign(0):zoom(0.42):maxwidth(640)
+				self:xy(16, 254):halign(0):zoom(0.42):maxwidth(640)
 			end,
 			SetCommand = function(self)
-				local active = isStatsOverlayBreakdownSubview(breakdownSubviewTabs.PerHandBreakdown)
+				local active = false
 				self:visible(active)
 				if not active then return end
 				self:settextf("L: %.2f%%  R: %.2f%%", perHandOverallLeftRatio, perHandOverallRightRatio)
@@ -4750,10 +4885,10 @@ local statsOverlay = Def.ActorFrame {
 		LoadFont("Common Normal") .. {
 			Name = "PerHandLeftRightSummary",
 			InitCommand = function(self)
-				self:xy(16, 264):halign(0):zoom(0.29):diffuse(color("#DDDDDD")):maxwidth(900)
+				self:xy(16, 292):halign(0):zoom(0.29):diffuse(color("#DDDDDD")):maxwidth(900)
 			end,
 			SetCommand = function(self)
-				local active = isStatsOverlayBreakdownSubview(breakdownSubviewTabs.PerHandBreakdown)
+				local active = false
 				self:visible(active)
 				if not active then return end
 				local direction = perHandOverallDelta > 0 and "Left Hand Dominant" or (perHandOverallDelta < 0 and "Right Hand Dominant" or "Perfectly Balanced")
@@ -4763,9 +4898,10 @@ local statsOverlay = Def.ActorFrame {
 			StatsOverlayTabChangedMessageCommand = function(self) self:playcommand("Set") end,
 			StatsOverlayBreakdownSubviewChangedMessageCommand = function(self) self:playcommand("Set") end,
 			StatsOverlayDataChangedMessageCommand = function(self) self:playcommand("Set") end
-		}
-	},
-	LoadFont("Common Large") .. {
+			}
+		},
+		playcountPanel(),
+		LoadFont("Common Large") .. {
 		InitCommand = function(self)
 			self:xy(16, 88):halign(0):zoom(0.36):settext("ACTIVITY HEATMAP"):diffusealpha(0.6)
 		end,

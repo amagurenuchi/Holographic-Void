@@ -42,6 +42,19 @@ local previewActive = false
 local inputDebugActor = nil
 local searchString = ""
 
+-- Shared entry point for decorations that apply a search without opening
+-- the search tab (for example, clicking a chart's CDTitle author).
+local function SetMusicSearchQuery(query)
+	searchString = tostring(query or "")
+	local screen = SCREENMAN:GetTopScreen()
+	local whee = screen and screen.GetMusicWheel and screen:GetMusicWheel()
+	if whee then whee:SongSearch(searchString) end
+	MESSAGEMAN:Broadcast("SearchQueryUpdated", {query = searchString, applied = true})
+end
+
+HV.SetMusicSearchQuery = SetMusicSearchQuery
+HV.GetMusicSearchQuery = function() return searchString end
+
 -- Mouse wheel locking to prevent double-moves
 local lastWheelMove = 0
 local wheelLockTime = 0.05
@@ -71,8 +84,10 @@ local function IsSelectMusicBackgroundClickArea()
 	local my = INPUTFILTER:GetMouseY() or SCREEN_CENTER_Y
 	if HV.ActiveTab and HV.ActiveTab ~= "" then return false end
 	if my <= 40 or my >= SCREEN_HEIGHT - 40 then return false end
-	if mx <= panelX + panelW + 110 then return false end
-	if mx >= SCREEN_WIDTH - 390 and mx <= SCREEN_WIDTH - 10 and my >= 84 and my <= SCREEN_HEIGHT - 64 then return false end
+	-- The background peek should cover the open space immediately beside the
+	-- left panel.  The old 110px buffer left a large, unusable dead strip.
+	if mx <= panelX + panelW + 16 then return false end
+	if mx >= SCREEN_WIDTH - 340 and mx <= SCREEN_WIDTH - 10 and my >= 84 and my <= SCREEN_HEIGHT - 64 then return false end
 	return true
 end
 

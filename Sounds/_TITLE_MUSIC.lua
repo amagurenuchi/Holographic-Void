@@ -1,5 +1,5 @@
 -- BGM resolver for title and options screens
--- Imported from Til Death theme (idle BGM loop)
+-- Uses the REbirth theme's longarrowhead BGM loop.
 
 local function shouldPlay()
 	if playSongSelectBGM ~= nil then
@@ -20,7 +20,6 @@ local function resolveSound(dir, file)
 	return nil
 end
 
-return resolveSound("", "music/idle")
-	or resolveSound("music", "idle")
-	or resolveSound("", "idle")
-	or THEME:GetPathS("", "_silent")
+return resolveSound("", "music/longarrowhead")
+	 or resolveSound("music", "longarrowhead")
+	 or THEME:GetPathS("", "_silent")

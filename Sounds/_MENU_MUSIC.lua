@@ -1,5 +1,5 @@
 -- BGM resolver for menu and song select screens
--- Imported from Til Death theme (idle BGM loop)
+-- Uses the REbirth theme's quiver BGM loop.
 
 local function shouldPlay()
 	if playSongSelectBGM ~= nil then
@@ -20,7 +20,6 @@ local function resolveSound(dir, file)
 	return nil
 end
 
-return resolveSound("", "music/idle")
-	or resolveSound("music", "idle")
-	or resolveSound("", "idle")
-	or THEME:GetPathS("", "_silent")
+return resolveSound("", "music/quiver")
+	 or resolveSound("music", "quiver")
+	 or THEME:GetPathS("", "_silent")

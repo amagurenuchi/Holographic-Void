@@ -204,7 +204,7 @@ local modShorthand = {
 	Shuffle = "SHF", SoftShuffle = "SSH",
 	SuperShuffle = "SUP", HRanShuffle = "HRS",
 	Planted = "PLT", Floored = "FLR",
-	Twister = "TWS", HoldRolls = "H>R",
+	Twister = "TWS", HoldRolls = "H>R", HoldReleases = "HRE",
 	Autoplay = "AP",  PracticeMode = "PRC",
 }
 

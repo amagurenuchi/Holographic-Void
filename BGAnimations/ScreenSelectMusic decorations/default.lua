@@ -149,6 +149,8 @@ HV.CurrentSongData = {
 	steps = nil,
 	group = nil,
 	avgMSD = 0,
+	packMSDDistribution = {}, -- Histogram of every chart's overall MSD in the selected pack
+	packChartCount = 0,
 	songCount = 0,
 	progress = 0,
 	rate = 1.0,
@@ -202,6 +204,46 @@ local function GetPlayableChartSeconds(song, steps)
 	return 0
 end
 
+-- The CDTitle can receive a hover event before GAMESTATE has finished
+-- updating its player-specific steps. Prefer the selection cache, then use
+-- the engine's simfile author lookup before falling back to the chart/song
+-- credits.
+local function GetCDTitleAuthor(song)
+	local function usable(value)
+		return type(value) == "string" and value ~= "" and value:lower() ~= "none defined"
+	end
+	local data = HV.CurrentSongData
+	local steps = data and data.steps
+	if not steps then
+		local ok, currentSteps = pcall(function() return GAMESTATE:GetCurrentSteps() end)
+		if ok then steps = currentSteps end
+	end
+
+	if steps then
+		local ok, author = pcall(function() return steps:GetAuthorCredit() end)
+		if ok and usable(author) then
+			return author
+		end
+		local okCredit, credit = pcall(function() return steps:GetCredit() end)
+		if okCredit and usable(credit) then
+			return credit
+		end
+	end
+
+	if song then
+		local ok, author = pcall(function() return song:GetOrTryAtLeastToGetSimfileAuthor() end)
+		if ok and usable(author) then
+			return author
+		end
+		local okCredit, credit = pcall(function() return song:GetCredit() end)
+		if okCredit and usable(credit) then
+			return credit
+		end
+	end
+
+	return "None defined"
+end
+
 
 
 -- ============================================================
@@ -241,6 +283,8 @@ t[#t + 1] = Def.Actor {
 		data.steps = GAMESTATE:GetCurrentSteps()
 		data.rate = getCurRateValue() or 1.0
 		data.group = nil
+		data.packMSDDistribution = {}
+		data.packChartCount = 0
 		if not data.song then
 			local screen = SCREENMAN:GetTopScreen()
 			if screen and screen.GetMusicWheel then
@@ -255,12 +299,18 @@ t[#t + 1] = Def.Actor {
 						local totalMSD = 0
 						local countedSongs = 0
 						local clearedSongs = 0
+						local packBins = {}
 						local stype = GAMESTATE:GetCurrentStyle():GetStepsType()
 						for _, s in ipairs(songs) do
 							local charts = s:GetStepsByStepsType(stype)
 							local highest = 0
 							for _, chart in ipairs(charts) do
 								local msd = chart:GetMSD(1, 1) -- Overall MSD at 1.0x
+								if msd and msd > 0 then
+					local bin = math.max(1, math.min(40, math.floor(msd)))
+									packBins[bin] = (packBins[bin] or 0) + 1
+									data.packChartCount = data.packChartCount + 1
+								end
 								if msd > highest then highest = msd end
 							end
 							if highest > 0 then
@@ -275,6 +325,7 @@ t[#t + 1] = Def.Actor {
 							end
 						end
 						data.avgMSD = countedSongs > 0 and (totalMSD / countedSongs) or 0
+						data.packMSDDistribution = packBins
 						data.progress = data.songCount > 0 and (clearedSongs / data.songCount) * 100 or 0
 					end
 				end
@@ -664,33 +715,21 @@ t[#t + 1] = Def.ActorFrame {
 			ToolTipCommand = function(self)
 				if isOver(self) then
 					if self.song and self.song:HasCDTitle() and self:GetVisible() then
-						local creditStr = "None defined"
-						
-						local steps = GAMESTATE:GetCurrentSteps(PLAYER_1)
-						if steps then
-							local ok, res = pcall(function() return steps:GetAuthorCredit() end)
-							if ok and type(res) == "string" and res ~= "" then
-								creditStr = res
-							else
-								local ok2, res2 = pcall(function() return steps:GetCredit() end)
-								if ok2 and type(res2) == "string" and res2 ~= "" then
-									creditStr = res2
-								end
-							end
-						end
-						
-						if creditStr == "None defined" and self.song then
-							local ok, res = pcall(function() return self.song:GetCredit() end)
-							if ok and type(res) == "string" and res ~= "" then
-								creditStr = res
-							end
-						end
-						
-						TOOLTIP:SetText(creditStr)
+						TOOLTIP:SetText(GetCDTitleAuthor(self.song))
 						TOOLTIP:Show()
 					else
 						TOOLTIP:Hide()
 					end
+				end
+			end,
+			MouseDownCommand = function(self, params)
+				if params and params.button and params.button ~= "DeviceButton_left mouse button" then return end
+				local author = GetCDTitleAuthor(self.song)
+				if type(author) ~= "string" or author == "" or author:lower() == "none defined" then return end
+				local currentQuery = HV.GetMusicSearchQuery and HV.GetMusicSearchQuery() or ""
+				if HV.SetMusicSearchQuery then
+					local authorQuery = "author=" .. author
+					HV.SetMusicSearchQuery(currentQuery == authorQuery and "" or authorQuery)
 				end
 			end,
 			MouseOverCommand = function(self)
@@ -1433,6 +1472,17 @@ t[#t + 1] = Def.ActorFrame {
 	OnCommand = function(self)
 		self:queuecommand("Tick")
 	end,
+	DelayedChartUpdateMessageCommand = function(self)
+		local data = HV.CurrentSongData
+		local isFolder = data.group and data.group ~= "" and not data.song
+		-- PackMSDGraph is a child of this frame, so keep the frame alive and
+		-- toggle only the song-specific Personal Best actors.
+		self:visible(true)
+		for _, name in ipairs({"PBHeader", "PBDate", "PBScoringSystem", "PBRate", "PBScore", "PBGrade", "PBClearType", "PBSSR", "PBCC", "PBJudgesFrame"}) do
+			local child = self:GetChild(name)
+			if child then child:visible(not isFolder) end
+		end
+	end,
 	TickCommand = function(self)
 		local mx, my = INPUTFILTER:GetMouseX(), INPUTFILTER:GetMouseY()
 		local isH = mx >= (panelX + 10) and mx <= (panelX + panelW - 22) and my >= (pbY - 4) and my <= (pbY + 110)
@@ -1660,8 +1710,10 @@ t[#t + 1] = Def.ActorFrame {
 		SetCommand = function(self)
 			local score = HV.CurrentSongData.pbScore
 			if score and score:GetChordCohesion() then
+				self:settext("Chord Cohesion ON")
 				self:visible(true)
 			else
+				self:settext("")
 				self:visible(false)
 			end
 		end,
@@ -1675,8 +1727,13 @@ t[#t + 1] = Def.ActorFrame {
 		end,
 		SetCommand = function(self)
 			local score = HV.CurrentSongData.pbScore
+			local blocks = self:GetChild("Blocks")
 			if not score then
 				self:visible(false)
+				for i = 1, 7 do
+					local block = blocks and blocks:GetChild("Block_" .. i)
+					if block then block:visible(false) end
+				end
 				return
 			end
 			self:visible(true)
@@ -1689,7 +1746,6 @@ t[#t + 1] = Def.ActorFrame {
 				end
 			end
 			
-			local blocks = self:GetChild("Blocks")
 			local gap = 2
 			local blockW = (panelW - 32 - (gap * (#judges - 1))) / #judges
 			for i = 1, 7 do
@@ -1697,7 +1753,13 @@ t[#t + 1] = Def.ActorFrame {
 				local j = judges[i]
 				block:visible(j ~= nil)
 				if j then block:playcommand("SetLayout", {x = (i - 1) * (blockW + gap), width = blockW}) end
-				if not j then break end
+				if not j then
+					block:GetChild("Val"):settext("")
+					block:GetChild("Lbl"):settext("")
+				end
+				if not j then
+					-- cleared above
+				else
 				local bg = block:GetChild("Bg")
 				local lbl = block:GetChild("Lbl")
 				local valTxt = block:GetChild("Val")
@@ -1709,6 +1771,7 @@ t[#t + 1] = Def.ActorFrame {
 					bg:diffuse(c):diffusealpha(0.2) -- translucent colored quad
 					lbl:settext(j.label):diffuse(c):zoom(0.2)
 					valTxt:diffuse(c):zoom(0.45)
+				end
 				end
 			end
 		end,
@@ -1766,6 +1829,47 @@ t[#t + 1] = Def.ActorFrame {
 		end)()
 	},
 
+	-- Folder selection replaces the song PB details with a pack-wide MSD histogram.
+	Def.ActorFrame {
+		Name = "PackMSDGraph",
+		InitCommand = function(self) self:xy(-5, -4):visible(false) end,
+		DelayedChartUpdateMessageCommand = function(self)
+			if not self then return end
+			local data = HV.CurrentSongData
+			local isFolder = data.group and data.group ~= "" and not data.song
+			if isFolder then
+				self:visible(true)
+				else
+				self:visible(false)
+			end
+			if not isFolder then return end
+			local bins = data.packMSDDistribution or {}
+			local maxCount = 1
+			for i = 1, 40 do maxCount = math.max(maxCount, bins[i] or 0) end
+			self:GetChild("Title"):settext(string.format("PACK MSD DISTRIBUTION ACROSS %d CHARTS", data.packChartCount or 0))
+			local bars = self:GetChild("Bars")
+			for i = 1, 40 do
+				local bar, count = bars:GetChild("Bar_" .. i), bins[i] or 0
+				bar:GetChild("Fill"):zoomy(48 * count / maxCount)
+				bar:GetChild("Value"):settext(count > 0 and tostring(count) or "")
+				bar:GetChild("Label"):settext(i == 1 and "0" or (i % 5 == 0 and tostring(i) or ""))
+			end
+		end,
+		LoadFont("Common Normal") .. { Name = "Title", InitCommand = function(self) self:halign(0):valign(0):xy(5, 6):zoom(0.40):diffuse(accentColor) end },
+		(function()
+			local graph = Def.ActorFrame { Name = "Bars" }
+			local barW, gap, baseY = (panelW - 68) / 40, 1, 92
+			for i = 1, 40 do
+				graph[#graph + 1] = Def.ActorFrame {
+					Name = "Bar_" .. i, InitCommand = function(self) self:x((i - 1) * (barW + gap)) end,
+					Def.Quad { Name = "Fill", InitCommand = function(self) self:halign(0):valign(1):xy(0, baseY):zoomto(barW, 0):diffuse(HVColor.GetMSDRatingColor(math.max(1, i + 0.5))) end },
+					LoadFont("Common Normal") .. { Name = "Value", InitCommand = function(self) self:halign(0.5):valign(1):xy(barW / 2, baseY - 62):zoom(0.28):diffuse(mainText) end },
+					LoadFont("Common Normal") .. { Name = "Label", InitCommand = function(self) self:halign(0.5):valign(0):xy(barW / 2, baseY + 4):zoom(0.28):diffuse(subText) end }
+				}
+			end
+			return graph
+		end)()
+	},
 
 }
 

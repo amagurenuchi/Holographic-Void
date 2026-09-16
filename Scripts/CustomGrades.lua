@@ -1,0 +1,21 @@
+return {
+	Grade_Tier01 = "AAAAA",
+	Grade_Tier02 = "AAAA:",
+	Grade_Tier03 = "AAAA.",
+	Grade_Tier04 = "AAAA",
+	Grade_Tier05 = "AAA:",
+	Grade_Tier06 = "AAA.",
+	Grade_Tier07 = "AAA",
+	Grade_Tier08 = "AA:",
+	Grade_Tier09 = "AA.",
+	Grade_Tier10 = "AA",
+	Grade_Tier11 = "A:",
+	Grade_Tier12 = "A.",
+	Grade_Tier13 = "A",
+	Grade_Tier14 = "B",
+	Grade_Tier15 = "C",
+	Grade_Tier16 = "D",
+	Grade_Tier17 = "Grade_Tier17",
+	Grade_Failed = "F",
+	Grade_None = "None"
+}

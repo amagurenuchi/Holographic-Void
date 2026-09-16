@@ -12,6 +12,9 @@ local wodth = 300
 local hidth = 40
 local loopStartPos
 local loopEndPos
+local lastCoinPressAt = 0
+local lastCoinWasPaused = false
+local doubleCoinWindow = 0.35
 local graphWidth = wodth * prevZoom
 
 local function notify(message)
@@ -117,6 +120,17 @@ local function clearRegion()
 		pcall(function() top:ResetLoopRegion() end)
 	end
 	broadcastRegion()
+end
+
+local function resetLoopToBookmark()
+	if not loopStartPos then return false end
+	loopEndPos = nil
+	local top = getTop()
+	if top and top.ResetLoopRegion then
+		pcall(function() top:ResetLoopRegion() end)
+	end
+	broadcastRegion()
+	return true
 end
 
 local function handleRegionSetting(positionGiven)
@@ -238,7 +252,19 @@ local function duminput(event)
 				setSongPos(loopStartPos, true)
 			end
 		elseif event.button == "Coin" then
-			handleRegionSetting(getSongPos())
+			local now = os.clock()
+			local paused = isPaused()
+			if paused and lastCoinWasPaused and now - lastCoinPressAt <= doubleCoinWindow then
+				if resetLoopToBookmark() then
+					notify("Loop Reset to Bookmark")
+				end
+				lastCoinPressAt = 0
+				lastCoinWasPaused = false
+			else
+				handleRegionSetting(getSongPos())
+				lastCoinPressAt = now
+				lastCoinWasPaused = paused
+			end
 		elseif event.DeviceInput and event.DeviceInput.button == "DeviceButton_mousewheel up" then
 			if GAMESTATE:IsPaused() then frameStep(0.05) end
 		elseif event.DeviceInput and event.DeviceInput.button == "DeviceButton_mousewheel down" then

@@ -2,6 +2,7 @@
 -- Rebuilt to focus only on custom cursor and jukebox shortcuts.
 
 local choiceNames = {"Start", "Multi", "ColorTheme", "PackDownloader", "Options", "Quit"}
+local customGradesEnabled = ThemePrefs.Get("HV_UseCustomGrades") == true or ThemePrefs.Get("HV_UseCustomGrades") == "true"
 
 local t = Def.ActorFrame {}
 
@@ -77,5 +78,25 @@ t[#t+1] = UIElements.QuadButton(1) .. {
 		end
 	end
 }
+
+-- Custom grade editing is a separate title-screen entry, outside the main list.
+if customGradesEnabled then
+	t[#t+1] = UIElements.QuadButton(1) .. {
+		InitCommand = function(self)
+			self:xy(SCREEN_LEFT + 16, SCREEN_TOP + 140):zoomto(180, 32):diffusealpha(0)
+		end,
+		MouseDownCommand = function(self, params)
+			if params.event == "DeviceButton_left mouse button" then
+				local x, y = INPUTFILTER:GetMouseX(), INPUTFILTER:GetMouseY()
+				if x >= SCREEN_LEFT + 16 and x <= SCREEN_LEFT + 196 and y >= SCREEN_TOP + 124 and y <= SCREEN_TOP + 156 then
+					SCREENMAN:AddNewScreenToTop("ScreenHVCustomGrades")
+				end
+			end
+		end
+	}
+	t[#t+1] = LoadFont("Common Normal") .. {
+		InitCommand = function(self) self:xy(SCREEN_LEFT + 26, SCREEN_TOP + 140):halign(0):zoom(.5):settext("EDIT GRADES") end,
+	}
+end
 
 return t

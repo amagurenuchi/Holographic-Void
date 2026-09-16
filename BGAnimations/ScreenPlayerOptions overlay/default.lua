@@ -22,7 +22,7 @@ local modShorthands = {
 	-- Remove
 	["NoMines"] = "NOM", ["NoHolds"] = "NOH", ["NoRolls"] = "NOR", ["NoLifts"] = "NOL", ["NoFakes"] = "NOF",
 	-- Other
-	["Reverse"] = "REV", ["Mines"] = "MNS",
+	["Reverse"] = "REV", ["Mines"] = "MNS", ["HoldReleases"] = "HRE",
 }
 
 local function formatSpeedMode(mode, speed)

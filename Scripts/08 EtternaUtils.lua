@@ -69,27 +69,62 @@ end
 ------------------------------------------------------------
 -- GRADE CALCULATION & CUSTOM NAMES
 ------------------------------------------------------------
-HV.CustomGrades = {
-	Grade_Tier01 = "神",
-	Grade_Tier02 = "秀上",
-	Grade_Tier03 = "秀中",
-	Grade_Tier04 = "秀下",
-	Grade_Tier05 = "優上",
-	Grade_Tier06 = "優中",
-	Grade_Tier07 = "優下",
-	Grade_Tier08 = "良上",
-	Grade_Tier09 = "良中",
-	Grade_Tier10 = "良下",
-	Grade_Tier11 = "佳上",
-	Grade_Tier12 = "佳中",
-	Grade_Tier13 = "佳下",
-	Grade_Tier14 = "普",
-	Grade_Tier15 = "欠",
-	Grade_Tier16 = "堕",
-	Grade_Tier17 = "Grade_Tier17.",
-	Grade_Failed = "堕",
-	Grade_None   = "無"
-}
+local function trimGradeLabel(s)
+	if type(s) ~= "string" then return "" end
+	local out, count, i = "", 0, 1
+	while i <= #s and count < 5 do
+		local c = s:byte(i)
+		local n = (c < 128 and 1) or (c < 224 and 2) or (c < 240 and 3) or 4
+		out = out .. s:sub(i, i + n - 1)
+		i = i + n
+		count = count + 1
+	end
+	return out
+end
+
+local gradeDefaults = {}
+do
+	local ok, data = pcall(dofile, "Scripts/CustomGrades.lua")
+	if ok and type(data) == "table" then gradeDefaults = data end
+end
+if next(gradeDefaults) == nil then
+	local fallback = {"AAAAA", "AAAA:", "AAAA.", "AAAA", "AAA:", "AAA.", "AAA", "AA:", "AA.", "AA", "A:", "A.", "A", "B", "C", "D"}
+	for i, value in ipairs(fallback) do gradeDefaults[string.format("Grade_Tier%02d", i)] = value end
+	gradeDefaults.Grade_Tier17, gradeDefaults.Grade_Failed, gradeDefaults.Grade_None = "Grade_Tier17", "F", "None"
+end
+local gradeConfigPath = "Save/Holographic Void_settings/CustomGrades.lua"
+local gradeConfig = nil
+if FILEMAN:DoesFileExist(gradeConfigPath) then
+	local f = RageFileUtil.CreateRageFile()
+	if f:Open(gradeConfigPath, 1) then
+		local chunk = loadstring(f:Read())
+		if chunk then local ok, data = pcall(chunk); if ok and type(data) == "table" then gradeConfig = data end end
+		f:Close()
+	end
+	f:destroy()
+end
+HV.CustomGrades = {}
+for key, value in pairs(gradeDefaults) do HV.CustomGrades[key] = trimGradeLabel((gradeConfig and gradeConfig[key]) or value) end
+function HV.GetTitleChoiceNames()
+	local names = "Start,Multi,ColorTheme,PackDownloader,Options,Quit"
+	local enabled = ThemePrefs.Get("HV_UseCustomGrades")
+	if enabled == true or enabled == "true" then names = names .. ",CustomGrades" end
+	return names
+end
+
+function HV.SaveCustomGrades()
+	if FILEMAN.CreateDir then FILEMAN:CreateDir("Save/Holographic Void_settings") end
+	local f = RageFileUtil.CreateRageFile()
+	if f:Open(gradeConfigPath, 2) then
+		local out = "return {\n"
+		for key, value in pairs(HV.CustomGrades) do out = out .. string.format("\t[%q] = %q,\n", key, trimGradeLabel(value)) end
+		f:Write(out .. "}\n"); f:Close()
+	end
+	f:destroy()
+end
+
+-- Ensure the editable configuration exists on first launch.
+if not FILEMAN:DoesFileExist(gradeConfigPath) then HV.SaveCustomGrades() end
 
 function HV.GetGradeName(grade)
 	if not grade then return "" end
@@ -332,6 +367,7 @@ function GetInvalidatingMods(pn)
 		-- Hold Transform mods
 		["planted"] = "Planted", ["floored"] = "Floored",
 		["twister"] = "Twister", ["holdrolls"] = "HoldRolls",
+		["hold releases"] = "HoldReleases", ["holdreleases"] = "HoldReleases",
 	}
 	
 	for pattern, name in pairs(checks) do
@@ -380,7 +416,7 @@ function IsScoreInvalid(score)
 		-- Turns
 		"backwards", "soft shuffle", "super shuffle", "hran shuffle", "shuffle",
 		-- Hold Transforms
-		"planted", "floored", "twister", "holdrolls",
+		"planted", "floored", "twister", "holdrolls", "hold releases",
 	}
 	for _, m in ipairs(invalidating) do
 		if mods:find(m) or mods:find(m:gsub("%s+", "")) then return true end

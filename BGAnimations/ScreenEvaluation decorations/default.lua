@@ -1413,8 +1413,10 @@ local function scoreBoard(pn)
 				if grade == "Grade_Failed" then
 					local totalNotes = songTotalNotes or steps:GetRadarValues(pn):GetValue("RadarCategory_Notes")
 					local encounteredNotes = 0
-					for _, j in ipairs(judges) do
-						encounteredNotes = encounteredNotes + pss:GetTapNoteScores(j)
+					for index, j in ipairs(judges) do
+						-- Ridiculous is emulated by the theme and is not a valid
+						-- TapNoteScore enum for PlayerStageStats.
+						encounteredNotes = encounteredNotes + getEvaluationJudgeCount(j, index)
 					end
 					
 					local progress = (totalNotes > 0) and (encounteredNotes / totalNotes) or 0
