@@ -15,6 +15,32 @@ ms.JudgeScalers = {
 	0.2,   -- J9
 }
 
+-- Shared comment wrapping is defined here because screen decorations can be
+-- constructed before the later score/rescore utility script is loaded.
+HV = HV or {}
+function HV.WrapScoreComment(text, maxCharacters)
+	local lines = {}
+	maxCharacters = math.max(1, tonumber(maxCharacters) or 40)
+	for paragraph in (tostring(text or "") .. "\n"):gmatch("([^\r\n]*)\r?\n") do
+		if paragraph ~= "" then
+			local line = ""
+			for word in paragraph:gmatch("%S+") do
+				local candidate = line == "" and word or (line .. " " .. word)
+				if line ~= "" and #candidate > maxCharacters then
+					lines[#lines + 1] = line
+					line = word
+				else
+					line = candidate
+				end
+			end
+			if line ~= "" then lines[#lines + 1] = line end
+		else
+			lines[#lines + 1] = ""
+		end
+	end
+	return table.concat(lines, "\n")
+end
+
 function ms.ok(text)
 	SCREENMAN:SystemMessage(text)
 end
@@ -25,12 +51,13 @@ end
 -- @param isPassword Boolean to mask the input
 -- @param funcOK     Function(answer) to call on OK
 -- @param funcCancel Function() to call on Cancel or Esc
-function easyInputStringOKCancel(question, maxLength, isPassword, funcOK, funcCancel)
+function easyInputStringOKCancel(question, maxLength, isPassword, funcOK, funcCancel, initialText)
 	SCREENMAN:AddNewScreenToTop("ScreenTextEntry")
 	local settings = {
 		Question = question,
 		MaxInputLength = maxLength,
 		Password = isPassword,
+		InitialText = initialText or "",
 		OnOK = function(answer)
 			local top = SCREENMAN:GetTopScreen()
 			if top and top:GetName() == "ScreenTextEntry" then top:Cancel() end

@@ -1478,7 +1478,7 @@ t[#t + 1] = Def.ActorFrame {
 		-- PackMSDGraph is a child of this frame, so keep the frame alive and
 		-- toggle only the song-specific Personal Best actors.
 		self:visible(true)
-		for _, name in ipairs({"PBHeader", "PBDate", "PBScoringSystem", "PBRate", "PBScore", "PBGrade", "PBClearType", "PBSSR", "PBCC", "PBJudgesFrame"}) do
+		for _, name in ipairs({"PBHeader", "PBDate", "PBScoringSystem", "PBRate", "PBScore", "PBGrade", "PBClearType", "PBSSR", "PBCC", "PBJudgesFrame", "PBComment"}) do
 			local child = self:GetChild(name)
 			if child then child:visible(not isFolder) end
 		end
@@ -1545,7 +1545,7 @@ t[#t + 1] = Def.ActorFrame {
 		InitCommand = function(self)
 			self:halign(0):valign(0):y(14):zoom(0.35):diffuse(subText)
 		end,
-		SetCommand = function(self)
+	SetCommand = function(self)
 			local score = HV.CurrentSongData.pbScore
 			if score then
 				if self:GetParent().isHovering then
@@ -1682,9 +1682,21 @@ t[#t + 1] = Def.ActorFrame {
 	},
 
 	LoadFont("Common Normal") .. {
+		Name = "PBComment",
+		InitCommand = function(self) self:halign(0):valign(0):y(96):zoom(0.28):diffuse(subText) end,
+		SetCommand = function(self)
+			local score = HV.CurrentSongData.pbScore
+			local comment = score and HV.GetScoreComment(score) or ""
+			self:settext(comment ~= "" and HV.WrapScoreComment(comment, 110) or "")
+			self:visible(comment ~= "")
+		end,
+		DelayedChartUpdateMessageCommand = function(self) self:playcommand("Set") end,
+	},
+
+	LoadFont("Common Normal") .. {
 		Name = "PBSSR",
 		InitCommand = function(self)
-			self:halign(0):valign(0):y(52):zoom(0.30):diffuse(mainText)
+			self:halign(0):valign(0):y(52):zoom(0.40):diffuse(mainText)
 		end,
 		SetCommand = function(self)
 			local showMSD = (ThemePrefs.Get("HV_ShowMSD") == "true" or ThemePrefs.Get("HV_ShowMSD") == true) or ThemePrefs.Get("HV_ShowMSD") == true
@@ -2068,7 +2080,7 @@ t[#t + 1] = Def.ActorFrame {
 				local profile = PROFILEMAN:GetProfile(PLAYER_1)
 				if profile and HV.GetLevelProgress then
 					local progress = HV.GetLevelProgress(profile)
-					self:smooth(0.5):zoomx(60 * progress)
+					self:stoptweening():smooth(0.5):zoomx(60 * progress)
 				elseif profile then
 					self:zoomx(0)
 				end

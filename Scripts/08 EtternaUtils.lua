@@ -1042,6 +1042,209 @@ function getRescoredWife3Judge(version, judgeScale, rst, useCurrent)
 	return math.min((totalPoints / maxPoints) * 100.0, 100)
 end
 
+-- Cosmetic gameplay score emulation. These helpers deliberately never call
+-- RescoreReplay or modify PlayerStageStats; the selected judge only changes
+-- what the HUD displays.
+function HV.GetCustomWindowChoices()
+	local choices, values = {}, {}
+	local store = rawget(_G, "customWindowsConfig")
+	if not store or type(store.get_data) ~= "function" then return choices, values end
+	local ok, data = pcall(function() return store:get_data() end)
+	if not ok or type(data) ~= "table" then return choices, values end
+	local configs = data.customWindowConfigs or {}
+	local order = data.customWindowOrder or {}
+	for _, name in ipairs(order) do
+		local config = configs[name]
+		if config then
+			choices[#choices + 1] = tostring(config.displayName or name)
+			values[#values + 1] = "Custom:" .. tostring(name)
+		end
+	end
+	return choices, values
+end
+
+function HV.ScoreEmulationEnabled()
+	local value = ThemePrefs and ThemePrefs.Get and ThemePrefs.Get("HV_EmulateScore")
+	return value == true or value == "true" or value == 1 or value == "1"
+end
+
+function HV.ScoreEmulationSelection()
+	return tostring((ThemePrefs and ThemePrefs.Get and ThemePrefs.Get("HV_EmulateScoreJudge")) or "J4")
+end
+
+function HV.ScoreEmulationLabel(selection)
+	selection = tostring(selection or HV.ScoreEmulationSelection())
+	if selection:sub(1, 7) == "Custom:" then return selection:sub(8) end
+	local labels = {
+		J4 = "Normal (J4)", J5 = "Pro (J5)", J6 = "Master (J6)",
+		J7 = "Insane (J7)", J8 = "Godly (J8)", J9 = "Justice (J9)"
+	}
+	return labels[selection] or selection
+end
+
+local function hvCosmeticCustomWindowPercentage(selection, rst)
+	local store = rawget(_G, "customWindowsConfig")
+	if not store or type(store.get_data) ~= "function" or type(rst) ~= "table" then return nil end
+	local ok, data = pcall(function() return store:get_data() end)
+	local configName = tostring(selection):sub(8)
+	local config = ok and data and data.customWindowConfigs and data.customWindowConfigs[configName]
+	if not config then return nil end
+
+	local worths, windows = config.customWindowWorths, config.customWindowWindows
+	local curve = type(config.customWindowCurveFunction) == "function" and config.customWindowCurveFunction or nil
+	local function tapWorth(offset)
+		if curve then return tonumber(curve((tonumber(offset) or 0) / 1000)) or 0 end
+		local ms = math.abs(tonumber(offset) or 0)
+		if ms <= (windows and windows.W1 or 22.5) then return worths and worths.W1 or 2 end
+		if ms <= (windows and windows.W2 or 45) then return worths and worths.W2 or 2 end
+		if ms <= (windows and windows.W3 or 90) then return worths and worths.W3 or 1 end
+		if ms <= (windows and windows.W4 or 135) then return worths and worths.W4 or 0 end
+		if ms <= (windows and windows.W5 or 180) then return worths and worths.W5 or -4 end
+		return worths and worths.Miss or -8
+	end
+	local points = 0
+	for _, offset in ipairs(rst.dvt or {}) do points = points + tapWorth(offset) end
+	local maxNotes = math.max(0, tonumber(rst.totalNotes) or 0, tonumber(rst.notesPassed) or 0)
+	local missWorth = worths and worths.Miss or (curve and curve(1.0)) or -8
+	points = points + math.max(0, maxNotes - (tonumber(rst.notesPassed) or 0)) * missWorth
+	local holdWorths = config.customWindowHoldWorths or {}
+	local longNotes = (rst.totalHolds or 0) + (rst.totalRolls or 0)
+	local longMissed = (rst.holdsMissed or 0) + (rst.rollsMissed or 0)
+	points = points + (longNotes - longMissed) * (holdWorths.Held or 0)
+	points = points + longMissed * (holdWorths.Missed or -4.5)
+	points = points + (rst.minesHit or 0) * (config.customWindowMineHitWorth or -2)
+	local typeWorths = config.customWindowTapNoteTypeWorths or {}
+	local tapWorthMax = typeWorths.Tap or 2
+	local holdWorthMax = typeWorths.HoldHead or 2
+	local maxPoints = math.max(0, (maxNotes - longNotes) * tapWorthMax + longNotes * holdWorthMax + longNotes * (holdWorths.Held or 0))
+	if maxPoints <= 0 then return 0 end
+	return math.max(0, math.min(100, points / maxPoints * 100))
+end
+
+function HV.GetCosmeticScorePercentage(pss, score, selection, useCurrent)
+	selection = tostring(selection or HV.ScoreEmulationSelection())
+	local rst = getRescoreElements(pss, score)
+	if not rst then return nil end
+	if selection:sub(1, 7) == "Custom:" then
+		return hvCosmeticCustomWindowPercentage(selection, rst)
+	end
+	local judge = tonumber(selection:match("J(%d)"))
+	if not judge or judge < 4 or judge > 9 then judge = 4 end
+
+	-- Standard judge emulation follows the engine's judge timing scale. It
+	-- intentionally does not flat-multiply the final percentage or modify the
+	-- underlying engine score.
+	local baseJ4
+	if score and type(score.GetRescoredWifeScore) == "function" then
+		local ok, value = pcall(score.GetRescoredWifeScore, score, 4)
+		if ok and tonumber(value) then baseJ4 = tonumber(value) * 100 end
+	end
+	if not baseJ4 and pss then
+		baseJ4 = HV.GetCurrentWifePercentage(pss)
+	end
+	if not baseJ4 then
+		return getRescoredWife3Judge(3, judge, rst, useCurrent)
+	end
+	return math.max(0, math.min(100, baseJ4))
+end
+
+function HV.IsReplayPlayback()
+	local state = GAMESTATE and GAMESTATE:GetPlayerState(PLAYER_1)
+	return state and state.GetPlayerController and state:GetPlayerController() == "PlayerController_Replay"
+end
+
+function HV.GetCosmeticTapMax(selection)
+	selection = tostring(selection or HV.ScoreEmulationSelection())
+	if selection:sub(1, 7) ~= "Custom:" then return 2 end
+	local store = rawget(_G, "customWindowsConfig")
+	if not store or type(store.get_data) ~= "function" then return 2 end
+	local ok, data = pcall(function() return store:get_data() end)
+	local config = ok and data and data.customWindowConfigs and data.customWindowConfigs[selection:sub(8)]
+	local worths = config and config.customWindowTapNoteTypeWorths or {}
+	return tonumber(worths.Tap) or 2
+end
+
+function HV.GetCosmeticPointValue(selection, offsetMs, tapScore)
+	selection = tostring(selection or HV.ScoreEmulationSelection())
+	local judge = tonumber(selection:match("J(%d)"))
+	if selection:sub(1, 7) ~= "Custom:" then
+		local judgeScale = (judge and ms.JudgeScalers and ms.JudgeScalers[math.max(4, math.min(9, judge))]) or 1
+		if offsetMs ~= nil then return wife3(math.abs(tonumber(offsetMs) or 0), judgeScale, "Wife3") end
+		if tapScore == "TapNoteScore_Miss" then return -5.5 end
+		if tapScore == "TapNoteScore_HitMine" then return -7 end
+		return 2
+	end
+
+	local store = rawget(_G, "customWindowsConfig")
+	if not store or type(store.get_data) ~= "function" then return 0 end
+	local ok, data = pcall(function() return store:get_data() end)
+	local config = ok and data and data.customWindowConfigs and data.customWindowConfigs[selection:sub(8)]
+	if not config then return 0 end
+	if tapScore == "TapNoteScore_HitMine" then return config.customWindowMineHitWorth or -2 end
+	if offsetMs ~= nil then
+		local curve = type(config.customWindowCurveFunction) == "function" and config.customWindowCurveFunction or nil
+		local worths, windows = config.customWindowWorths or {}, config.customWindowWindows or {}
+		if curve then return tonumber(curve((tonumber(offsetMs) or 0) / 1000)) or 0 end
+		local msValue = math.abs(tonumber(offsetMs) or 0)
+		if msValue <= (windows.W1 or 22.5) then return worths.W1 or 2 end
+		if msValue <= (windows.W2 or 45) then return worths.W2 or 2 end
+		if msValue <= (windows.W3 or 90) then return worths.W3 or 1 end
+		if msValue <= (windows.W4 or 135) then return worths.W4 or 0 end
+		if msValue <= (windows.W5 or 180) then return worths.W5 or -4 end
+		return worths.Miss or -8
+	end
+	local worths = config.customWindowWorths or {}
+	if tapScore == "TapNoteScore_Miss" then return worths.Miss or -8 end
+	return config.customWindowTapNoteTypeWorths and config.customWindowTapNoteTypeWorths.Tap or 2
+end
+
+function HV.GetCosmeticHoldPointValue(selection, holdScore)
+	selection = tostring(selection or HV.ScoreEmulationSelection())
+	if selection:sub(1, 7) ~= "Custom:" then return -4.5 end
+	local store = rawget(_G, "customWindowsConfig")
+	if not store or type(store.get_data) ~= "function" then return -4.5 end
+	local ok, data = pcall(function() return store:get_data() end)
+	local config = ok and data and data.customWindowConfigs and data.customWindowConfigs[selection:sub(8)]
+	local worths = config and config.customWindowHoldWorths or {}
+	return (holdScore == "HoldNoteScore_LetGo" and worths.LetGo) or worths.Missed or -4.5
+end
+
+function HV.GetCurrentWifePercentage(pss)
+	if not pss then return nil end
+	local notesPassed = 0
+	for _, judgment in ipairs({"W1", "W2", "W3", "W4", "W5", "Miss"}) do
+		local ok, count = pcall(pss.GetTapNoteScores, pss, "TapNoteScore_" .. judgment)
+		if ok then notesPassed = notesPassed + (tonumber(count) or 0) end
+	end
+	if notesPassed > 0 and type(pss.GetWifePoints) == "function" then
+		local ok, points = pcall(pss.GetWifePoints, pss)
+		if ok and tonumber(points) then
+			return (tonumber(points) / (notesPassed * 2)) * 100
+		end
+	end
+	return nil
+end
+
+function HV.GetReplayCurrentWifePercentage(pss)
+	if not pss then return nil end
+	local notesPassed = 0
+	for _, judgment in ipairs({"W1", "W2", "W3", "W4", "W5", "Miss"}) do
+		local ok, count = pcall(pss.GetTapNoteScores, pss, "TapNoteScore_" .. judgment)
+		if ok then notesPassed = notesPassed + (tonumber(count) or 0) end
+	end
+	if notesPassed > 0 and type(pss.GetWifePoints) == "function" then
+		local ok, points = pcall(pss.GetWifePoints, pss)
+		if ok and tonumber(points) then
+			return (tonumber(points) / (notesPassed * 2)) * 100
+		end
+	end
+	if type(pss.GetWifeScore) == "function" then
+		local ok, value = pcall(pss.GetWifeScore, pss)
+		if ok and tonumber(value) then return tonumber(value) * 100 end
+	end
+	return nil
+end
+
 local function hvNonNegativeCount(value)
 	value = tonumber(value) or 0
 	if value < 0 then return 0 end
@@ -1172,6 +1375,191 @@ function getRescoreElementsFromScore(score)
 	end
 	
 	return o
+end
+
+------------------------------------------------------------
+-- SCORE COMMENTS
+------------------------------------------------------------
+HV.ScoreCommentsPath = HV.ScoreCommentsPath or "Save/Holographic Void_settings/ScoreComments.lua"
+HV.ScoreComments = HV.ScoreComments or {}
+
+function HV.WrapScoreComment(text, maxCharacters)
+	local lines = {}
+	maxCharacters = math.max(1, tonumber(maxCharacters) or 40)
+	for paragraph in (tostring(text or "") .. "\n"):gmatch("([^\r\n]*)\r?\n") do
+		if paragraph ~= "" then
+			local line = ""
+			for word in paragraph:gmatch("%S+") do
+				local candidate = line == "" and word or (line .. " " .. word)
+				if line ~= "" and #candidate > maxCharacters then
+					lines[#lines + 1] = line
+					line = word
+				else
+					line = candidate
+				end
+			end
+			if line ~= "" then lines[#lines + 1] = line end
+		else
+			lines[#lines + 1] = ""
+		end
+	end
+	return table.concat(lines, "\n")
+end
+
+local function hvReadLuaTable(path)
+	if not FILEMAN:DoesFileExist(path) then return {} end
+	local file = RageFileUtil.CreateRageFile()
+	local result = {}
+	if file:Open(path, 1) then
+		local chunk = loadstring(file:Read())
+		if chunk then
+			local ok, data = pcall(chunk)
+			if ok and type(data) == "table" then result = data end
+		end
+		file:Close()
+	end
+	file:destroy()
+	return result
+end
+
+local function hvEnsureSettingsDir()
+	if FILEMAN.CreateDir then FILEMAN:CreateDir("Save/Holographic Void_settings") end
+end
+
+function HV.ScoreCommentKey(score)
+	if not score then return nil end
+	local function call(name, ...)
+		if type(score[name]) == "function" then
+			local ok, value = pcall(score[name], score, ...)
+			if ok and value ~= nil then return tostring(value) end
+		end
+		return tostring((select(1, ...)) or "")
+	end
+	return table.concat({
+		call("GetChartKey"), call("GetMusicRate", 1), call("GetDate"),
+		call("GetScore", 0), call("GetWifeScore", 0), call("GetMaxCombo", 0),
+		call("GetModifiers"), call("GetTapNoteScore", "TapNoteScore_W1"),
+		call("GetTapNoteScore", "TapNoteScore_W2"), call("GetTapNoteScore", "TapNoteScore_W3"),
+		call("GetTapNoteScore", "TapNoteScore_W4"), call("GetTapNoteScore", "TapNoteScore_W5"),
+		call("GetTapNoteScore", "TapNoteScore_Miss")
+	}, "|")
+end
+
+function HV.LoadScoreComments()
+	HV.ScoreComments = hvReadLuaTable(HV.ScoreCommentsPath)
+	return HV.ScoreComments
+end
+
+function HV.SaveScoreComments()
+	hvEnsureSettingsDir()
+	local file = RageFileUtil.CreateRageFile()
+	if file:Open(HV.ScoreCommentsPath, 2) then
+		file:Write("return {\n")
+		for key, value in pairs(HV.ScoreComments or {}) do
+			if type(key) == "string" and type(value) == "string" and value ~= "" then
+				file:Write(string.format("\t[%q] = %q,\n", key, value))
+			end
+		end
+		file:Write("}\n")
+		file:Close()
+	end
+	file:destroy()
+end
+
+function HV.GetScoreComment(score)
+	local key = HV.ScoreCommentKey(score)
+	return key and HV.ScoreComments[key] or ""
+end
+
+function HV.SetScoreComment(score, comment)
+	local key = HV.ScoreCommentKey(score)
+	if not key then return end
+	comment = tostring(comment or "")
+	if comment == "" then HV.ScoreComments[key] = nil else HV.ScoreComments[key] = comment end
+	HV.SaveScoreComments()
+end
+
+HV.LoadScoreComments()
+
+------------------------------------------------------------
+-- OSU!MANIA TAP RESCORING
+------------------------------------------------------------
+HV.ManiaJudgementNames = {"MAX", "300", "200", "100", "50", "MISS"}
+HV.ManiaJudgementPoints = {320, 300, 200, 100, 50, 0}
+HV.ManiaJudgementAccuracy = {1, 1, 2 / 3, 1 / 3, 1 / 6, 0}
+HV.ManiaState = HV.ManiaState or {enabled = false, od = 8.0}
+
+function HV.ResetManiaMode()
+	HV.ManiaState.enabled = false
+	HV.ManiaState.od = 8.0
+end
+
+function HV.ToggleManiaMode()
+	HV.ManiaState.enabled = not HV.ManiaState.enabled
+	return HV.ManiaState.enabled
+end
+
+function HV.SetManiaOD(value)
+	HV.ManiaState.od = math.max(0, math.min(11, math.floor((tonumber(value) or 8) * 10 + 0.5) / 10))
+	return HV.ManiaState.od
+end
+
+function HV.GetOrderedReplayTapOffsets(score, judgeByOldestNote)
+	local replay = score:GetReplay()
+	if not replay then return {}, false end
+	pcall(function() replay:LoadAllData() end)
+	local offsets = hvReplayVector(replay, "GetOffsetVector") or {}
+	local rows = hvReplayVector(replay, "GetNoteRowVector") or {}
+	local tracks = hvReplayVector(replay, "GetTrackVector") or {}
+	local types = hvReplayVector(replay, "GetTapNoteTypeVector") or {}
+	local taps = {}
+	for i, offset in ipairs(offsets) do
+		local typ = types[i]
+		if #types == 0 or typ == "TapNoteType_Tap" or typ == "TapNoteType_HoldHead" or typ == "TapNoteType_Lift" then
+			taps[#taps + 1] = {
+				offset = tonumber(offset) or 0,
+				row = tonumber(rows[i]) or i,
+				track = tonumber(tracks[i]) or i,
+				index = i
+			}
+		end
+	end
+	if judgeByOldestNote then
+		table.sort(taps, function(a, b)
+			if a.row == b.row then return a.track < b.track end
+			return a.row < b.row
+		end)
+	end
+	local orderedOffsets = {}
+	for _, tap in ipairs(taps) do orderedOffsets[#orderedOffsets + 1] = tap.offset end
+	return orderedOffsets, judgeByOldestNote == true, taps
+end
+
+function HV.GetOsuManiaRescore(score, od, judgeByOldestNote)
+	od = math.max(0, math.min(11, tonumber(od) or 8))
+	local offsets, reprioritized = HV.GetOrderedReplayTapOffsets(score, judgeByOldestNote)
+	-- ScoreV2's PERFECT window changes slope at OD 5 while remaining
+	-- continuous: 22.4 - 0.6*OD through OD 5, then 24.9 - 1.1*OD.
+	local perfectWindow = od <= 5 and (22.4 - 0.6 * od) or (24.9 - 1.1 * od)
+	local maxErrors = {perfectWindow, 64 - 3 * od, 97 - 3 * od, 127 - 3 * od, 151 - 3 * od, 188 - 3 * od}
+	local counts = {0, 0, 0, 0, 0, 0}
+	local points, accuracy = 0, 0
+	for _, offset in ipairs(offsets) do
+		local error = math.floor(math.abs(offset) + 0.5)
+		local judgement = 6
+		for i = 1, 5 do
+			if error <= math.floor(maxErrors[i] + 0.5) then judgement = i; break end
+		end
+		counts[judgement] = counts[judgement] + 1
+		points = points + HV.ManiaJudgementPoints[judgement]
+		accuracy = accuracy + HV.ManiaJudgementAccuracy[judgement]
+	end
+	return {
+		od = od, counts = counts, points = points,
+		maxPoints = #offsets * 320,
+		accuracy = #offsets > 0 and (accuracy / #offsets) or 0,
+		windows = maxErrors, reprioritized = reprioritized
+	}
 end
 
 function getJ4NormalizedPercentage(score)

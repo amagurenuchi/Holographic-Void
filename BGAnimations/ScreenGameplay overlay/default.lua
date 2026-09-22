@@ -155,6 +155,14 @@ local t = Def.ActorFrame {
 	end,
 	BeginCommand = function(self)
 		hideFallbackLifeBar()
+		-- The online-replay marker is set by the online score launcher and must
+		-- not leak into subsequent ordinary gameplay/evaluation screens.
+		if not (HV.IsReplayPlayback and HV.IsReplayPlayback()) then
+			HV.OnlineReplayActive = false
+			HV.OnlineReplayName = nil
+		end
+		HV.OnlineEvaluationActive = nil
+		HV.OnlineEvaluationName = nil
 		failSfxPlayed = false
 		HV_AutoFailJudgeCounts = { W2 = 0, W3 = 0, W4 = 0, W5 = 0, Miss = 0 }
 		-- Re-check sync mode via SCREENMAN now that it's safer
@@ -190,6 +198,13 @@ local t = Def.ActorFrame {
 		HV_PointsLost = 0
 		HV_RidiculousCount = 0
 		HV_JudgeScale = PREFSMAN:GetPreference("TimingWindowScale") or 1.0
+		if HV.IsReplayPlayback and HV.IsReplayPlayback() and curScreen and curScreen.GetReplayScore then
+			local replayScore = curScreen:GetReplayScore(PLAYER_1)
+			if replayScore and type(replayScore.GetJudgeScale) == "function" then
+				local ok, scale = pcall(replayScore.GetJudgeScale, replayScore)
+				if ok and tonumber(scale) then HV_JudgeScale = tonumber(scale) end
+			end
+		end
 
 		-- Initialize Auto-Fail Personal Best threshold if needed
 		local condition = ThemePrefs.Get("HV_AutoFailCondition")
@@ -203,6 +218,17 @@ local t = Def.ActorFrame {
 			end
 		end
 	end,
+	LoadFont("Common Normal") .. {
+		Name = "OnlineReplayWatermark",
+		InitCommand = function(self)
+			self:xy(SCREEN_CENTER_X, SCREEN_CENTER_Y):zoom(2.2):rotationz(-15)
+				:diffuse(HVColor.Accent):diffusealpha(0.14):z(999):draworder(10000):visible(false)
+			self:settext("ONLINE REPLAY")
+		end,
+		OnCommand = function(self)
+			self:visible(HV.OnlineReplayActive == true)
+		end
+	},
 	OnCommand = function(self)
 		hideFallbackLifeBar()
 		-- Double check mods on OnCommand just in case
@@ -579,11 +605,25 @@ t[#t + 1] = Def.ActorFrame {
 	end,
 
 	LoadFont("Common Normal") .. {
+		Name = "EmulatedJudgeLabel",
+		InitCommand = function(self)
+			self:y(-15):zoom(0.30):diffuse(subText):diffusealpha(0)
+			if HV.ScoreEmulationEnabled() and not (HV.IsReplayPlayback and HV.IsReplayPlayback()) then
+				self:settext(HV.ScoreEmulationLabel()):diffusealpha(0.8)
+			end
+		end,
+	},
+
+	LoadFont("Common Normal") .. {
 		Name = "ScoreValue",
 		InitCommand = function(self)
 			self:zoom(0.45):diffuse(brightText):diffusealpha(0.7)
 			self.currWifePoints = 0
 			self.currScoredTaps = 0
+			self.emulatedPoints = 0
+			self.emulatedMaxPoints = 0
+			self.replayWifePoints = 0
+			self.replayMaxPoints = 0
 			local scoreMode = ThemePrefs.Get("HV_ScoreDisplayMode") or "Normal"
 			if scoreMode == "Subtractive" then
 				self:settext("100.0000%")
@@ -604,6 +644,27 @@ t[#t + 1] = Def.ActorFrame {
 			if msg.Player ~= GAMESTATE:GetMasterPlayerNumber() then return end
 			if msg.HoldNoteScore then return end -- Skip holds, handled in HoldNoteScoreMessageCommand
 			if msg.TapNoteScore and msg.TapNoteScore ~= "TapNoteScore_AvoidMine" and msg.TapNoteScore ~= "TapNoteScore_CheckpointHit" and msg.TapNoteScore ~= "TapNoteScore_CheckpointMiss" then
+				if HV.IsReplayPlayback and HV.IsReplayPlayback() then
+					if msg.TapNoteScore ~= "TapNoteScore_HitMine" then
+						self.replayMaxPoints = self.replayMaxPoints + 2
+					end
+					if msg.TapNoteOffset then
+						self.replayWifePoints = self.replayWifePoints + wife3(math.abs(msg.TapNoteOffset) * 1000, HV_JudgeScale, "Wife3")
+					elseif msg.TapNoteScore == "TapNoteScore_Miss" then
+						self.replayWifePoints = self.replayWifePoints - 5.5
+					elseif msg.TapNoteScore == "TapNoteScore_HitMine" then
+						self.replayWifePoints = self.replayWifePoints - 7
+					else
+						self.replayWifePoints = self.replayWifePoints + 2
+					end
+				end
+				if HV.ScoreEmulationEnabled and HV.ScoreEmulationEnabled() then
+					local selection = HV.ScoreEmulationSelection()
+					if msg.TapNoteScore ~= "TapNoteScore_HitMine" then
+						self.emulatedMaxPoints = self.emulatedMaxPoints + HV.GetCosmeticTapMax(selection)
+					end
+					self.emulatedPoints = self.emulatedPoints + HV.GetCosmeticPointValue(selection, msg.TapNoteOffset and math.abs(msg.TapNoteOffset) * 1000 or nil, msg.TapNoteScore)
+				end
 				if msg.TapNoteOffset then
 					self.currWifePoints = self.currWifePoints + wife3(math.abs(msg.TapNoteOffset) * 1000, HV_JudgeScale, "Wife3")
 					self.currScoredTaps = self.currScoredTaps + 1
@@ -623,6 +684,12 @@ t[#t + 1] = Def.ActorFrame {
 			if msg.Player ~= GAMESTATE:GetMasterPlayerNumber() then return end
 			-- The engine applies the hold penalty even if the head was completely missed
 			if msg.HoldNoteScore == "HoldNoteScore_LetGo" or msg.HoldNoteScore == "HoldNoteScore_MissedHold" then
+				if HV.IsReplayPlayback and HV.IsReplayPlayback() then
+					self.replayWifePoints = self.replayWifePoints - 4.5
+				end
+				if HV.ScoreEmulationEnabled and HV.ScoreEmulationEnabled() then
+					self.emulatedPoints = self.emulatedPoints + HV.GetCosmeticHoldPointValue(HV.ScoreEmulationSelection(), msg.HoldNoteScore)
+				end
 				self.currWifePoints = self.currWifePoints - 4.5
 				self:playcommand("Update")
 			end
@@ -630,6 +697,12 @@ t[#t + 1] = Def.ActorFrame {
 		RollNoteScoreMessageCommand = function(self, msg)
 			if msg.Player ~= GAMESTATE:GetMasterPlayerNumber() then return end
 			if msg.RollNoteScore == "RollNoteScore_LetGo" or msg.RollNoteScore == "RollNoteScore_MissedRoll" then
+				if HV.IsReplayPlayback and HV.IsReplayPlayback() then
+					self.replayWifePoints = self.replayWifePoints - 4.5
+				end
+				if HV.ScoreEmulationEnabled and HV.ScoreEmulationEnabled() then
+					self.emulatedPoints = self.emulatedPoints + HV.GetCosmeticHoldPointValue(HV.ScoreEmulationSelection(), msg.RollNoteScore)
+				end
 				self.currWifePoints = self.currWifePoints - 4.5
 				self:playcommand("Update")
 			end
@@ -642,8 +715,23 @@ t[#t + 1] = Def.ActorFrame {
 			local scoreMode = ThemePrefs.Get("HV_ScoreDisplayMode") or "Normal"
 			local pss = STATSMAN:GetCurStageStats():GetPlayerStageStats()
 			local isAutoplay = getAutoplay and getAutoplay() ~= 0
-			
-			if isAutoplay and pss then
+			local isReplay = HV.IsReplayPlayback and HV.IsReplayPlayback()
+
+			-- Replay playback must reflect the engine's live replay stats. Do not
+			-- apply this theme's cumulative or subtractive display calculations.
+			if isReplay then
+				if self.replayMaxPoints > 0 then
+					wifePct = (self.replayWifePoints / self.replayMaxPoints) * 100
+				else
+					wifePct = 0
+				end
+			elseif HV.ScoreEmulationEnabled and HV.ScoreEmulationEnabled() and pss then
+				if self.emulatedMaxPoints > 0 then
+					wifePct = (self.emulatedPoints / self.emulatedMaxPoints) * 100
+				else
+					wifePct = 0
+				end
+			elseif isAutoplay and pss then
 				local notesPassed = pss:GetTapNoteScores("TapNoteScore_W1") +
 								   pss:GetTapNoteScores("TapNoteScore_W2") +
 								   pss:GetTapNoteScores("TapNoteScore_W3") +

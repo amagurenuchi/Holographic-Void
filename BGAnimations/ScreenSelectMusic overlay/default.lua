@@ -42,6 +42,59 @@ local previewActive = false
 local inputDebugActor = nil
 local searchString = ""
 
+-- SCOREMAN's ranked lists are shared by all local profiles.  Keep the
+-- Profile tab scoped to the profile that is currently selected in PLAYER_1.
+local function getActiveLocalProfileName()
+	local profile = (GetPlayerOrMachineProfile and GetPlayerOrMachineProfile(PLAYER_1))
+		or (PROFILEMAN and PROFILEMAN:GetProfile(PLAYER_1))
+	if not profile or type(profile.GetDisplayName) ~= "function" then return nil end
+	local ok, name = pcall(function() return profile:GetDisplayName() end)
+	return ok and name and tostring(name) or nil
+end
+
+local function isScoreForActiveLocalProfile(score, profileName)
+	if not score or type(score) == "table" then return false end
+	-- SCOREMAN's local list is profile-scoped; if the profile name is not
+	-- available, retain that list rather than making the display empty.
+	if not profileName then return true end
+	local hasProfileName = false
+	for _, getterName in ipairs({"GetDisplayName", "GetName"}) do
+		local getter = score[getterName]
+		if type(getter) == "function" then
+			local ok, name = pcall(getter, score)
+			if ok and name and tostring(name) ~= "" then
+				hasProfileName = true
+				if tostring(name) == profileName then return true end
+			end
+		end
+	end
+	-- Scores loaded from older Etterna.xml files may not have a name field.
+	-- SCOREMAN's local ranked list is already scoped to the loaded profile, so
+	-- keep unnamed scores instead of hiding the entire local history.
+	return not hasProfileName
+end
+
+local function getLocalProfileScores(endIndex, isRecent, skillset)
+	local scores = {}
+	local profileName = getActiveLocalProfileName()
+
+	local rawIndex = 0
+	while #scores < endIndex and rawIndex < 10000 do
+		rawIndex = rawIndex + 1
+		local ok, score = pcall(function()
+			if isRecent then
+				return SCOREMAN:GetRecentScoreForGame(rawIndex)
+			end
+			return SCOREMAN:GetTopSSRHighScoreForGame(rawIndex, skillset)
+		end)
+		if not ok or not score then break end
+		if isScoreForActiveLocalProfile(score, profileName) then
+			scores[#scores + 1] = score
+		end
+	end
+	return scores
+end
+
 -- Shared entry point for decorations that apply a search without opening
 -- the search tab (for example, clicking a chart's CDTitle author).
 local function SetMusicSearchQuery(query)
@@ -1178,7 +1231,7 @@ local profileOverlay = Def.ActorFrame {
 					local prof = PROFILEMAN:GetProfile(PLAYER_1)
 					if prof and HV.GetLevelProgress then
 						local progress, cur, total = HV.GetLevelProgress(prof)
-						self:GetChild("Bar"):smooth(0.5):zoomx(60 * progress)
+						self:GetChild("Bar"):stoptweening():smooth(0.5):zoomx(60 * progress)
 						self:GetChild("Num"):settextf("%d / %d XP", cur, total)
 						self:visible(true)
 					elseif prof then
@@ -1551,11 +1604,17 @@ local profileOverlay = Def.ActorFrame {
 		local maxPage = 100 -- Large enough safety net
 		
 		local maxPage = 100 -- Logic clamping below will handle real end
+		local useLocalScores = self.isRecentMode or not (self.isOnlineMode and DLMAN:IsLoggedIn())
 		
 		if self.isRecentMode then
 			SCOREMAN:SortRecentScoresForGame()
-		elseif not self.isOnlineMode then
+		elseif useLocalScores then
 			SCOREMAN:SortSSRsForGame(self.currentSkillset)
+		end
+
+		local localScores = nil
+		if useLocalScores then
+			localScores = getLocalProfileScores(start + scorePageSize, self.isRecentMode, self.currentSkillset)
 		end
 		
 		local foundAnyOnPage = false
@@ -1565,17 +1624,14 @@ local profileOverlay = Def.ActorFrame {
 			local score = nil
 			
 			if self.isRecentMode then
-				-- Local score APIs are 1-indexed; using pageIndex keeps row 1 aligned to slot 1.
-				local ok, res = pcall(function() return SCOREMAN:GetRecentScoreForGame(pageIndex) end)
-				score = (ok and res ~= nil) and res or nil
+				score = localScores and localScores[pageIndex] or nil
 			else
 				if self.isOnlineMode and DLMAN:IsLoggedIn() then
 					-- Online scores are 1-indexed
 					local ok, res = pcall(function() return DLMAN:GetTopSkillsetScore(pageIndex, self.currentSkillset) end)
 					score = (ok and res ~= nil) and res or nil
 				else
-					local ok, res = pcall(function() return SCOREMAN:GetTopSSRHighScoreForGame(pageIndex, self.currentSkillset) end)
-					score = (ok and res ~= nil) and res or nil
+					score = localScores and localScores[pageIndex] or nil
 				end
 			end
 			

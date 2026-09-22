@@ -51,6 +51,10 @@ local pausedPos = 0
 local visualSeekActive = false
 local visualSeekStartTime = 0
 local visualSeekStartPos = 0
+-- During the async sample-music handoff the engine briefly reports position 0.
+-- Keep the timestamp used to initialise the preview until that handoff is done.
+local previewPosition = 0
+local previewSongPath = nil
 
 local fullSongMode = false
 
@@ -226,15 +230,28 @@ local function updateSync(self)
 	if not ssm then return end
 	
 	local pos = ssm:GetSampleMusicPosition()
+	-- PlayCurrentSongSampleMusic can reset its position to the sample start
+	-- for a frame while the deferred seek is being applied. Do not let that
+	-- transient value reset the graph cursor to the beginning.
+	local pendingSeek = rootRef and rootRef.pendingSeekPos
+	if pendingSeek ~= nil then
+		pos = rootRef.pendingSeekPos
+	end
 	if visualSeekActive then
 		local visualPos = visualSeekStartPos + ((GetTimeSinceStart() - visualSeekStartTime) * math.max(MIN_MUSIC_RATE, getCurRateValue()))
-		if pos and math.abs(pos - visualPos) < 0.15 then
+		-- Keep the visual clock authoritative for the whole async seek. The
+		-- engine may still report 0 even after the first SetSampleMusicPosition
+		-- call, and accepting that value would put the marker back at the start.
+		if pendingSeek ~= nil then
+			pos = visualPos
+		elseif pos and math.abs(pos - visualPos) < 0.15 then
 			visualSeekActive = false
 		else
 			pos = visualPos
 		end
 	end
 	if pos > musicLength then pos = musicLength end
+	previewPosition = math.max(0, pos or 0)
 
 	applyPreviewPosition(pos)
 
@@ -445,7 +462,9 @@ local function input(event)
 			-- Capture exact position BEFORE toggling pause to avoid frame slip
 			if not isPaused then
 				pausedPos = ssm:GetSampleMusicPosition() or 0
+				if pausedPos <= 0 then pausedPos = previewPosition end
 			end
+			previewPosition = pausedPos
 			ssm:PauseSampleMusic()
 			isPaused = not isPaused
 			MESSAGEMAN:Broadcast("MusicPauseToggled")
@@ -535,7 +554,7 @@ local function skillsetPanel()
 		InitCommand = function(self)
 			self:visible(HV.ShowMSD())
 		end,
-		Def.Quad { InitCommand = function(self) self:zoomto(sidePanelWidth, 300):diffuse(bgCard):diffusealpha(0.8) end },
+		Def.Quad { InitCommand = function(self) self:zoomto(sidePanelWidth, 240):diffuse(bgCard):diffusealpha(0.8) end },
 		LoadFont("Common Normal") .. { InitCommand = function(self) self:y(-135):settext("SKILLSETS"):zoom(0.4):diffuse(accentColor) end },
 		Def.ActorFrame {
 			Name = "Grid",
@@ -573,7 +592,7 @@ local function radarPanel()
 	}
 	return Def.ActorFrame {
 		Name = "RadarPanel",
-		Def.Quad { InitCommand = function(self) self:zoomto(sidePanelWidth, 300):diffuse(bgCard):diffusealpha(0.8) end },
+		Def.Quad { InitCommand = function(self) self:zoomto(sidePanelWidth, 240):diffuse(bgCard):diffusealpha(0.8) end },
 		LoadFont("Common Normal") .. { InitCommand = function(self) self:y(-135):settext("ANALYSIS"):zoom(0.4):diffuse(accentColor) end },
 		Def.ActorFrame {
 			Name = "Grid",
@@ -1007,6 +1026,11 @@ local t = Def.ActorFrame {
 		song = GAMESTATE:GetCurrentSong()
 		steps = GAMESTATE:GetCurrentSteps()
 		if not song or not steps then return end
+		local currentSongPath = song:GetMusicPath()
+		if previewSongPath ~= nil and previewSongPath ~= currentSongPath then
+			previewPosition = 0
+		end
+		previewSongPath = currentSongPath
 		
 		musicLength = song:GetLastSecond()
 		visualSeekActive = false
@@ -1034,15 +1058,35 @@ local t = Def.ActorFrame {
 		-- by the engine's own reset to song:GetSampleStart().
 		-- PlayingSampleMusicMessageCommand (below) applies the seek once the stream is live.
 		local capturedPos = 0
-		if HV.GetBgmCurrentPos then
-			capturedPos = HV.GetBgmCurrentPos()
+		-- GetSampleMusicPosition is not populated for the custom SOUND preview
+		-- modes, so use the engine song clock and the custom-preview tracker as
+		-- fallbacks. Only accept positive values: zero is the stream handoff
+		-- value, not a reliable indication that playback is at the beginning.
+		if ssm and ssm.GetSampleMusicPosition then
+			local ok, sp = pcall(function() return ssm:GetSampleMusicPosition() end)
+			if ok and type(sp) == "number" and sp > capturedPos then capturedPos = sp end
 		end
-		if capturedPos <= 0 and ssm and ssm.GetSampleMusicPosition then
-			local sp = ssm:GetSampleMusicPosition()
-			if sp and sp > 0 then capturedPos = sp end
+		local ok, songPos = pcall(function()
+			return GAMESTATE:GetSongPosition():GetMusicSeconds()
+		end)
+		if ok and type(songPos) == "number" and songPos > capturedPos then
+			capturedPos = songPos
+		end
+		if HV.GetBgmCurrentPos then
+			local ok, bgmPos = pcall(HV.GetBgmCurrentPos)
+			if ok and type(bgmPos) == "number" and bgmPos > capturedPos then
+				capturedPos = bgmPos
+			end
 		end
 		if capturedPos < 0 then capturedPos = 0 end
+		if capturedPos == 0 and previewPosition > 0 then
+			capturedPos = previewPosition
+		end
 		self.pendingSeekPos = capturedPos
+		previewPosition = capturedPos
+		-- Start the visual clock before starting the async stream so the first
+		-- update frame cannot render the marker at the engine's temporary zero.
+		startVisualSeekClock(capturedPos)
 		
 		-- Try the seek immediately on open so audio can snap to the
 		-- notefield ASAP, then let the deferred seek path verify it.
@@ -1085,6 +1129,17 @@ local t = Def.ActorFrame {
 	end,
 	
 	ChartPreviewOffMessageCommand = function(self)
+		-- Preserve the exact position before handing audio back to the song
+		-- preview. This is also the fallback if the next entry occurs while the
+		-- audio position APIs are between streams.
+		if ssm and ssm.GetSampleMusicPosition then
+			local ok, pos = pcall(function() return ssm:GetSampleMusicPosition() end)
+			-- Custom preview audio does not update this API and reports 0.
+			-- Never replace a valid tracked position with that sentinel value.
+			if ok and type(pos) == "number" and pos > 0 then
+				previewPosition = math.min(pos, musicLength > 0 and musicLength or pos)
+			end
+		end
 		self:visible(false)
 		SCREENMAN:set_input_redirected(PLAYER_1, false)
 		-- Don't stop music — let the screen handle it naturally

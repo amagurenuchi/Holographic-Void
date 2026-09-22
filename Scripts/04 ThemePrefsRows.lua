@@ -448,6 +448,17 @@ local HVPrefRows = {
 		Choices = {"Off", "On"},
 		Values = {false, true},
 	},
+	-- Cosmetic gameplay score emulation.
+	HV_EmulateScore = {
+		Default = false,
+		Choices = {"Off", "On"},
+		Values = {false, true},
+	},
+	HV_EmulateScoreJudge = {
+		Default = "J4",
+		Choices = {"J4", "J5", "J6", "J7", "J8", "J9"},
+		Values = {"J4", "J5", "J6", "J7", "J8", "J9"},
+	},
 } -- End of HVPrefRows
 
 -- Register the rows with the _Fallback ThemePrefsRows system
@@ -711,6 +722,42 @@ end
 
 function OptionRowEmulateRidiculous()
 	return HVThemePrefRow("HV_EmulateRidiculous", "Emulate Ridiculous")
+end
+
+function OptionRowEmulateScore()
+	return HVThemePrefRow("HV_EmulateScore", "Emulate Score (Cosmetic)")
+end
+
+function OptionRowEmulateScoreJudge()
+	local row = ThemePrefRow("HV_EmulateScoreJudge", "Emulated Judge")
+	local choices = {"Judge 4", "Judge 5", "Judge 6", "Judge 7", "Judge 8", "Judge 9"}
+	local values = {"J4", "J5", "J6", "J7", "J8", "J9"}
+	if HV.GetCustomWindowChoices then
+		local customChoices, customValues = HV.GetCustomWindowChoices()
+		for i, choice in ipairs(customChoices or {}) do
+			choices[#choices + 1] = choice
+			values[#values + 1] = customValues[i]
+		end
+	end
+	row.Choices, row.Values = choices, values
+	row.ExportOnChange = true
+	row.LoadSelections = function(self, list, pn)
+		local value = ThemePrefs.Get("HV_EmulateScoreJudge") or "J4"
+		for i, candidate in ipairs(self.Values) do
+			if tostring(candidate) == tostring(value) then list[i] = true; return end
+		end
+		list[1] = true
+	end
+	row.SaveSelections = function(self, list, pn)
+		for i, selected in ipairs(list) do
+			if selected then
+				ThemePrefs.Set("HV_EmulateScoreJudge", self.Values[i])
+				ThemePrefs.ForceSave()
+				return
+			end
+		end
+	end
+	return row
 end
 
 function OptionRowShowCombo()

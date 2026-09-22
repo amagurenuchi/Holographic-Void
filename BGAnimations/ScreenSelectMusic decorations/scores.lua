@@ -13,6 +13,7 @@ local overlayW = 680
 local overlayH = 400
 local rowH = 34
 local pageSize = 8
+local rowsStartY = -overlayH/2 + 82
 local currentPage = 1
 local scoresActor = nil
 local whee = nil
@@ -32,8 +33,31 @@ local localScores = {}
 local onlineScores = {}
 local displayedScores = {}
 local onlineLoading = false
+local onlineRequestToken = 0
 local filterCurrentRate = true
 local displayAsJ4 = PREFSMAN:GetPreference("SortBySSRNormPercent")
+local hoveredCommentScore = nil
+
+local function GetScoreDisplayName(score)
+	if not score then return nil end
+	local fallback
+	local placeholders = {
+		["Player 1"] = true, ["Player 2"] = true, ["Replay"] = true,
+		["Unknown"] = true, ["???"] = true, [""] = true
+	}
+	for _, getterName in ipairs({"GetDisplayName", "GetName"}) do
+		local getter = score[getterName]
+		if type(getter) == "function" then
+			local ok, name = pcall(getter, score)
+			if ok and name then
+				name = tostring(name)
+				if not placeholders[name] then return name end
+				fallback = fallback or name
+			end
+		end
+	end
+	return nil
+end
 
 -- ============================================================
 -- DATA HELPERS
@@ -104,6 +128,8 @@ local function GetLocalScores()
 end
 
 local function FetchOnlineScores()
+	onlineRequestToken = onlineRequestToken + 1
+	local requestToken = onlineRequestToken
 	onlineScores = {}
 	onlineLoading = true
 
@@ -137,7 +163,8 @@ local function FetchOnlineScores()
 	DLMAN:RequestChartLeaderBoardFromOnline(
 		ck,
 		function(leaderboard)
-			if leaderboard then
+			if requestToken ~= onlineRequestToken then return end
+			if type(leaderboard) == "table" then
 				onlineScores = leaderboard
 				-- Sort using helper
 				SortScores(onlineScores)
@@ -145,7 +172,11 @@ local function FetchOnlineScores()
 				onlineScores = {}
 			end
 			onlineLoading = false
-			if scoresActor then scoresActor:queuecommand("RefreshScores") end
+			local actor = scoresActor
+			if actor then
+				local ok = pcall(function() actor:queuecommand("RefreshScores") end)
+				if not ok then scoresActor = nil end
+			end
 		end
 	)
 end
@@ -153,6 +184,8 @@ end
 local function ViewScore(score)
 	if not score then return end
 	local ss = score.score or score
+	HV.OnlineEvaluationActive = (currentView == VIEW_ONLINE)
+	HV.OnlineEvaluationName = HV.OnlineEvaluationActive and GetScoreDisplayName(ss) or nil
 	local screen = SCREENMAN:GetTopScreen()
 	-- ShowEvalScreenForScore is a standard Etterna ScreenSelectMusic method for viewing historical scores
 	if screen and screen.ShowEvalScreenForScore then
@@ -176,6 +209,54 @@ local t = Def.ActorFrame {
 		scoresActor = self
 		self:xy(SCREEN_CENTER_X, SCREEN_CENTER_Y):visible(false):diffusealpha(0)
 	end,
+	OffCommand = function(self)
+		if scoresActor == self then scoresActor = nil end
+	end,
+	OnCommand = function(self)
+		self:SetUpdateFunction(function(actor)
+			if not actor:GetVisible() then
+				local tooltip = actor:GetChild("ScoreCommentTooltip")
+				if tooltip then tooltip:visible(false) end
+				return
+			end
+			local mx, my = INPUTFILTER:GetMouseX(), INPUTFILTER:GetMouseY()
+			local found = nil
+			for ri = 1, pageSize do
+				local ry = SCREEN_CENTER_Y + rowsStartY + (ri - 1) * rowH + rowH / 2
+				if mx >= SCREEN_CENTER_X - overlayW / 2 + 25 and mx <= SCREEN_CENTER_X + overlayW / 2 - 25
+					and my >= ry - rowH / 2 and my <= ry + rowH / 2 then
+					local entry = displayedScores[(currentPage - 1) * pageSize + ri]
+					found = entry and (entry.score or entry) or nil
+					break
+				end
+			end
+			local tooltip = actor:GetChild("ScoreCommentTooltip")
+			local comment = found and HV.GetScoreComment(found) or ""
+			hoveredCommentScore = found
+			if tooltip then
+				local hasComment = comment ~= ""
+				tooltip:visible(hasComment)
+				if hasComment then
+					local text = tooltip:GetChild("Text")
+					local bg = tooltip:GetChild("Bg")
+					local wrappedComment = HV.WrapScoreComment(comment, 58)
+					text:settext(wrappedComment)
+					local textWidth = #comment * 0.32 * 8
+					if text.GetWidth then
+						local measuredWidth = text:GetWidth() * 0.32
+						if measuredWidth > 0 then textWidth = measuredWidth end
+					end
+					local lineCount = 1
+					for _ in wrappedComment:gmatch("\n") do lineCount = lineCount + 1 end
+					local tooltipWidth = math.max(140, math.min(520, textWidth + 24))
+					bg:zoomto(tooltipWidth, math.max(42, lineCount * 16 + 16))
+					-- Keep the tooltip attached to the cursor, even while the
+					-- cursor moves within the same score row.
+					tooltip:xy(mx - SCREEN_CENTER_X + 16, my - SCREEN_CENTER_Y + 16)
+				end
+			end
+		end)
+	end,
 	BeginCommand = function(self)
 		local screen = SCREENMAN:GetTopScreen()
 		if screen and screen.GetMusicWheel then whee = screen:GetMusicWheel() end
@@ -195,6 +276,7 @@ local t = Def.ActorFrame {
 			end
 		else
 			self:visible(false)
+			onlineRequestToken = onlineRequestToken + 1
 			if HV.ActiveTab == "SCORES" then HV.ActiveTab = "" end
 		end
 	end,
@@ -393,10 +475,15 @@ local t = Def.ActorFrame {
 				:settext(THEME:GetString("Scores", "ScoreHint"))
 		end,
 	},
+	Def.ActorFrame {
+		Name = "ScoreCommentTooltip",
+		InitCommand = function(self) self:visible(false):z(20) end,
+		Def.Quad { Name = "Bg", InitCommand = function(self) self:halign(0):valign(0):zoomto(140, 70):diffuse(color("0.01,0.01,0.01,0.90")) end },
+		LoadFont("Common Normal") .. { Name = "Text", InitCommand = function(self) self:halign(0):valign(0):xy(10, 8):zoom(0.32):diffuse(brightText) end }
+	},
 }
 
 -- Score rows
-local rowsStartY = -overlayH/2 + 82
 for i = 1, pageSize do
 	t[#t + 1] = Def.ActorFrame {
 		Name = "ScoreRow_" .. i,
@@ -409,14 +496,13 @@ for i = 1, pageSize do
 		LoadFont("Common Normal") .. { Name = "Player", InitCommand = function(self) self:halign(0):valign(0.5):x(30):y(rowH/2):zoom(0.42):diffuse(mainText):maxwidth(150 / 0.42) end },
 		LoadFont("Common Normal") .. { Name = "Wife", InitCommand = function(self) self:halign(0):valign(0.5):x(190):y(rowH/2 - 5):zoom(0.40):diffuse(brightText) end },
 		LoadFont("Common Normal") .. { Name = "Judge", InitCommand = function(self) self:halign(1):valign(0.5):x(185):y(rowH/2 - 5):zoom(0.30):diffuse(subText) end },
-		LoadFont("Common Normal") .. { Name = "Judgments", InitCommand = function(self) self:halign(0):valign(0.5):x(190):y(rowH/2 + 8):zoom(0.22):diffuse(subText) end },
-		LoadFont("Common Normal") .. { Name = "SSR", InitCommand = function(self) self:halign(0):valign(0.5):x(280):y(rowH/2):zoom(0.40):diffuse(brightText):visible(HV.ShowMSD()) end },
+		LoadFont("Common Normal") .. { Name = "Judgments", InitCommand = function(self) self:halign(0):valign(0.5):x(190):y(rowH/2 + 8):zoom(0.28):diffuse(subText) end },
+		LoadFont("Common Normal") .. { Name = "SSR", InitCommand = function(self) self:halign(0):valign(0.5):x(280):y(rowH/2):zoom(0.50):diffuse(brightText):visible(HV.ShowMSD()) end },
 		LoadFont("Common Normal") .. { Name = "Grade", InitCommand = function(self) self:halign(0):valign(0.5):x(345):y(rowH/2):zoom(0.38) end },
 		LoadFont("Common Normal") .. { Name = "Rate", InitCommand = function(self) self:halign(0):valign(0.5):x(415):y(rowH/2):zoom(0.38):diffuse(mainText) end },
 		LoadFont("Common Normal") .. { Name = "Clear", InitCommand = function(self) self:halign(0):valign(0.5):x(485):y(rowH/2):zoom(0.35) end },
 		LoadFont("Common Normal") .. { Name = "Date", InitCommand = function(self) self:halign(1):valign(0.5):x(overlayW - 90):y(rowH/2):zoom(0.32):diffuse(subText) end },
 		LoadFont("Common Normal") .. { Name = "CC", InitCommand = function(self) self:halign(0):valign(0.5):x(30):y(rowH/2 + 8):zoom(0.28):diffuse(color("#FF0000")):settext("Chord Cohesion ON") end },
-		
 		-- Replay Button
 		Def.ActorFrame {
 			Name = "ReplayButton",
@@ -520,7 +606,7 @@ for i = 1, pageSize do
 					-- Online leaderboard score
 					local s = scores[idx]
 					pcall(function()
-						local username = s:GetDisplayName() or s:GetName() or "???"
+						local username = GetScoreDisplayName(s) or "Unknown"
 						self:GetChild("Player"):settext(username)
 
 						-- Online judgments if available
@@ -591,6 +677,7 @@ end
 
 -- RefreshScores on main frame
 t.RefreshScoresCommand = function(self)
+	hoveredCommentScore = nil
 	UpdateDisplayedScores()
 	
 	local scores = displayedScores
@@ -684,18 +771,28 @@ t[#t + 1] = Def.ActorFrame {
 				for ri = 1, pageSize do
 					local ry = SCREEN_CENTER_Y + rowsStartY + (ri - 1) * rowH + rowH / 2
 					
-					-- 1. Check Replay Button first (higher priority)
+					-- Replay button
+					-- Check Replay Button.
 					if IsMouseOverCentered(replayX, ry, 35, 30) then
 						local idx = (currentPage - 1) * pageSize + ri
 						local s = displayedScores[idx]
 						if s then
 							local ss = s.score or s
 							if currentView == VIEW_LOCAL then
+								HV.OnlineReplayActive = false
+								HV.OnlineReplayName = nil
+								HV.OnlineEvaluationName = nil
 								if ss:HasReplayData() then
 									SCREENMAN:GetTopScreen():PlayReplay(ss)
 								end
 							else
 								-- Online Replay: Request data first, then play
+								HV.OnlineReplayActive = true
+								-- Keep the leaderboard author's name alongside the replay. The
+								-- engine may not preserve online score metadata on the replay
+								-- score object after PlayReplay switches screens.
+								HV.OnlineReplayName = GetScoreDisplayName(ss)
+								HV.OnlineEvaluationName = HV.OnlineReplayName
 								DLMAN:RequestOnlineScoreReplayData(
 									ss,
 									function()
@@ -711,7 +808,7 @@ t[#t + 1] = Def.ActorFrame {
 						return true
 					end
 
-					-- 2. Check Row Click (View Score)
+					-- Check Row Click (View Score)
 					if IsMouseOverCentered(SCREEN_CENTER_X, ry, overlayW - 50, rowH) then
 						local idx = (currentPage - 1) * pageSize + ri
 						local s = displayedScores[idx]

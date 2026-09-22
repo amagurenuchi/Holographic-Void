@@ -129,13 +129,33 @@ local t = Def.ActorFrame {
 		CycleNameCommand = function(self)
 			self:stoptweening()
 			local pn = PLAYER_1
-			local onlineName = (DLMAN:IsLoggedIn()) and DLMAN:GetUsername() or ""
+			local onlineName = HV.OnlineReplayActive
+				and (HV.OnlineReplayName or "")
+				or ((DLMAN:IsLoggedIn()) and DLMAN:GetUsername() or "")
+			if HV.OnlineReplayActive and onlineName == "" then
+				local screen = SCREENMAN:GetTopScreen()
+				if screen and screen.GetReplayScore then
+					local replayScore = screen:GetReplayScore(pn)
+					if replayScore then
+						local getter = replayScore.GetDisplayName or replayScore.GetName
+						if getter then
+							local ok, name = pcall(getter, replayScore)
+							local placeholder = { ["Player 1"] = true, ["Player 2"] = true, ["Replay"] = true, ["Unknown"] = true, ["???"] = true }
+							if ok and name and name ~= "" and not placeholder[tostring(name)] then onlineName = tostring(name) end
+						end
+					end
+				end
+			end
 			local localName = ""
 			local profile = PROFILEMAN:GetProfile(pn)
 			if profile then localName = profile:GetDisplayName() end
 			if localName == "" then localName = "Player 1" end
 			
-			if onlineName ~= "" and onlineName ~= localName then
+			if HV.OnlineReplayActive and onlineName ~= "" then
+				self.cycleState = 0
+				self:diffusealpha(1):settext(onlineName)
+				self:sleep(3):queuecommand("CycleName")
+			elseif onlineName ~= "" and onlineName ~= localName then
 				if self.cycleState == 0 then
 					self:settext(onlineName)
 				else

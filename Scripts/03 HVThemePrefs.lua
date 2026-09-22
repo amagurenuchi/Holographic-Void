@@ -739,6 +739,17 @@ local HVPrefs = {
 		Choices = {"Off", "On"},
 		Values = {false, true}
 	},
+	-- Cosmetic gameplay score emulation.
+	HV_EmulateScore = {
+		Default = false,
+		Choices = {"Off", "On"},
+		Values = {false, true}
+	},
+	HV_EmulateScoreJudge = {
+		Default = "J4",
+		Choices = {"J4", "J5", "J6", "J7", "J8", "J9"},
+		Values = {"J4", "J5", "J6", "J7", "J8", "J9"}
+	},
 }
 
 -- bLoadFromDisk = true on the first call to read existing prefs from file.

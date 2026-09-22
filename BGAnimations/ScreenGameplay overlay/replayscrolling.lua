@@ -90,6 +90,9 @@ end
 
 local inputAdded = false
 local playerName = "Replay"
+if HV.OnlineReplayActive and HV.OnlineReplayName then
+	playerName = HV.OnlineReplayName
+end
 local isCustomizeGameplay = playerConfig:get_data(pn_to_profile_slot(PLAYER_1)).CustomizeGameplay
 
 local t = Def.ActorFrame {
@@ -104,7 +107,9 @@ local t = Def.ActorFrame {
 		local screen = SCREENMAN:GetTopScreen()
 		if screen and screen.GetReplayScore then
 			local score = screen:GetReplayScore(PLAYER_1)
-			if score then playerName = score:GetDisplayName() or score:GetName() or "Replay" end
+			if score and not (HV.OnlineReplayActive and HV.OnlineReplayName) then
+				playerName = score:GetDisplayName() or score:GetName() or "Replay"
+			end
 		end
 		
 		if not inputAdded then
