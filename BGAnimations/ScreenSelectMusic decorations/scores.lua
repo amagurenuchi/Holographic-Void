@@ -483,6 +483,8 @@ local t = Def.ActorFrame {
 				self:visible(true)
 				if currentView == VIEW_LOCAL then
 					self:settext(THEME:GetString("Scores", "NoScoresLocal"))
+				elseif not DLMAN:IsLoggedIn() then
+					self:settext(THEME:GetString("Scores", "OnlineLoginRequired"))
 				else
 					self:settext(THEME:GetString("Scores", "NoScoresOnline"))
 				end

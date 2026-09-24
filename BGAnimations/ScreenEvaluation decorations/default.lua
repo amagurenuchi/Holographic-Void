@@ -276,28 +276,6 @@ local function calculateCustomWindowScore(configName, rst)
 	return math.max(0, math.min(100, (pts / maxPts) * 100))
 end
 
--- Return the score percentage for the window currently selected on the eval
--- screen.  The normal rescored percentage is Wife3-based, so it must not be
--- used for the floating DP while a custom window is active.
-local function getActiveCustomWindowScore()
-	if not usingCustomWindows or not customWindowsConfig then return nil end
-	local data = customWindowsConfig:get_data()
-	local order = data and data.customWindowOrder or {}
-	local index = rawget(_G, "customWindowIndex") or rawget(_G, "customWindowConfigIndex") or rawget(_G, "currentCustomWindowIndex") or 1
-	local configName = order[index]
-	if not configName then return nil end
-	local rst = getRescoreElements(pss, curScore)
-	if not rst then return nil end
-	rst.dvt = getFilteredDvt()
-	return calculateCustomWindowScore(configName, rst)
-end
-
-local function getEvaluationDP()
-	local customPct = getActiveCustomWindowScore()
-	if customPct then return (customPct / 100) * songMaxPoints end
-	return ((rescoredPercentage or (pss:GetWifeScore() * 100)) / 100) * songMaxPoints
-end
-
 local function updateVectors()
 	local replay = curScore and curScore:GetReplay() or nil
 	local hasReplay = replay and replay:LoadAllData()
@@ -1740,7 +1718,7 @@ local function scoreBoard(pn)
 				local wholePart = self:GetChild("WholeDP")
 				local decimalPart = self:GetChild("DecimalDP")
 				local displayPct = rescoredPercentage or (pss:GetWifeScore() * 100)
-				local dp = maniaRescore and maniaRescore.points or getEvaluationDP()
+				local dp = maniaRescore and maniaRescore.points or ((displayPct / 100) * songMaxPoints)
 				local targetDP = dp
 				
 				local duration = 0.2
@@ -1771,23 +1749,21 @@ local function scoreBoard(pn)
 			-- Whole part
 			LoadFont("Common Normal") .. {
 				Name = "WholeDP",
-				InitCommand = function(self) self:halign(0):valign(1):xy(0, 5):zoom(0.8):diffuse(color("#55b0ff")) end,
+				InitCommand = function(self) self:halign(0):valign(1):xy(0, 5):zoom(0.8):diffuse(accentColor) end,
 				SetJudgeCommand = function(self)
 					self:GetParent():SetUpdateFunction(nil)
 					if rescoredPercentage then
-						local dp = maniaRescore and maniaRescore.points or getEvaluationDP()
+						local dp = maniaRescore and maniaRescore.points or ((rescoredPercentage / 100) * songMaxPoints)
 						local decimalPart = self:GetParent():GetChild("DecimalDP")
 						local precision = (rescoredPercentage >= 99) and 4 or 2
 						setDPTextActors(self, decimalPart, dp, precision)
 					end
 				end,
-				LoadedCustomWindowMessageCommand = function(self) self:GetParent():playcommand("On") end,
-				UnloadedCustomWindowMessageCommand = function(self) self:GetParent():playcommand("On") end,
 			},
 			-- Decimal part
 			LoadFont("Common Normal") .. {
 				Name = "DecimalDP",
-				InitCommand = function(self) self:halign(0):valign(1):xy(0, 5):zoom(0.35):diffuse(color("#55b0ff")) end,
+				InitCommand = function(self) self:halign(0):valign(1):xy(0, 5):zoom(0.35):diffuse(accentColor) end,
 				OnCommand = function(self)
 					-- Handled by WholeDP UpdateFunction
 				end,
