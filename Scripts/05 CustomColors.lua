@@ -208,6 +208,69 @@ end
 -- Public API
 HVCustomColors = {}
 
+-- Small self-contained base64 codec used for portable color presets.
+local base64chars = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/"
+local function base64Encode(input)
+	local output = {}
+	for i = 1, #input, 3 do
+		local a, b, c = input:byte(i, i + 2)
+		local n = (a or 0) * 65536 + (b or 0) * 256 + (c or 0)
+		output[#output + 1] = base64chars:sub(math.floor(n / 262144) + 1, math.floor(n / 262144) + 1)
+		output[#output + 1] = base64chars:sub(math.floor(n / 4096) % 64 + 1, math.floor(n / 4096) % 64 + 1)
+		output[#output + 1] = b and base64chars:sub(math.floor(n / 64) % 64 + 1, math.floor(n / 64) % 64 + 1) or "="
+		output[#output + 1] = c and base64chars:sub(n % 64 + 1, n % 64 + 1) or "="
+	end
+	return table.concat(output)
+end
+
+local function base64Decode(input)
+	input = input:gsub("%s", "")
+	if #input == 0 or #input % 4 ~= 0 or not input:match("^[A-Za-z0-9+/]*=*=$") and not input:match("^[A-Za-z0-9+/]+={0,2}$") then return nil end
+	local output = {}
+	for i = 1, #input, 4 do
+		local a, b, c, d = input:sub(i,i), input:sub(i+1,i+1), input:sub(i+2,i+2), input:sub(i+3,i+3)
+		local av, bv = base64chars:find(a, 1, true), base64chars:find(b, 1, true)
+		if not av or not bv then return nil end
+		local cv = c == "=" and 1 or base64chars:find(c, 1, true)
+		local dv = d == "=" and 1 or base64chars:find(d, 1, true)
+		if not cv or not dv then return nil end
+		local n = (av-1)*262144 + (bv-1)*4096 + (cv-1)*64 + (dv-1)
+		output[#output+1] = string.char(math.floor(n/65536)%256)
+		if c ~= "=" then output[#output+1] = string.char(math.floor(n/256)%256) end
+		if d ~= "=" then output[#output+1] = string.char(n%256) end
+	end
+	return table.concat(output)
+end
+
+function HVCustomColors.ExportBase64()
+	initCustomColors()
+	local lines = {"HV_CUSTOM_COLORS_V1"}
+	for _, category in ipairs(HVCustomColors.GetCategories()) do
+		for _, element in ipairs(HVCustomColors.GetElements(category)) do
+			lines[#lines + 1] = category .. "\t" .. element .. "\t" .. HVCustomColors.GetColor(category, element)
+		end
+	end
+	return base64Encode(table.concat(lines, "\n"))
+end
+
+function HVCustomColors.ImportBase64(encoded)
+	local decoded = type(encoded) == "string" and base64Decode(encoded) or nil
+	if not decoded or decoded:sub(1, 20) ~= "HV_CUSTOM_COLORS_V1\n" then return false, "Invalid color configuration" end
+	local changed = false
+	for line in decoded:gmatch("[^\n]+") do
+		local category, element, hex = line:match("^([^\t]+)\t([^\t]+)\t([^\t]+)$")
+		local normalized = normalizeHex(hex)
+		if category and element and normalized and defaultCustomColors[category] and defaultCustomColors[category][element] then
+			if HVCustomColors.GetColor(category, element):lower() ~= normalized:lower() then changed = true end
+			customColorData[category][element] = normalized
+		end
+	end
+	if not changed then return false, "No colors imported" end
+	saveCustomColors()
+	MESSAGEMAN:Broadcast("CustomColorReset", { Category = "all" })
+	return true
+end
+
 --- Get a custom color hex string for a category and element
 function HVCustomColors.GetColor(category, element)
 	initCustomColors()
