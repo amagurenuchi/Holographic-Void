@@ -1549,7 +1549,13 @@ function HV.GetOsuManiaRescore(score, od, judgeByOldestNote)
 	local offsets, reprioritized = HV.GetOrderedReplayTapOffsets(score, judgeByOldestNote)
 	-- ScoreV2's PERFECT window changes slope at OD 5 while remaining
 	-- continuous: 22.4 - 0.6*OD through OD 5, then 24.9 - 1.1*OD.
-	local perfectWindow = od <= 5 and (22.4 - 0.6 * od) or (24.9 - 1.1 * od)
+	-- ScoreV1 used a flat 16ms MAX window regardless of OD.
+	local perfectWindow
+	if HV.ManiaState.useScoreV2 then
+		perfectWindow = od <= 5 and (22.4 - 0.6 * od) or (24.9 - 1.1 * od)
+	else
+		perfectWindow = 16
+	end
 	local maxErrors = {perfectWindow, 64 - 3 * od, 97 - 3 * od, 127 - 3 * od, 151 - 3 * od, 188 - 3 * od}
 	local counts = {0, 0, 0, 0, 0, 0}
 	local points, accuracy = 0, 0

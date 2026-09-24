@@ -328,9 +328,18 @@ local function formatEvaluationPercent(pct)
 	return formatWifePercent(pct)
 end
 
-local function getOsuManiaGrade(accuracy)
+local function getOsuManiaGrade(accuracy, rescoreData)
 	accuracy = tonumber(accuracy) or 0
-	if accuracy >= 100 then return "X" end
+	-- ScoreV2: X rank requires every hit to be 300 or MAX (no 200/100/50/miss)
+	if HV.ManiaState and HV.ManiaState.useScoreV2 and rescoreData and rescoreData.counts then
+		local c = rescoreData.counts
+		if (c[3] or 0) == 0 and (c[4] or 0) == 0 and (c[5] or 0) == 0 and (c[6] or 0) == 0 then
+			return "X"
+		end
+	-- ScoreV1: X rank requires 100% accuracy
+	elseif accuracy >= 100 then
+		return "X"
+	end
 	if accuracy >= 95 then return "S" end
 	if accuracy >= 90 then return "A" end
 	if accuracy >= 80 then return "B" end
@@ -1428,7 +1437,7 @@ local function scoreBoard(pn)
 			Name = "GradeScoreLabel",
 			InitCommand = function(self) self:halign(0):valign(0):xy(0, 0):zoom(0.85):diffuse(mainText):diffusealpha(0) end,
 			OnCommand = function(self)
-				local grade = isManiaModeEnabled() and getOsuManiaGrade(rescoredPercentage) or (rescoredPercentage and GetGradeFromPercent(rescoredPercentage / 100) or pss:GetWifeGrade())
+				local grade = isManiaModeEnabled() and getOsuManiaGrade(rescoredPercentage, maniaRescore) or (rescoredPercentage and GetGradeFromPercent(rescoredPercentage / 100) or pss:GetWifeGrade())
 				if isManiaModeEnabled() then
 					self:settext(grade)
 					self:diffuse(getOsuManiaGradeColor(grade))
@@ -1444,7 +1453,7 @@ local function scoreBoard(pn)
 				if usingCustomWindows then return end
 				if rescoredPercentage then
 					if isManiaModeEnabled() then
-						local grade = getOsuManiaGrade(rescoredPercentage)
+						local grade = getOsuManiaGrade(rescoredPercentage, maniaRescore)
 						self:settext(grade)
 						self:diffuse(getOsuManiaGradeColor(grade))
 						return
