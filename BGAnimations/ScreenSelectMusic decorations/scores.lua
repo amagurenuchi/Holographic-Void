@@ -35,8 +35,18 @@ local displayedScores = {}
 local onlineLoading = false
 local onlineRequestToken = 0
 local filterCurrentRate = true
+local showInvalidScores = false
 local displayAsJ4 = PREFSMAN:GetPreference("SortBySSRNormPercent")
 local hoveredCommentScore = nil
+
+local function IsOnlineScoreInvalid(score)
+	if not score then return false end
+	if type(score.GetEtternaValid) == "function" then
+		local ok, valid = pcall(score.GetEtternaValid, score)
+		if ok and valid == false then return true end
+	end
+	return IsScoreInvalid(score)
+end
 
 local function GetScoreDisplayName(score)
 	if not score then return nil end
@@ -411,6 +421,20 @@ local t = Def.ActorFrame {
 	},
 
 	-- Page info
+	-- Invalid score visibility toggle (Online only)
+	Def.ActorFrame {
+		Name = "InvalidToggleFrame",
+		InitCommand = function(self) self:xy(-overlayW/2 + 75, -overlayH/2 + 40) end,
+		RefreshScoresCommand = function(self) self:visible(currentView == VIEW_ONLINE) end,
+		Def.Quad { Name = "InvalidBtnBg", InitCommand = function(self) self:zoomto(100, 18):diffuse(color("#B01824")):diffusealpha(0.15) end,
+			RefreshScoresCommand = function(self) self:diffusealpha(showInvalidScores and 0.65 or 0.15) end },
+		LoadFont("Common Normal") .. { InitCommand = function(self) self:zoom(0.24):diffuse(brightText) end,
+			RefreshScoresCommand = function(self)
+				self:settext(showInvalidScores and "INVALID: ON" or "INVALID: OFF")
+				self:diffusealpha(showInvalidScores and 1 or 0.55)
+			end },
+	},
+
 	LoadFont("Common Normal") .. {
 		Name = "PageInfo",
 		InitCommand = function(self)
@@ -534,6 +558,9 @@ for i = 1, pageSize do
 			if idx <= #scores then
 				self:visible(true)
 				self:stoptweening():diffusealpha(0):sleep(i * 0.04):linear(0.15):diffusealpha(1)
+				local rowScore = scores[idx].score or scores[idx]
+				local rowInvalid = currentView == VIEW_ONLINE and IsOnlineScoreInvalid(rowScore)
+				self:GetChild("Bg"):diffuse(rowInvalid and color("#7A1018") or color("0,0,0,0.2"))
 				self:GetChild("Rank"):settext(tostring(idx))
 
 				if currentView == VIEW_LOCAL then
@@ -632,7 +659,7 @@ for i = 1, pageSize do
 						self:GetChild("Grade"):settext(HV.GetGradeName(gradeStr)):diffuse(HVColor.GetGradeColor(gradeStr))
 						self:GetChild("Rate"):settextf("%.2fx", s:GetMusicRate())
 
-						local ct = getDetailedClearType(s)
+						local ct = IsOnlineScoreInvalid(s) and "Invalid" or getDetailedClearType(s)
 						self:GetChild("Clear"):settext(ct):diffuse(HVColor.GetClearTypeColor(ct))
 						self:GetChild("Date"):settext(s:GetDate())
 
@@ -665,7 +692,7 @@ local function UpdateDisplayedScores()
 		local currentRate = getCurRateValue()
 		for _, s in ipairs(source) do
 			local rNum = s:GetMusicRate()
-			if not filterCurrentRate or math.abs(rNum - currentRate) < 0.001 then
+			if (showInvalidScores or not IsOnlineScoreInvalid(s)) and (not filterCurrentRate or math.abs(rNum - currentRate) < 0.001) then
 				displayedScores[#displayedScores + 1] = s
 			end
 		end
@@ -741,6 +768,14 @@ t[#t + 1] = Def.ActorFrame {
 					if currentView == VIEW_LOCAL then
 						GetLocalScores()
 					end
+					scoresActor:playcommand("RefreshScores")
+					return true
+				end
+
+				-- Invalid score visibility button
+				if currentView == VIEW_ONLINE and IsMouseOverCentered(SCREEN_CENTER_X - overlayW/2 + 75, SCREEN_CENTER_Y - overlayH/2 + 40, 100, 18) then
+					showInvalidScores = not showInvalidScores
+					currentPage = 1
 					scoresActor:playcommand("RefreshScores")
 					return true
 				end
