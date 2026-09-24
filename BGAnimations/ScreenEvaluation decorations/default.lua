@@ -29,9 +29,7 @@ local function isOnlineEvaluation()
 	return HV.OnlineEvaluationActive == true or HV.OnlineReplayActive == true
 end
 
--- Each evaluation screen starts in normal Etterna mode. This prevents a
--- previous evaluation screen from leaking temporary osu!mania state into the
--- normal score display while actors are being constructed.
+-- This is here to make sure that osu!mania state doesn't leak into the normal score display
 HV.ResetManiaMode()
 
 local function isManiaModeEnabled()
@@ -1625,6 +1623,38 @@ local function scoreBoard(pn)
 			LoadFont("Common Normal") .. { Name = "Value", InitCommand = function(self) self:halign(0.5):x(135):y(-1):zoom(0.32):diffuse(accentColor) end }
 		},
 
+		-- ScoreV2 toggle button (visible only in mania mode)
+		Def.ActorFrame {
+			Name = "ManiaScoreV2Toggle",
+			InitCommand = function(self) self:xy(110, 56):visible(false) end,
+			ManiaModeChangedMessageCommand = function(self)
+				local active = isManiaModeEnabled()
+				self:visible(active)
+				if active then self:playcommand("Refresh") end
+			end,
+			RefreshCommand = function(self)
+				local v2 = HV.ManiaState.useScoreV2
+				self:GetChild("Bg"):diffuse(v2 and accentColor or color("0.12,0.12,0.14,0.9"))
+					:diffusealpha(v2 and 0.35 or 0.9)
+				self:GetChild("Label")
+					:settext(v2 and "ScoreV2" or "ScoreV1")
+					:diffuse(v2 and accentColor or dimText)
+			end,
+			-- Background pill
+			Def.Quad {
+				Name = "Bg",
+				InitCommand = function(self)
+					self:halign(0):x(85):zoomto(100, 18):diffuse(color("0.12,0.12,0.14,0.9")):diffusealpha(0.9)
+				end
+			},
+			LoadFont("Common Normal") .. {
+				Name = "Label",
+				InitCommand = function(self)
+					self:halign(0.5):x(135):y(-1):zoom(0.28):diffuse(dimText):settext("ScoreV1")
+				end
+			}
+		},
+
 		-- Chart Progress (Percentage completion on fail)
 		Def.ActorFrame {
 			Name = "ChartProgressWrapper",
@@ -2248,6 +2278,13 @@ t[#t + 1] = Def.ActorFrame {
 					local odFieldX, odFieldY = 207, 201
 					if mx >= odFieldX and mx <= odFieldX + 110 and my >= odFieldY - 14 and my <= odFieldY + 14 then
 						editManiaOD()
+						return true
+					end
+					-- ScoreV2 toggle button: same X band, 22px lower than OD (at y ~223)
+					local v2FieldY = odFieldY + 22
+					if mx >= odFieldX and mx <= odFieldX + 110 and my >= v2FieldY - 11 and my <= v2FieldY + 11 then
+						HV.ToggleManiaScoreV2()
+						if refreshEvaluationDisplays then refreshEvaluationDisplays() end
 						return true
 					end
 				end

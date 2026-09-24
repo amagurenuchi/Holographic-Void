@@ -1486,17 +1486,26 @@ HV.LoadScoreComments()
 ------------------------------------------------------------
 HV.ManiaJudgementNames = {"MAX", "300", "200", "100", "50", "MISS"}
 HV.ManiaJudgementPoints = {320, 300, 200, 100, 50, 0}
+-- Score V1 accuracy: MAX and 300 both worth 1.0 (denominator 300 per note)
 HV.ManiaJudgementAccuracy = {1, 1, 2 / 3, 1 / 3, 1 / 6, 0}
-HV.ManiaState = HV.ManiaState or {enabled = false, od = 8.0}
+-- Score V2 accuracy: denominator is 305; MAX=305, 300=300, 200=200, 100=100, 50=50, MISS=0
+HV.ManiaJudgementAccuracyV2 = {305/305, 300/305, 200/305, 100/305, 50/305, 0}
+HV.ManiaState = HV.ManiaState or {enabled = false, od = 8.0, useScoreV2 = false}
 
 function HV.ResetManiaMode()
 	HV.ManiaState.enabled = false
 	HV.ManiaState.od = 8.0
+	HV.ManiaState.useScoreV2 = false
 end
 
 function HV.ToggleManiaMode()
 	HV.ManiaState.enabled = not HV.ManiaState.enabled
 	return HV.ManiaState.enabled
+end
+
+function HV.ToggleManiaScoreV2()
+	HV.ManiaState.useScoreV2 = not HV.ManiaState.useScoreV2
+	return HV.ManiaState.useScoreV2
 end
 
 function HV.SetManiaOD(value)
@@ -1552,7 +1561,8 @@ function HV.GetOsuManiaRescore(score, od, judgeByOldestNote)
 		end
 		counts[judgement] = counts[judgement] + 1
 		points = points + HV.ManiaJudgementPoints[judgement]
-		accuracy = accuracy + HV.ManiaJudgementAccuracy[judgement]
+		local accTable = HV.ManiaState.useScoreV2 and HV.ManiaJudgementAccuracyV2 or HV.ManiaJudgementAccuracy
+		accuracy = accuracy + accTable[judgement]
 	end
 	return {
 		od = od, counts = counts, points = points,
