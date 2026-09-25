@@ -5,7 +5,9 @@
 
 local screenName = Var("LoadingScreen") or ...
 local topScreen
+local tooltipActor
 local pointerActor
+local clickWaveActor
 -- ScreenTextEntry has its own visual cursor, but it must not touch the shared
 -- BUTTON state.  Modal screens can inherit the caller's LoadingScreen value,
 -- so resetting here would clear the caller's hover/cursor state.
@@ -42,12 +44,27 @@ end
 -- modal.  Reinstall the callback when that screen regains focus so the cursor
 -- continues to follow the mouse after the one-time focus refresh.
 local function startUpdateLoop(self)
-
 	self:SetUpdateFunction(UpdateLoop)
 	local refreshRate = DISPLAY:GetDisplayRefreshRate()
 	if refreshRate and refreshRate > 0 then
 		self:SetUpdateFunctionInterval(1 / refreshRate)
 	end
+end
+
+-- TOOLTIP is a singleton.  Every pushed screen creates its own tooltip and
+-- pointer actors, which replaces these references.  Capture the live actor
+-- references after this cursor has loaded, then restore them once a modal is
+-- popped; otherwise the update loop addresses the detached modal pointer.
+local function captureTooltipActors()
+	tooltipActor = TOOLTIP.Actor
+	pointerActor = TOOLTIP.Pointer
+	clickWaveActor = TOOLTIP.ClickWave
+end
+
+local function activateTooltipActors()
+	TOOLTIP.Actor = tooltipActor
+	TOOLTIP.Pointer = pointerActor
+	TOOLTIP.ClickWave = clickWaveActor
 end
 
 -- ScreenTextEntry is pushed as a modal screen and is often popped from inside
@@ -88,6 +105,7 @@ end
 local t = Def.ActorFrame {
 	OnCommand = function(self)
 		self:draworder(20000)
+		captureTooltipActors()
 		startUpdateLoop(self)
 		registerInputCallback()
 		cursorCheck()
@@ -95,6 +113,7 @@ local t = Def.ActorFrame {
 	-- Re-register when a sub-screen (e.g. ScreenHVColorEdit) is popped and this
 	-- screen becomes the top screen again; the old topScreen handle is stale by then.
 	GainFocusCommand = function(self)
+		activateTooltipActors()
 		startUpdateLoop(self)
 		registerInputCallback()
 		cursorCheck()
@@ -102,6 +121,7 @@ local t = Def.ActorFrame {
 		refreshAfterModalPop(self)
 	end,
 	RefreshCursorCommand = function(self)
+		activateTooltipActors()
 		startUpdateLoop(self)
 		registerInputCallback()
 		cursorCheck()
@@ -124,11 +144,10 @@ local t = Def.ActorFrame {
 	end,
 }
 
--- Create tooltip + pointer + click wave actors from the _fallback system
-local tooltip, pointer, clickwave = TOOLTIP:New()
-pointerActor = pointer
-t[#t + 1] = tooltip
-t[#t + 1] = pointer
-t[#t + 1] = clickwave
+-- Create tooltip + pointer + click wave actors from the _fallback system.
+tooltipActor, pointerActor, clickWaveActor = TOOLTIP:New()
+t[#t + 1] = tooltipActor
+t[#t + 1] = pointerActor
+t[#t + 1] = clickWaveActor
 
 return t
