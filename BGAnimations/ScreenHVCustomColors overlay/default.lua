@@ -20,18 +20,10 @@ local categories = HVCustomColors.GetCategories()
 local function exportColors()
 	local encoded = HVCustomColors.ExportBase64()
 	local ok, result = false, false
-	if Arch and Arch.setClipboard then
-		-- Etterna builds differ: newer builds accept a clipboard type tag.
-		ok, result = pcall(Arch.setClipboard, encoded, "text")
-		if not ok or result == false then ok, result = pcall(Arch.setClipboard, encoded) end
-	end
-	-- Windows Etterna builds expose clipboard reading but not always writing.
-	if not ok or result == false then
-		local pipe = io and io.popen and io.popen("clip.exe", "w")
-		if pipe then
-			local wrote = pcall(function() pipe:write(encoded) pipe:close() end)
-			ok, result = wrote, wrote
-		end
+	if Arch and Arch.setClipboardText then
+		-- Thanks jole for the correct function call name
+		ok, result = pcall(Arch.setClipboardText, encoded, "text")
+
 	end
 	if ok and result ~= false then
 		SCREENMAN:SystemMessage("Color configuration copied to clipboard")

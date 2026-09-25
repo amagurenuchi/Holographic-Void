@@ -286,7 +286,31 @@ function HVCustomColors.SetColor(category, element, hex)
 	if not customColorData[category] then customColorData[category] = {} end
 	customColorData[category][element] = hex
 	saveCustomColors()
+	-- The color helpers cache each palette. Refresh the affected palette before
+	-- broadcasting so screens returning from the editor see the new value.
+	if HVColor then
+		if category == "grades" and HVColor.RefreshGradeColors then
+			HVColor.RefreshGradeColors()
+		elseif category == "judgment" and HVColor.RefreshJudgmentColors then
+			HVColor.RefreshJudgmentColors()
+		elseif category == "difficulty" and HVColor.RefreshDifficultyColors then
+			HVColor.RefreshDifficultyColors()
+		elseif category == "clearType" and HVColor.RefreshClearTypeColors then
+			HVColor.RefreshClearTypeColors()
+		elseif category == "goalTracker" and HVColor.RefreshGoalTrackerColors then
+			HVColor.RefreshGoalTrackerColors()
+		end
+	end
 	MESSAGEMAN:Broadcast("CustomColorChanged", { Category = category, Element = element, Color = hex })
+	if category == "grades" then
+		MESSAGEMAN:Broadcast("GradeStyleChanged")
+	elseif category == "judgment" then
+		MESSAGEMAN:Broadcast("JudgeStyleChanged")
+	elseif category == "difficulty" then
+		MESSAGEMAN:Broadcast("DiffStyleChanged")
+	elseif category == "clearType" then
+		MESSAGEMAN:Broadcast("CTStyleChanged")
+	end
 end
 
 --- Get all elements for a category
