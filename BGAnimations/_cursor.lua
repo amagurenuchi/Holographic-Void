@@ -38,6 +38,18 @@ local function updatePointerImmediately()
 	UpdateLoop()
 end
 
+-- Actor update callbacks are paused while a screen is covered by a pushed
+-- modal.  Reinstall the callback when that screen regains focus so the cursor
+-- continues to follow the mouse after the one-time focus refresh.
+local function startUpdateLoop(self)
+
+	self:SetUpdateFunction(UpdateLoop)
+	local refreshRate = DISPLAY:GetDisplayRefreshRate()
+	if refreshRate and refreshRate > 0 then
+		self:SetUpdateFunctionInterval(1 / refreshRate)
+	end
+end
+
 -- ScreenTextEntry is pushed as a modal screen and is often popped from inside
 -- its input callback.  In that case GainFocus can run before the screen stack
 -- has finished changing, so the mouse position/button state is refreshed
@@ -76,24 +88,21 @@ end
 local t = Def.ActorFrame {
 	OnCommand = function(self)
 		self:draworder(20000)
-		self:SetUpdateFunction(UpdateLoop)
-		-- Match display refresh rate for smooth cursor tracking
-		local refreshRate = DISPLAY:GetDisplayRefreshRate()
-		if refreshRate and refreshRate > 0 then
-			self:SetUpdateFunctionInterval(1 / refreshRate)
-		end
+		startUpdateLoop(self)
 		registerInputCallback()
 		cursorCheck()
 	end,
 	-- Re-register when a sub-screen (e.g. ScreenHVColorEdit) is popped and this
 	-- screen becomes the top screen again; the old topScreen handle is stale by then.
 	GainFocusCommand = function(self)
+		startUpdateLoop(self)
 		registerInputCallback()
 		cursorCheck()
 		updatePointerImmediately()
 		refreshAfterModalPop(self)
 	end,
 	RefreshCursorCommand = function(self)
+		startUpdateLoop(self)
 		registerInputCallback()
 		cursorCheck()
 		updatePointerImmediately()
