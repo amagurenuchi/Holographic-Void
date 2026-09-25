@@ -6,7 +6,15 @@
 local screenName = Var("LoadingScreen") or ...
 local topScreen
 local pointerActor
-BUTTON:ResetButtonTable(screenName)
+-- ScreenTextEntry has its own visual cursor, but it must not touch the shared
+-- BUTTON state.  Modal screens can inherit the caller's LoadingScreen value,
+-- so resetting here would clear the caller's hover/cursor state.
+local currentScreen = SCREENMAN:GetTopScreen()
+local isTextEntry = screenName == "ScreenTextEntry"
+	 or (currentScreen and currentScreen:GetName() == "ScreenTextEntry")
+if not isTextEntry then
+	BUTTON:ResetButtonTable(screenName)
+end
 
 local function UpdateLoop()
 	local mouseX = INPUTFILTER:GetMouseX()
@@ -17,7 +25,9 @@ local function UpdateLoop()
 		pcall(function() pointerActor:xy(mouseX, mouseY) end)
 	end
 	pcall(function() TOOLTIP:SetPosition(mouseX, mouseY) end)
-	BUTTON:UpdateMouseState()
+	if not isTextEntry then
+		BUTTON:UpdateMouseState()
+	end
 	return false
 end
 
@@ -26,6 +36,14 @@ local function updatePointerImmediately()
 	-- pointer here so returning from a sub-screen does not leave it at its old
 	-- coordinates until the next mouse event.
 	UpdateLoop()
+end
+
+-- ScreenTextEntry is pushed as a modal screen and is often popped from inside
+-- its input callback.  In that case GainFocus can run before the screen stack
+-- has finished changing, so the mouse position/button state is refreshed
+-- against the text-entry screen instead of the screen underneath it.
+local function refreshAfterModalPop(self)
+	self:sleep(0):queuecommand("RefreshCursor")
 end
 
 local function cursorCheck()
@@ -44,6 +62,7 @@ end
 -- Must be called both at init and whenever this screen regains focus after a
 -- sub-screen is popped, because AddInputCallback only wires up a single screen handle.
 local function registerInputCallback()
+	if isTextEntry then return end
 	topScreen = SCREENMAN:GetTopScreen()
 	if topScreen then
 		topScreen:AddInputCallback(function(event)
@@ -72,9 +91,17 @@ local t = Def.ActorFrame {
 		registerInputCallback()
 		cursorCheck()
 		updatePointerImmediately()
+		refreshAfterModalPop(self)
+	end,
+	RefreshCursorCommand = function(self)
+		registerInputCallback()
+		cursorCheck()
+		updatePointerImmediately()
 	end,
 	OffCommand = function(self)
-		BUTTON:ResetButtonTable(screenName)
+		if not isTextEntry then
+			BUTTON:ResetButtonTable(screenName)
+		end
 		pcall(function() TOOLTIP:Hide() end)
 	end,
 	CancelCommand = function(self)
