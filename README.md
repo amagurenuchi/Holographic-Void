@@ -82,7 +82,7 @@ A futuristic, high-performance Etterna theme built for technical players who dem
 ~~1. Add the proper Customize Gameplay mechanic from other themes~~ done
 ~~2. Also add the full-fledged color configuration screen~~ done
 ~~3. Add the song background to other screens~~ done
-1. Clean up the very scuffed ThemePref saving
+~~1. Clean up the very scuffed ThemePref saving~~
 
 ---
 
@@ -99,4 +99,5 @@ A futuristic, high-performance Etterna theme built for technical players who dem
 * 1033Forest and PoRa for noteskins porting
 * Etienne for Etienne
 * nonyu for being bald
+* mainebow for being the living rainbow
 * the Fatigue theme for inspo for theme creation, this is basically what Fatigue could have been
