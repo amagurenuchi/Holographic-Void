@@ -13,6 +13,11 @@ local profile = PROFILEMAN:GetProfile(pn)
 -- Autoplay results are not player scores.  Keep this local to the evaluation
 -- screen so autoplay can still be used normally during gameplay.
 local function isAutoplayEvaluation()
+	-- A score opened from Song Select's Scores tab is a historical score
+	-- view, not the result of the current gameplay session.  This gate keeps
+	-- the persistent autoplay setting from affecting those evaluations.
+	if HV.GameplaySessionValid ~= true then return false end
+
 	if type(getAutoplay) == "function" then
 		local ok, value = pcall(getAutoplay)
 		if ok and tonumber(value) and tonumber(value) ~= 0 then return true end
