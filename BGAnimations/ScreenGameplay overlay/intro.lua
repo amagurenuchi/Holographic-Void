@@ -275,7 +275,7 @@ t[#t+1] = Def.ActorFrame{
 		
 		-- Auto-Fail
 		local failMode = ThemePrefs.Get("HV_AutoFailMode")
-		local hasFail = failMode and failMode ~= "Off"
+		local hasFail = not GAMESTATE:IsPracticeMode() and failMode and failMode ~= "Off"
 		if hasFail then
 			local condition = ThemePrefs.Get("HV_AutoFailCondition")
 			local threshold = ""
@@ -284,7 +284,7 @@ t[#t+1] = Def.ActorFrame{
 			elseif condition == "Judgement Count" then
 				local judge = ThemePrefs.Get("HV_AutoFailJudgement") or "Miss"
 				local judgeName = THEME:GetString("TapNoteScore", judge)
-				threshold = string.format(">= %d %s", ThemePrefs.Get("HV_AutoFailThreshold_Count") or 10, judgeName)
+				threshold = string.format("> %d %s", ThemePrefs.Get("HV_AutoFailThreshold_Count") or 10, judgeName)
 			elseif condition == "Personal Best" then
 				local best = GetDisplayScore()
 				local pbStr = ""

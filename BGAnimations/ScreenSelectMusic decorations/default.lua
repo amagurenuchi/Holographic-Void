@@ -2441,6 +2441,10 @@ root[#root + 1] = Def.ActorFrame {
 	UpdateBannerCommand = function(self)
 		local bg = self:GetChild("PeekSongBackground")
 		if not bg then return end
+		if HV.GetSongBackgroundBrightness() <= 0 then
+			bg:visible(false)
+			return
+		end
 		local bgPath = GetCurrentSongBackgroundPath()
 		if not bgPath then
 			bg:visible(false)

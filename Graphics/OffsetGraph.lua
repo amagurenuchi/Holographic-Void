@@ -1226,6 +1226,10 @@ t[#t+1] = LoadFont("Common Normal") .. {
 	UpdateCommand = function(self, params)
 		params = checkParams(params)
 		self:xy(params.width - 5, -5 - 10)
+		if params.chordCohesion then
+			self:settext("Cannot Record Hand Data")
+			return
+		end
 		if params.dvt and #params.dvt > 0 and params.ctt and #params.ctt > 0 then
 			local leftPts, rightPts, middlePts = 0, 0, 0
 			local leftTaps, rightTaps, middleTaps = 0, 0, 0

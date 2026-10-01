@@ -36,6 +36,8 @@ local lastJudgment = "TapNoteScore_None"
 local noteSum = 0
 local peakNPS = 0
 local curNPS = 0
+local lastMusicSeconds = nil
+local npsReferenceSeconds = nil
 
 -- Cached UI references
 local npsTextActor = nil
@@ -55,12 +57,37 @@ local function addNote(time, size)
 	noteSum = noteSum + size
 end
 
+local function getMusicSeconds()
+	return math.max(0, GAMESTATE:GetSongPosition():GetMusicSeconds() / getCurRateValue())
+end
+
+local function resetNPSWindow()
+	noteTable = {}
+	noteSum = 0
+	lastMusicSeconds = nil
+	npsReferenceSeconds = nil
+end
+
+local function getCurrentMusicSeconds()
+	local currentTime = getMusicSeconds()
+	-- A bookmark loop rewinds the song position. Discard timestamps from the
+	-- previous pass so they cannot remain ahead of the new pass in the queue.
+	if lastMusicSeconds and currentTime < lastMusicSeconds - 0.05 then
+		resetNPSWindow()
+	end
+	lastMusicSeconds = currentTime
+	if not npsReferenceSeconds then
+		npsReferenceSeconds = currentTime
+	end
+	return currentTime
+end
+
 local function removeNote()
 	local exit = false
 	while not exit do
 		if #noteTable >= 1 then
 			-- Calculate time since start (mimicking GetTimeSinceStart for gameplay)
-			local currentTime = GAMESTATE:GetSongPosition():GetMusicSeconds() / getCurRateValue()
+			local currentTime = getCurrentMusicSeconds()
 			local noteTime = noteTable[1][1]
 			if noteTime + npsWindow < currentTime then
 				noteSum = noteSum - noteTable[1][2]
@@ -75,8 +102,9 @@ local function removeNote()
 end
 
 local function getCurNPS()
-	local musicSeconds = math.max(0, GAMESTATE:GetSongPosition():GetMusicSeconds() / getCurRateValue())
-	return noteSum / clamp(musicSeconds, minWindow, npsWindow)
+	local musicSeconds = getCurrentMusicSeconds()
+	local elapsedSeconds = musicSeconds - (npsReferenceSeconds or musicSeconds)
+	return noteSum / clamp(elapsedSeconds, minWindow, npsWindow)
 end
 
 local function Update(self)
@@ -121,10 +149,19 @@ local t = Def.ActorFrame {
 						end
 					end
 				end
-				local currentTime = GAMESTATE:GetSongPosition():GetMusicSeconds() / getCurRateValue()
+				local currentTime = getCurrentMusicSeconds()
 				addNote(currentTime, chordsize)
 				lastJudgment = params.TapNoteScore
 			end
+		end,
+		PracticeLoopChangedMessageCommand = function(self)
+			resetNPSWindow()
+		end,
+		PracticeModeResetMessageCommand = function(self)
+			resetNPSWindow()
+		end,
+		PracticeModeReloadMessageCommand = function(self)
+			resetNPSWindow()
 		end,
 		ThemePrefChangedMessageCommand = function(self, params)
 			if params and params.Name == "HV_NPSWindowSize" then

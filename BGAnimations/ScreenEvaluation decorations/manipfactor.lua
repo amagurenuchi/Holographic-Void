@@ -2,6 +2,9 @@
 --For Til Death, tailored for Holographic Void
 local t = Def.ActorFrame {}
 
+-- Do not expose replay-derived analysis for CPU/autoplay evaluations.
+if HV.EvaluationScoringVoided then return t end
+
 local score = SCOREMAN:GetMostRecentScore()
 if not score then
     score = SCOREMAN:GetTempReplayScore()

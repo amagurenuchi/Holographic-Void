@@ -320,10 +320,10 @@ local HVPrefs = {
 		Values = {0.0, 0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9, 1.0},
 	},
 
-
-	-- Visual: Song Background Brightness (0.0 - 1.0)
+	-- Compatibility mirror of Etterna's global BGBrightness preference.
+	-- BGBrightness remains the source of truth and the user-facing option.
 	HV_SongBackgroundBrightness = {
-		Default = 0.0,
+		Default = 1.0,
 		Choices = {"0%", "10%", "20%", "30%", "40%", "50%", "60%", "70%", "80%", "90%", "100%"},
 		Values = {0.0, 0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9, 1.0},
 	},
@@ -857,6 +857,33 @@ function HV.GetLaneCoverHidden()
 	return tonumber(ThemePrefs.Get("HV_LaneCoverHidden")) or 0
 end
 
+--- Apply the theme's lane-cover settings through Etterna's native appearance
+--- modifiers.  Keep every option level in sync so the setting survives the
+--- transition from player options into gameplay.
+function HV.ApplyLaneCoverModifiers()
+	local ps = GAMESTATE:GetPlayerState(PLAYER_1)
+	if not ps then return end
+
+	local sudden = math.max(0, math.min(100, HV.GetLaneCoverSudden())) / 100
+	local hidden = math.max(0, math.min(100, HV.GetLaneCoverHidden())) / 100
+	local levels = {
+		"ModsLevel_Preferred",
+		"ModsLevel_Stage",
+		"ModsLevel_Song",
+		"ModsLevel_Current",
+	}
+
+	for _, level in ipairs(levels) do
+		local po = ps:GetPlayerOptions(level)
+		if po then
+			po:Sudden(sudden > 0 and 1 or 0)
+			po:SuddenOffset(sudden)
+			po:Hidden(hidden > 0 and 1 or 0)
+			po:HiddenOffset(hidden)
+		end
+	end
+end
+
 --- Check if real-time NPS should be shown.
 function HV.ShowNPS()
 	return isTrue(ThemePrefs.Get("HV_ShowNPS"))
@@ -958,7 +985,12 @@ end
 
 --- Get song background brightness (0.0-1.0).
 function HV.GetSongBackgroundBrightness()
-	return tonumber(ThemePrefs.Get("HV_SongBackgroundBrightness")) or 0.5
+	local brightness = tonumber(PREFSMAN:GetPreference("BGBrightness")) or 1.0
+	local customBrightness = tonumber(ThemePrefs.Get("HV_SongBackgroundBrightness"))
+	if customBrightness ~= brightness then
+		ThemePrefs.Set("HV_SongBackgroundBrightness", brightness)
+	end
+	return brightness
 end
 
 --- Check if mouse parallax effects are enabled.

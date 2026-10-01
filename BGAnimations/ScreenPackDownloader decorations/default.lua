@@ -25,6 +25,8 @@ local rowHilight = color("0.12,0.12,0.12,0.9")
 local rowNormal = color("0.04,0.04,0.04,0.5")
 local rowAlt = color("0.06,0.06,0.06,0.5")
 local rowInstalled = color("0.04,0.08,0.04,0.6")
+local externalDownloadThreshold = 2000000000
+local externalDownloadColor = color("1,0.65,0.2,1")
 
 -- ============================================================
 -- STATE
@@ -36,6 +38,7 @@ local packsPerPage = 14
 local currentPacks = {}
 local installedFlags = {} -- cache installed status per row
 local isSearching = false
+local selectLastRowOnPageLoad = false
 
 -- Bundle Selector State
 local availableBundles = {"All"}
@@ -455,7 +458,12 @@ local packListFrame = Def.ActorFrame {
 		for i, pack in ipairs(currentPacks) do
 			installedFlags[i] = isPackInstalled(pack)
 		end
-		selectedRow = 1
+		if selectLastRowOnPageLoad then
+			selectedRow = math.min(#currentPacks, packsPerPage)
+			selectLastRowOnPageLoad = false
+		else
+			selectedRow = 1
+		end
 		self:playcommand("RefreshRows")
 	end,
 
@@ -539,13 +547,29 @@ for i = 1, packsPerPage do
 					self:settext(pack:GetName())
 					if installedFlags[i] then
 						self:diffuse(installedColor)
-					elseif pack:IsNSFW() then
-						self:diffuse(color("1,0,0,1"))
 					elseif i == selectedRow then
 						self:diffuse(brightText)
 					else
 						self:diffuse(mainText)
 					end
+					self:visible(true)
+				else
+					self:visible(false)
+				end
+			end
+		},
+
+		-- NSFW label
+		LoadFont("Common Normal") .. {
+			Name = "NSFWLabel",
+			InitCommand = function(self)
+				self:halign(0):valign(0):xy(colNameX, 14)
+					:zoom(0.32):diffuse(color("1,0,0,1"))
+			end,
+			["UpdateRow" .. i .. "Command"] = function(self)
+				local pack = currentPacks[i]
+				if pack and pack:IsNSFW() then
+					self:settext("NSFW")
 					self:visible(true)
 				else
 					self:visible(false)
@@ -628,6 +652,24 @@ for i = 1, packsPerPage do
 					else
 						self:settext("--")
 					end
+					self:visible(true)
+				else
+					self:visible(false)
+				end
+			end
+		},
+
+		-- Large packs are downloaded externally
+		LoadFont("Common Normal") .. {
+			Name = "ExternalDownloadNotice",
+			InitCommand = function(self)
+				self:halign(1):valign(0):xy(colSizeX, 14)
+					:zoom(0.36):diffuse(externalDownloadColor)
+			end,
+			["UpdateRow" .. i .. "Command"] = function(self)
+				local pack = currentPacks[i]
+				if pack and pack:GetSize() > externalDownloadThreshold then
+					self:settext("Downloads Externally")
 					self:visible(true)
 				else
 					self:visible(false)
@@ -927,13 +969,27 @@ t[#t + 1] = Def.ActorFrame {
 			local btn = event.DeviceInput.button
 			local gameBtn = event.button
 
-			-- Mouse wheel -> scroll rows up/down
+			-- Mouse wheel -> scroll rows up/down, changing pages at either edge
 			local scroll = GetMouseScrollDirection(btn)
 			if scroll ~= 0 then
 				if scroll < 0 then
-					selectedRow = math.max(selectedRow - 1, 1)
+					if selectedRow > 1 then
+						selectedRow = selectedRow - 1
+					else
+						selectLastRowOnPageLoad = true
+						if not packList:PrevPage() then
+							selectLastRowOnPageLoad = false
+						else
+							self:GetParent():GetChild("LoadingText"):playcommand("ShowLoading")
+						end
+					end
 				else
-					selectedRow = math.min(selectedRow + 1, math.min(#currentPacks, packsPerPage))
+					local lastRow = math.min(#currentPacks, packsPerPage)
+					if selectedRow < lastRow then
+						selectedRow = selectedRow + 1
+					elseif packList:NextPage() then
+						self:GetParent():GetChild("LoadingText"):playcommand("ShowLoading")
+					end
 				end
 				self:GetParent():GetChild("PackRows"):playcommand("RefreshRows")
 				return
@@ -1084,7 +1140,7 @@ t[#t + 1] = Def.ActorFrame {
 							-- Already selected, trigger download
 							local pack = currentPacks[i]
 							if pack and not installedFlags[i] and not pack:IsQueued() and not isPackDownloading(pack) then
-								if pack:GetSize() > 2000000000 then
+								if pack:GetSize() > externalDownloadThreshold then
 									pack:DownloadExternally()
 								else
 									pack:DownloadAndInstall(false)
@@ -1139,7 +1195,7 @@ t[#t + 1] = Def.ActorFrame {
 				-- Enter/Start = download/queue selected pack
 				local pack = currentPacks[selectedRow]
 				if pack and not installedFlags[selectedRow] and not pack:IsQueued() and not isPackDownloading(pack) then
-					if pack:GetSize() > 2000000000 then
+					if pack:GetSize() > externalDownloadThreshold then
 						pack:DownloadExternally()
 					else
 						pack:DownloadAndInstall(false)

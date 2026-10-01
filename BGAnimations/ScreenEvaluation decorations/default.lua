@@ -10,8 +10,72 @@ local steps = GAMESTATE:GetCurrentSteps()
 local pn = GAMESTATE:GetEnabledPlayers()[1]
 local profile = PROFILEMAN:GetProfile(pn)
 
+-- Autoplay results are not player scores.  Keep this local to the evaluation
+-- screen so autoplay can still be used normally during gameplay.
+local function isAutoplayEvaluation()
+	if type(getAutoplay) == "function" then
+		local ok, value = pcall(getAutoplay)
+		if ok and tonumber(value) and tonumber(value) ~= 0 then return true end
+	end
+	if GAMESTATE.IsAutoplay then
+		local ok, value = pcall(GAMESTATE.IsAutoplay, GAMESTATE)
+		if ok and value == true then return true end
+	end
+	for _, player in ipairs(GAMESTATE:GetEnabledPlayers() or {}) do
+		local state = GAMESTATE:GetPlayerState(player)
+		if state and state.GetPlayerController then
+			local ok, controller = pcall(state.GetPlayerController, state)
+			if ok and tostring(controller):lower():find("autoplay", 1, true) then return true end
+		end
+	end
+	local stageScore = pss and pss.GetHighScore and pss:GetHighScore()
+	if stageScore and stageScore.GetModifiers then
+		local ok, mods = pcall(stageScore.GetModifiers, stageScore)
+		if ok and tostring(mods):lower():find("autoplay", 1, true) then return true end
+	end
+	return false
+end
+
+-- Keep this state global rather than another closure upvalue.  This file has
+-- a large scoreBoard() closure and Etterna's Lua build limits its upvalues.
+scoringVoided = isAutoplayEvaluation()
+HV.EvaluationScoringVoided = scoringVoided
+
+if scoringVoided then
+	return Def.ActorFrame {
+		Def.Quad {
+			InitCommand = function(self)
+				self:xy(SCREEN_CENTER_X, SCREEN_CENTER_Y)
+					:zoomto(SCREEN_WIDTH, SCREEN_HEIGHT)
+					:diffuse(color("0.01,0.01,0.02,0.94"))
+			end
+		},
+		LoadFont("Common Large") .. {
+			InitCommand = function(self)
+				self:xy(SCREEN_CENTER_X, SCREEN_CENTER_Y):zoom(1.1)
+					:diffuse(HVColor.Accent):settext("Why are you lying to yourself?")
+			end
+		}
+	}
+end
+
+function evaluationWifeScore()
+	return scoringVoided and 0 or (pss:GetWifeScore() or 0)
+end
+function evaluationGrade()
+	return scoringVoided and "Grade_None" or pss:GetWifeGrade()
+end
+
+function evaluationTapCount(name)
+	return scoringVoided and 0 or pss:GetTapNoteScores(name)
+end
+
+function evaluationHoldCount(name)
+	return scoringVoided and 0 or pss:GetHoldNoteScores(name)
+end
+
 -- State variables (declared early for function visibility)
-local curScore = pss:GetHighScore()
+local curScore = scoringVoided and nil or pss:GetHighScore()
 local judge = 4
 local judges = HV.EmulateRidiculousEnabled() and {"Ridiculous","TapNoteScore_W1","TapNoteScore_W2","TapNoteScore_W3","TapNoteScore_W4","TapNoteScore_W5","TapNoteScore_Miss"} or {"TapNoteScore_W1","TapNoteScore_W2","TapNoteScore_W3","TapNoteScore_W4","TapNoteScore_W5","TapNoteScore_Miss"}
 
@@ -174,6 +238,11 @@ local function getFilteredDvt()
 end
 
 local function refreshRescoredPercentage()
+	if scoringVoided then
+		maniaRescore = nil
+		rescoredPercentage = nil
+		return
+	end
 	if HV.ManiaState and HV.ManiaState.enabled then
 		maniaRescore = HV.GetOsuManiaRescore(curScore, HV.ManiaState.od, true)
 		rescoredPercentage = maniaRescore.accuracy * 100
@@ -277,6 +346,10 @@ local function calculateCustomWindowScore(configName, rst)
 end
 
 local function updateVectors()
+	if scoringVoided then
+		nrv, dvt, ctt, ntt, totalTaps = {}, {}, {}, {}, 0
+		return
+	end
 	local replay = curScore and curScore:GetReplay() or nil
 	local hasReplay = replay and replay:LoadAllData()
 
@@ -401,6 +474,7 @@ end
 -- LA/RA Ratio calculation (ported from Til Death)
 -- Calculates Ludicrous Attack and Ridiculous Attack ratios from replay offsets
 local function calculateRatios(score)
+	if scoringVoided then return -1, -1, -1, -1, 0, 0 end
 	local replay = score:GetReplay()
 	if not replay then return -1, -1, -1, -1 end
 	pcall(function() replay:LoadAllData() end)
@@ -464,6 +538,7 @@ end
 
 -- a helper to get the radar value for a score and fall back to playerstagestats if that fails
 local function gatherRadarValue(radar, score)
+	if scoringVoided then return 0 end
     local n = score:GetRadarValues():GetValue(radar)
     if n == -1 then
         return pss:GetRadarActual():GetValue(radar)
@@ -487,14 +562,14 @@ clampJudge()
 
 local hsTable = getScoreTable(pn, rate)
 local scoreIndex = 0
-if hsTable then
+if hsTable and curScore then
 	scoreIndex = getHighScoreIndex(hsTable, curScore)
 end
-local recScore = getBestScore(pn, scoreIndex, rate, true)
-local clearType = getClearType(pn, steps, curScore)
+local recScore = scoringVoided and nil or getBestScore(pn, scoreIndex, rate, true)
+local clearType = scoringVoided and nil or getClearType(pn, steps, curScore)
 
-local tracks = pss:GetTrackVector()
-local devianceTable = pss:GetOffsetVector()
+local tracks = scoringVoided and {} or pss:GetTrackVector()
+local devianceTable = scoringVoided and {} or pss:GetOffsetVector()
 local cbl, cbr, cbm = 0, 0, 0
 local tst = ms.JudgeScalers
 local ncol = steps and steps:GetNumColumns() or 4
@@ -518,6 +593,7 @@ end
 recountCBs()
 
 local function getStatInfo()
+	if scoringVoided then return {0, 0, 0, 0, 0, 0, 0} end
 	return {
 		wifeMean(dvt),
 		wifeAbsMean(dvt),
@@ -543,18 +619,20 @@ local judgmentColors = {
 if not HV.EmulateRidiculousEnabled() then table.remove(judgmentColors, 1) end
 
 local ridiculousCount = nil
-if HV.EmulateRidiculousEnabled() then
+if HV.EmulateRidiculousEnabled() and not scoringVoided then
 	local ok, offsets = pcall(function() return pss:GetOffsetVector() end)
 	ridiculousCount = ok and HV.GetRidiculousCountFromOffsets(offsets, ms.JudgeScalers[getJudgeForScore(curScore)] or 1) or nil
 end
 
 local function getEvaluationJudgeCount(judgeName, judgeIndex)
+	if scoringVoided then return 0 end
 	if judgeName == "Ridiculous" then return ridiculousCount or 0 end
-	if judgeName == "TapNoteScore_W1" and ridiculousCount then return pss:GetTapNoteScores(judgeName) - ridiculousCount end
-	return pss:GetTapNoteScores(judgeName)
+	if judgeName == "TapNoteScore_W1" and ridiculousCount then return evaluationTapCount(judgeName) - ridiculousCount end
+	return evaluationTapCount(judgeName)
 end
 
 local function getEvaluationRescoredJudgeCount(offsetVector, judgeScale, judgeName, judgeIndex)
+	if scoringVoided then return 0 end
 	if maniaRescore then return maniaRescore.counts[judgeIndex] or 0 end
 	local ridiculousScale = ms.JudgeScalers[judgeScale] or judgeScale
 	if judgeName == "Ridiculous" then return HV.GetRidiculousCountFromOffsets(offsetVector, ridiculousScale) end
@@ -592,13 +670,14 @@ local function getActiveJudgeRowCount()
 end
 
 local function getRATallyCount(rowIndex)
+	if scoringVoided then return 0 end
 	local ra, la, ridic, marvRA, ludic, ridicLA = getRatios()
 	if rowIndex == 1 then return ludic
 	elseif rowIndex == 2 then return ridicLA
 	elseif rowIndex == 3 then return marvRA
-	elseif rowIndex == 4 then return pss:GetTapNoteScores("TapNoteScore_W2")
-	elseif rowIndex == 5 then return pss:GetTapNoteScores("TapNoteScore_W3")
-	elseif rowIndex == 6 then return pss:GetTapNoteScores("TapNoteScore_Miss")
+	elseif rowIndex == 4 then return evaluationTapCount("TapNoteScore_W2")
+	elseif rowIndex == 5 then return evaluationTapCount("TapNoteScore_W3")
+	elseif rowIndex == 6 then return evaluationTapCount("TapNoteScore_Miss")
 	end
 	return 0
 end
@@ -738,8 +817,8 @@ local t = Def.ActorFrame {
 			end
 
 			-- Only log once per screen entry AND only if we just came from gameplay
-			if not screen.HV_GradeCounted then
-				if HV.GameplaySessionValid and GRADECOUNTERSTORAGE and GRADECOUNTERSTORAGE.incrementSession then
+				if not screen.HV_GradeCounted then
+				if not scoringVoided and HV.GameplaySessionValid and GRADECOUNTERSTORAGE and GRADECOUNTERSTORAGE.incrementSession then
 					GRADECOUNTERSTORAGE:incrementSession(pss:GetWifeGrade())
 					-- Clear the flag after a short delay to allow other actors (like XP display) to see it first
 					self:sleep(0.5):queuecommand("ClearFlag")
@@ -752,6 +831,7 @@ local t = Def.ActorFrame {
 		end
 	},
 	ScoreChangedMessageCommand = function(self)
+		if scoringVoided then return end
 		pss = STATSMAN:GetCurStageStats():GetPlayerStageStats()
 		
 		local mss = SCOREMAN:GetMostRecentScore()
@@ -1437,7 +1517,7 @@ local function scoreBoard(pn)
 			Name = "GradeScoreLabel",
 			InitCommand = function(self) self:halign(0):valign(0):xy(0, 0):zoom(0.85):diffuse(mainText):diffusealpha(0) end,
 			OnCommand = function(self)
-				local grade = isManiaModeEnabled() and getOsuManiaGrade(rescoredPercentage, maniaRescore) or (rescoredPercentage and GetGradeFromPercent(rescoredPercentage / 100) or pss:GetWifeGrade())
+				local grade = isManiaModeEnabled() and getOsuManiaGrade(rescoredPercentage, maniaRescore) or (rescoredPercentage and GetGradeFromPercent(rescoredPercentage / 100) or evaluationGrade())
 				if isManiaModeEnabled() then
 					self:settext(grade)
 					self:diffuse(getOsuManiaGradeColor(grade))
@@ -1471,7 +1551,7 @@ local function scoreBoard(pn)
 			InitCommand = function(self) self:halign(0):valign(0):xy(10, 45):zoom(0.8):diffuse(subText):diffusealpha(0) end,
 			OnCommand = function(self)
 				if HV.ShowMSD() then
-					local ssr = curScore:GetSkillsetSSR("Overall")
+					local ssr = scoringVoided and 0 or curScore:GetSkillsetSSR("Overall")
 					self:settextf("%.2f", ssr)
 					self:diffuse(HVColor.GetMSDRatingColor(ssr))
 					self:sleep(0.4):linear(0.2):diffusealpha(1)
@@ -1507,7 +1587,7 @@ local function scoreBoard(pn)
 			InitCommand = function(self) self:xy(110, 5) end,
 			OnCommand = function(self)
 				local label = self:GetChild("WifeScoreLabel")
-				local wife = rescoredPercentage or (pss:GetWifeScore() * 100)
+				local wife = rescoredPercentage or (evaluationWifeScore() * 100)
 				label:sleep(0.35):linear(0.15):diffusealpha(1)
 				
 				-- Incremental counting
@@ -1669,7 +1749,7 @@ local function scoreBoard(pn)
 			Name = "ChartProgressWrapper",
 			InitCommand = function(self) self:xy(110, 29):visible(false) end,
 			OnCommand = function(self)
-				local grade = pss:GetWifeGrade()
+				local grade = evaluationGrade()
 				if grade == "Grade_Failed" then
 					local totalNotes = songTotalNotes or steps:GetRadarValues(pn):GetValue("RadarCategory_Notes")
 					local encounteredNotes = 0
@@ -1717,7 +1797,7 @@ local function scoreBoard(pn)
 			OnCommand = function(self)
 				local wholePart = self:GetChild("WholeDP")
 				local decimalPart = self:GetChild("DecimalDP")
-				local displayPct = rescoredPercentage or (pss:GetWifeScore() * 100)
+				local displayPct = rescoredPercentage or (evaluationWifeScore() * 100)
 				local dp = maniaRescore and maniaRescore.points or ((displayPct / 100) * songMaxPoints)
 				local targetDP = dp
 				
@@ -1794,7 +1874,7 @@ local function scoreBoard(pn)
 				if isOnlineEvaluation() then self:settext(""):visible(false); return end
 				if recScore then
 					local pbDp = recScore.GetWifePoints and recScore:GetWifePoints() or (recScore:GetWifeScore() * songMaxPoints)
-					local curDp = pss:GetWifeScore() * songMaxPoints
+					local curDp = evaluationWifeScore() * songMaxPoints
 					local diff = curDp - pbDp
 					
 					self:settextf("PB: %.2f (%+5.2f)", pbDp, diff)
@@ -1866,7 +1946,7 @@ local function scoreBoard(pn)
 			LoadFont("Common Normal") .. {
 				InitCommand = function(self) self:halign(0):valign(0):zoom(0.5) end,
 				OnCommand = function(self)
-					local currentCT = clearType or "Clear"
+				local currentCT = clearType or (scoringVoided and "Noplay" or "Clear")
 					self:settext(getClearTypeText(currentCT)):diffuse(getClearTypeColor(currentCT))
 				end
 			},
@@ -2128,14 +2208,14 @@ local function scoreBoard(pn)
 					if marvRA == 0 then self:settext(ridic > 0 and "No Marvs" or "N/A"):diffuse(ridic > 0 and ratioColors[2] or dimText)
 					else self:settextf("%.2f:1", ra):diffuse(ratioColors[2]) end
 				elseif ri == 3 then
-					local w1 = pss:GetTapNoteScores("TapNoteScore_W1")
-					local w2 = pss:GetTapNoteScores("TapNoteScore_W2")
+					local w1 = evaluationTapCount("TapNoteScore_W1")
+					local w2 = evaluationTapCount("TapNoteScore_W2")
 					if w2 == 0 then self:settext(w1 > 0 and "No Perfs" or "N/A"):diffuse(w1 > 0 and color("#FFFFFF") or dimText)
 					else self:settextf("%.2f:1", w1 / w2):diffuse(ratioColors[3]) end
 				elseif ri == 4 then
-					local w3 = pss:GetTapNoteScores("TapNoteScore_W3")
-					if w3 == 0 then self:settext(pss:GetTapNoteScores("TapNoteScore_W2") > 0 and "No Greats" or "N/A"):diffuse(dimText)
-					else self:settextf("%.2f:1", pss:GetTapNoteScores("TapNoteScore_W2") / w3):diffuse(ratioColors[4]) end
+					local w3 = evaluationTapCount("TapNoteScore_W3")
+					if w3 == 0 then self:settext(evaluationTapCount("TapNoteScore_W2") > 0 and "No Greats" or "N/A"):diffuse(dimText)
+					else self:settextf("%.2f:1", evaluationTapCount("TapNoteScore_W2") / w3):diffuse(ratioColors[4]) end
 				end
 				self:sleep(0.7 + ri * 0.05):linear(0.2):diffusealpha(1)
 			end,
@@ -2181,9 +2261,9 @@ local function scoreBoard(pn)
 		board[#board + 1] = LoadFont("Common Normal") .. {
 			InitCommand = function(self) self:halign(1):xy(frameW - pad, hy):zoom(0.45):diffuse(mainText):diffusealpha(0) end,
 			OnCommand = function(self)
-				if i == 1 then self:settext(pss:GetHoldNoteScores("HoldNoteScore_Held"))
-				elseif i == 2 then self:settext(pss:GetHoldNoteScores("HoldNoteScore_LetGo"))
-				elseif i == 3 then self:settext(pss:GetTapNoteScores("TapNoteScore_HitMine")) end
+				if i == 1 then self:settext(evaluationHoldCount("HoldNoteScore_Held"))
+				elseif i == 2 then self:settext(evaluationHoldCount("HoldNoteScore_LetGo"))
+				elseif i == 3 then self:settext(evaluationTapCount("TapNoteScore_HitMine")) end
 				self:stoptweening():sleep(0.65 + i * 0.05):linear(0.2):diffusealpha(1)
 			end
 		}
@@ -2210,7 +2290,8 @@ local function scoreBoard(pn)
 			end,
 			SetJudgeCommand = function(self) self:playcommand("UpdateText") end,
 			UpdateTextCommand = function(self)
-				if i == 1 then self:settextf("%.2fms", wifeMean(dvt))
+				if scoringVoided then self:settext("0.00ms")
+				elseif i == 1 then self:settextf("%.2fms", wifeMean(dvt))
 				elseif i == 2 then self:settextf("%.2fms", wifeSd(dvt))
 				elseif i == 3 then self:settextf("%.2fms", wifeMax(dvt)) end
 			end
@@ -2234,7 +2315,7 @@ local function scoreBoard(pn)
 			OnCommand = function(self)
 				if steps then
 					local possible = steps:GetRadarValues(pn):GetValue(noteTypeRadars[ni])
-					local actual = pss:GetRadarActual():GetValue(noteTypeRadars[ni])
+					local actual = scoringVoided and 0 or pss:GetRadarActual():GetValue(noteTypeRadars[ni])
 					self:settextf("%d/%d", actual, possible)
 				end
 				self:sleep(0.8 + ni * 0.03):linear(0.15):diffusealpha(1)
@@ -2532,6 +2613,7 @@ t[#t + 1] = Def.ActorFrame {
 						dvt = dvt,
 						ctt = ctt,
 						ntt = ntt,
+						chordCohesion = curScore and curScore.GetChordCohesion and curScore:GetChordCohesion() or false,
 						columns = steps and steps:GetNumColumns() or 4,
 						cbl = cbl,
 						cbr = cbr,
@@ -2551,6 +2633,7 @@ t[#t + 1] = Def.ActorFrame {
 						dvt = dvt,
 						ctt = ctt,
 						ntt = ntt,
+						chordCohesion = curScore and curScore.GetChordCohesion and curScore:GetChordCohesion() or false,
 						columns = steps and steps:GetNumColumns() or 4,
 						cbl = cbl,
 						cbr = cbr,

@@ -343,11 +343,12 @@ local t = Def.ActorFrame {
 	},
 
 	-- DP Display Frame
-	Def.ActorFrame {
+		Def.ActorFrame {
 		Name = "DPDisplay",
 		InitCommand = function(self)
 			self:xy(-panelX, -12):halign(0)
 			self:xy((MovableValues and MovableValues.DPDisplayX) or getDefaultGameplayCoordinate("DPDisplayX") or (-panelX), (MovableValues and MovableValues.DPDisplayY) or getDefaultGameplayCoordinate("DPDisplayY") or -12):zoom((MovableValues and MovableValues.DPDisplayZoom) or getDefaultGameplaySize("DPDisplayZoom") or 1)
+			self:visible(not GAMESTATE:IsPracticeMode())
 		end,
 		JudgmentMessageCommand = function(self, msg)
 			updateDPFromJudgment(msg)

@@ -88,14 +88,6 @@ local HVPrefRows = {
 		Values = {0.0, 0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9, 1.0},
 	},
 
-
-	-- Song Background Brightness
-	HV_SongBackgroundBrightness = {
-		Default = 0.5,
-		Choices = {"0%", "10%", "20%", "30%", "40%", "50%", "60%", "70%", "80%", "90%", "100%"},
-		Values = {0.0, 0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9, 1.0},
-	},
-
 	-- Lane Cover
 	HV_LaneCoverSudden = {
 		Default = 0,
@@ -585,6 +577,10 @@ local function HVThemePrefRow(name, title)
 		end
 		ThemePrefs.Set(name, val)
 		ThemePrefs.ForceSave() -- Bypass NeedsSaved check to be certain
+		if (name == "HV_LaneCoverSudden" or name == "HV_LaneCoverHidden")
+			and HV and HV.ApplyLaneCoverModifiers then
+			HV.ApplyLaneCoverModifiers()
+		end
 	end
 	
 	return row
@@ -895,8 +891,37 @@ function OptionRowRecentJudgmentDisplay()
 	return HVThemePrefRow("HV_RecentJudgmentDisplay", "Recent Judgement Display")
 end
 
+-- Custom Brightness row backed by Etterna's internal BGBrightness preference.
 function OptionRowSongBackgroundBrightness()
-	return HVThemePrefRow("HV_SongBackgroundBrightness", "Background Brightness")
+	local row = {
+		Name = "HV_SongBackgroundBrightness",
+		Title = "Background Brightness",
+		LayoutType = "ShowAllInRow",
+		SelectType = "SelectOne",
+		OneChoiceForAllPlayers = true,
+		ExportOnChange = true,
+		Choices = {"0%", "10%", "20%", "30%", "40%", "50%", "60%", "70%", "80%", "90%", "100%"},
+	}
+	row.LoadSelections = function(self, list, pn)
+		local brightness = tonumber(PREFSMAN:GetPreference("BGBrightness")) or 1.0
+		if tonumber(ThemePrefs.Get("HV_SongBackgroundBrightness")) ~= brightness then
+			ThemePrefs.Set("HV_SongBackgroundBrightness", brightness)
+		end
+		local index = math.max(1, math.min(11, math.floor((brightness * 10) + 0.5) + 1))
+		list[index] = true
+	end
+	row.SaveSelections = function(self, list, pn)
+		for i = 1, #self.Choices do
+			if list[i] then
+				local brightness = (i - 1) / 10
+				PREFSMAN:SetPreference("BGBrightness", brightness)
+				PREFSMAN:SavePreferences()
+				ThemePrefs.Set("HV_SongBackgroundBrightness", brightness)
+				break
+			end
+		end
+	end
+	return row
 end
 
 -- Customize Gameplay toggle (used in ScreenPlayerOptions)

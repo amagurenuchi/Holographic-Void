@@ -16,7 +16,7 @@ t[#t + 1] = Def.Sprite {
 	InitCommand = function(self)
 		local song = GAMESTATE:GetCurrentSong()
 		local showBG = HV.ShowSongBackground()
-		if song and showBG and song:GetBackgroundPath() then
+		if song and showBG and HV.GetSongBackgroundBrightness() > 0 and song:GetBackgroundPath() then
 			self:visible(true):LoadBackground(song:GetBackgroundPath())
 			self:Center():zoomto(SCREEN_WIDTH, SCREEN_HEIGHT)
 			local brightness = HV.GetSongBackgroundBrightness()
