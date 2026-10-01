@@ -65,17 +65,6 @@ local function minimalisticHUDVisible(baseVisible, enabled)
 	return baseVisible and not enabled
 end
 
-local function gameplayChordCohesionEnabled()
-	local stageStats = STATSMAN:GetCurStageStats()
-	local pss = stageStats and stageStats:GetPlayerStageStats()
-	local score = pss and pss.GetHighScore and pss:GetHighScore()
-	if score and score.GetChordCohesion then
-		local ok, enabled = pcall(function() return score:GetChordCohesion() end)
-		return ok and enabled == true
-	end
-	return false
-end
-
 local function animateGameplayHUDVisibility(self, visible, instant)
 	self:stoptweening()
 	if visible then
@@ -904,7 +893,7 @@ t[#t + 1] = Def.ActorFrame {
 				elseif statType == "MARatio" then
 					self:settext("0.00:1")
 				elseif statType == "DeltaHand" then
-					self:settext(gameplayChordCohesionEnabled() and "Cannot Record Hand Data" or "0.0000%")
+					self:settext("0.0000%")
 				else
 					self:settext("0.00ms")
 				end
@@ -1029,10 +1018,6 @@ t[#t + 1] = Def.ActorFrame {
 						self:settext("0.00:1")
 					end
 				elseif self.statType == "DeltaHand" then
-					if gameplayChordCohesionEnabled() then
-						self:settext("Cannot Record Hand Data")
-						return
-					end
 					local cols = 4
 					local style = GAMESTATE:GetCurrentStyle()
 					if style and style.ColumnsPerPlayer then cols = style:ColumnsPerPlayer() end
