@@ -477,7 +477,10 @@ function OptionRowMini()
 		LayoutType = "ShowAllInRow",
 		SelectType = "SelectOne",
 		OneChoiceForAllPlayers = true,
-		ExportOnChange = false,
+		-- Persist the receptor scale immediately.  This row is used from the
+		-- player-options screen immediately before starting a song, so waiting
+		-- for a later export can leave the setting at its default (100%).
+		ExportOnChange = true,
 		ExportOnCancel = true,
 		Choices = RSChoices,
 		LoadSelections = function(self, list, pn)
