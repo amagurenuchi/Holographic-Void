@@ -2113,7 +2113,9 @@ end
 
 if not isSync then
 	t[#t + 1] = LoadActor("scoretracking")
-	t[#t + 1] = LoadActor("pacemaker")
+	if ThemePrefs.Get("HV_ShowPacemakerGraph") then
+		t[#t + 1] = LoadActor("pacemaker")
+	end
 	t[#t + 1] = Def.ActorFrame {
 		Name = "AutofailDisplay",
 		InitCommand = function(self)
