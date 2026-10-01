@@ -5,14 +5,74 @@
 
 local screenName = Var("LoadingScreen") or ...
 local topScreen
-BUTTON:ResetButtonTable(screenName)
+local tooltipActor
+local pointerActor
+local clickWaveActor
+-- ScreenTextEntry has its own visual cursor, but it must not touch the shared
+-- BUTTON state.  Modal screens can inherit the caller's LoadingScreen value,
+-- so resetting here would clear the caller's hover/cursor state.
+local currentScreen = SCREENMAN:GetTopScreen()
+local isTextEntry = screenName == "ScreenTextEntry"
+	 or (currentScreen and currentScreen:GetName() == "ScreenTextEntry")
+if not isTextEntry then
+	BUTTON:ResetButtonTable(screenName)
+end
 
 local function UpdateLoop()
 	local mouseX = INPUTFILTER:GetMouseX()
 	local mouseY = INPUTFILTER:GetMouseY()
+	-- SetPosition intentionally returns early while the tooltip actor is being
+	-- recreated. The pointer is a separate actor, so update it directly too.
+	if pointerActor then
+		pcall(function() pointerActor:xy(mouseX, mouseY) end)
+	end
 	pcall(function() TOOLTIP:SetPosition(mouseX, mouseY) end)
-	BUTTON:UpdateMouseState()
+	if not isTextEntry then
+		BUTTON:UpdateMouseState()
+	end
 	return false
+end
+
+local function updatePointerImmediately()
+	-- A screen can regain focus before its first update tick.  Reposition the
+	-- pointer here so returning from a sub-screen does not leave it at its old
+	-- coordinates until the next mouse event.
+	UpdateLoop()
+end
+
+-- Actor update callbacks are paused while a screen is covered by a pushed
+-- modal.  Reinstall the callback when that screen regains focus so the cursor
+-- continues to follow the mouse after the one-time focus refresh.
+local function startUpdateLoop(self)
+	self:SetUpdateFunction(UpdateLoop)
+	local refreshRate = DISPLAY:GetDisplayRefreshRate()
+	if refreshRate and refreshRate > 0 then
+		self:SetUpdateFunctionInterval(1 / refreshRate)
+	end
+end
+
+-- TOOLTIP is a singleton.  Every pushed screen creates its own tooltip and
+-- pointer actors, which replaces these references.  Capture the live actor
+-- references after this cursor has loaded, then restore them once a modal is
+-- popped; otherwise the update loop addresses the detached modal pointer.
+local function captureTooltipActors()
+	tooltipActor = TOOLTIP.Actor
+	pointerActor = TOOLTIP.Pointer
+	clickWaveActor = TOOLTIP.ClickWave
+end
+
+local function activateTooltipActors()
+	TOOLTIP.Actor = tooltipActor
+	TOOLTIP.Pointer = pointerActor
+	TOOLTIP.ClickWave = clickWaveActor
+end
+
+-- ScreenTextEntry is pushed as a modal screen and is often popped from inside
+-- its input callback.  In that case GainFocus can run before the screen stack
+-- has finished changing, so the mouse position/button state is refreshed
+-- against the text-entry screen instead of the screen underneath it.
+local function refreshAfterModalPop(self)
+	self:sleep(0):queuecommand("RefreshCursor")
 end
 
 local function cursorCheck()
@@ -20,32 +80,57 @@ local function cursorCheck()
 	-- In windowed mode, the system cursor is visible so hide ours
 	if not PREFSMAN:GetPreference("Windowed") and not PREFSMAN:GetPreference("FullscreenIsBorderlessWindow") then
 		TOOLTIP:ShowPointer()
+		if pointerActor then pointerActor:visible(true) end
 	else
 		TOOLTIP:HidePointer()
+		if pointerActor then pointerActor:visible(false) end
+	end
+end
+
+-- Registers (or re-registers) the BUTTON input callback on the current top screen.
+-- Must be called both at init and whenever this screen regains focus after a
+-- sub-screen is popped, because AddInputCallback only wires up a single screen handle.
+local function registerInputCallback()
+	if isTextEntry then return end
+	topScreen = SCREENMAN:GetTopScreen()
+	if topScreen then
+		topScreen:AddInputCallback(function(event)
+			if BUTTON and type(BUTTON.InputCallback) == "function" then
+				BUTTON.InputCallback(event)
+			end
+		end)
 	end
 end
 
 local t = Def.ActorFrame {
 	OnCommand = function(self)
 		self:draworder(20000)
-		self:SetUpdateFunction(UpdateLoop)
-		-- Match display refresh rate for smooth cursor tracking
-		local refreshRate = DISPLAY:GetDisplayRefreshRate()
-		if refreshRate and refreshRate > 0 then
-			self:SetUpdateFunctionInterval(1 / refreshRate)
-		end
-		topScreen = SCREENMAN:GetTopScreen()
-		if topScreen then
-			topScreen:AddInputCallback(function(event)
-				if BUTTON and type(BUTTON.InputCallback) == "function" then
-					BUTTON.InputCallback(event)
-				end
-			end)
-		end
+		captureTooltipActors()
+		startUpdateLoop(self)
+		registerInputCallback()
 		cursorCheck()
 	end,
+	-- Re-register when a sub-screen (e.g. ScreenHVColorEdit) is popped and this
+	-- screen becomes the top screen again; the old topScreen handle is stale by then.
+	GainFocusCommand = function(self)
+		activateTooltipActors()
+		startUpdateLoop(self)
+		registerInputCallback()
+		cursorCheck()
+		updatePointerImmediately()
+		refreshAfterModalPop(self)
+	end,
+	RefreshCursorCommand = function(self)
+		activateTooltipActors()
+		startUpdateLoop(self)
+		registerInputCallback()
+		cursorCheck()
+		updatePointerImmediately()
+	end,
 	OffCommand = function(self)
-		BUTTON:ResetButtonTable(screenName)
+		if not isTextEntry then
+			BUTTON:ResetButtonTable(screenName)
+		end
 		pcall(function() TOOLTIP:Hide() end)
 	end,
 	CancelCommand = function(self)
@@ -59,10 +144,10 @@ local t = Def.ActorFrame {
 	end,
 }
 
--- Create tooltip + pointer + click wave actors from the _fallback system
-local tooltip, pointer, clickwave = TOOLTIP:New()
-t[#t + 1] = tooltip
-t[#t + 1] = pointer
-t[#t + 1] = clickwave
+-- Create tooltip + pointer + click wave actors from the _fallback system.
+tooltipActor, pointerActor, clickWaveActor = TOOLTIP:New()
+t[#t + 1] = tooltipActor
+t[#t + 1] = pointerActor
+t[#t + 1] = clickWaveActor
 
 return t

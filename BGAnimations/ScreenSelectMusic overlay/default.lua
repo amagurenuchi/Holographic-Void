@@ -137,6 +137,13 @@ local function IsSelectMusicBackgroundClickArea()
 	local my = INPUTFILTER:GetMouseY() or SCREEN_CENTER_Y
 	if HV.ActiveTab and HV.ActiveTab ~= "" then return false end
 	if my <= 40 or my >= SCREEN_HEIGHT - 40 then return false end
+	-- The login/logout button is part of the profile card just outside the
+	-- panel.  Keep clicking it from also starting the background peek hold.
+	local loginX = panelX + panelW + 16
+	local loginY = SCREEN_HEIGHT - 40 - 75 - 22
+	if mx >= loginX and mx <= loginX + 80 and my >= loginY - 12 and my <= loginY + 12 then
+		return false
+	end
 	-- The background peek should cover the open space immediately beside the
 	-- left panel.  The old 110px buffer left a large, unusable dead strip.
 	if mx <= panelX + panelW + 16 then return false end

@@ -910,7 +910,7 @@ t[#t + 1] = Def.ActorFrame {
 						end
 					end
 				elseif self.statType == "StdDev" then
-			        if msg.TapNoteOffset ~= nil then
+			        if msg.TapNoteOffset ~= nil and msg.TapNoteScore ~= "TapNoteScore_Miss" then
 			            local offset = msg.TapNoteOffset * 1000
 			            -- Implementation inspired by Rebirth's displaystddev.lua 
 			            self.tapcount = self.tapcount + 1
@@ -919,6 +919,11 @@ t[#t + 1] = Def.ActorFrame {
 			            local delta2 = offset - self.runningmean
 			            self.runningvariance = self.runningvariance + (delta * delta2)
 			        end
+				elseif self.statType == "Mean" then
+					if msg.TapNoteOffset ~= nil and msg.TapNoteScore ~= "TapNoteScore_Miss" then
+						self.meansum = self.meansum + msg.TapNoteOffset * 1000
+						self.meancount = self.meancount + 1
+					end
 				elseif self.statType == "DeltaHand" then
 					if msg.TapNoteOffset and msg.TapNoteScore and msg.TapNoteScore ~= "TapNoteScore_AvoidMine" and msg.TapNoteScore ~= "TapNoteScore_CheckpointHit" then
 						local track = msg.FirstTrack
@@ -945,11 +950,6 @@ t[#t + 1] = Def.ActorFrame {
 								self.middleOffsetCount = (self.middleOffsetCount or 0) + 1
 							end
 						end
-					elseif self.statType == "Mean" then
-					    if msg.TapNoteOffset ~= nil then
-					        self.meansum = self.meansum + msg.TapNoteOffset*1000
-					        self.meancount = self.meancount + 1
-					    end
 					end
 				end
 				self:queuecommand("Update")
@@ -1059,6 +1059,7 @@ t[#t + 1] = Def.ActorFrame {
 				self.leftOffsetSumMs, self.leftOffsetCount = 0, 0
 				self.rightOffsetSumMs, self.rightOffsetCount = 0, 0
 				self.middleOffsetSumMs, self.middleOffsetCount = 0, 0
+				self.meansum, self.meancount = 0, 0
 				self.tapcount = 0
 				self.runningmean = 0
 				self.runningvariance = 0
@@ -1069,6 +1070,7 @@ t[#t + 1] = Def.ActorFrame {
 				self.leftOffsetSumMs, self.leftOffsetCount = 0, 0
 				self.rightOffsetSumMs, self.rightOffsetCount = 0, 0
 				self.middleOffsetSumMs, self.middleOffsetCount = 0, 0
+				self.meansum, self.meancount = 0, 0
 				self:queuecommand("Update")
 			end
 		
@@ -1849,7 +1851,7 @@ t[#t + 1] = Def.ActorFrame {
 				self.tapcount = 0
 			end,
 			JudgmentMessageCommand = function(self,msg)
-				if msg.TapNoteOffset ~= nil then
+				if msg.TapNoteOffset ~= nil and msg.TapNoteScore ~= "TapNoteScore_Miss" then
 		            local offset = msg.TapNoteOffset * 1000
 		            -- Implementation inspired by Rebirth's displaystddev.lua 
 		            self.tapcount = self.tapcount + 1

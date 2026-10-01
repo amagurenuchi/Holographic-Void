@@ -31,6 +31,16 @@ local curPage = 1
 local alreadyPulled = false
 local scoreList = hsTable
 local showAllRates = false
+local showInvalidScores = false
+
+local function isOnlineScoreInvalid(s)
+	if not s then return false end
+	if type(s.GetEtternaValid) == "function" then
+		local ok, valid = pcall(s.GetEtternaValid, s)
+		if ok and valid == false then return true end
+	end
+	return IsScoreInvalid(s)
+end
 
 local function getViewedRateValue()
 	if score and score.GetMusicRate then
@@ -161,7 +171,7 @@ local function refreshScores(self)
 		if rawOnlineScores then
 			for i = 1, #rawOnlineScores do
 				local s = rawOnlineScores[i]
-				if showAllRates or isSameRateScore(s, targetRateValue, targetRate) then
+				if (showInvalidScores or not isOnlineScoreInvalid(s)) and (showAllRates or isSameRateScore(s, targetRateValue, targetRate)) then
 					scoreList[#scoreList + 1] = s
 				end
 			end
@@ -221,7 +231,8 @@ local function scoreItem(i)
 				self:halign(0):valign(0):zoomto(SCREEN_CENTER_X - 40, 42):diffuse(color("0,0,0,0.4"))
 			end,
 			SetScoreCommand = function(self, params)
-				self:diffuse(color("0,0,0,0.4"))
+				local s = scoreList[params.index]
+				self:diffuse(not isLocal and isOnlineScoreInvalid(s) and color("#7A1018") or color("0,0,0,0.4"))
 			end,
 			WheelUpSlowMessageCommand = function(self) if isOver(self) then movePage(-1) end end,
 			WheelDownSlowMessageCommand = function(self) if isOver(self) then movePage(1) end end
@@ -232,6 +243,16 @@ local function scoreItem(i)
 			InitCommand = function(self) self:xy(10, 21):zoom(0.45):diffuse(accentColor):halign(0) end,
 			SetScoreCommand = function(self, params)
 				self:settext(params.index)
+			end
+		},
+
+		-- Clear type
+		LoadFont("Common Normal") .. {
+			InitCommand = function(self) self:xy(220, 8):zoom(0.32):halign(0):diffuse(subText) end,
+			SetScoreCommand = function(self, params)
+				local s = scoreList[params.index]
+				local ct = (not isLocal and isOnlineScoreInvalid(s)) and "Invalid" or getDetailedClearType(s)
+				self:settext(ct):diffuse(HVColor.GetClearTypeColor(ct))
 			end
 		},
 
@@ -456,6 +477,31 @@ local t = Def.ActorFrame {
 	LoadFont("Common Normal") .. {
 		InitCommand = function(self) self:xy(264, -30):zoom(0.3):diffuse(brightText):settext("All") end,
 		RefreshOnlineScoreboardMessageCommand = function(self) self:visible(not isLocal) end
+	},
+
+	-- Invalid score visibility
+	Def.Quad {
+		Name = "InvalidToggle",
+		InitCommand = function(self)
+			self:xy(305, -38):zoomto(92, 16):halign(0):valign(0):diffuse(color("#B01824"))
+			self:diffusealpha(0)
+		end,
+		RefreshOnlineScoreboardMessageCommand = function(self)
+			self:diffusealpha(not isLocal and (showInvalidScores and 0.65 or 0.2) or 0)
+		end,
+		MouseDownCommand = function(self)
+			if isOver(self) and not isLocal then
+				showInvalidScores = not showInvalidScores
+				refreshScores(self:GetParent())
+				self:GetParent():playcommand("RefreshUI")
+			end
+		end
+	},
+	LoadFont("Common Normal") .. {
+		InitCommand = function(self) self:xy(351, -30):zoom(0.28):diffuse(brightText) end,
+		RefreshOnlineScoreboardMessageCommand = function(self)
+			self:visible(not isLocal):settext(showInvalidScores and "Invalid ON" or "Invalid OFF")
+		end
 	},
 
 	-- Page info

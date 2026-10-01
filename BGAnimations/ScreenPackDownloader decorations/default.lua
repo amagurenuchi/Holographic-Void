@@ -97,6 +97,21 @@ local function isPackInstalled(pack)
 	return SONGMAN:DoesSongGroupExist(pack:GetName())
 end
 
+-- Check the active download list separately from the queued state. A pack is
+-- removed from the queue once its download starts, so IsQueued() alone is not
+-- enough to describe its current status.
+local function isPackDownloading(pack)
+	if not pack then return false end
+	local downloadingPacks = DLMAN:GetDownloadingPacks()
+	if not downloadingPacks then return false end
+	for _, downloadingPack in ipairs(downloadingPacks) do
+		if downloadingPack:GetName() == pack:GetName() then
+			return true
+		end
+	end
+	return false
+end
+
 -- ============================================================
 -- BACKGROUND
 -- ============================================================
@@ -632,6 +647,9 @@ for i = 1, packsPerPage do
 					if installedFlags[i] then
 						self:settext("INSTALLED")
 						self:diffuse(installedColor)
+					elseif isPackDownloading(pack) then
+						self:settext("DOWNLOADING")
+						self:diffuse(accentColor)
 					elseif pack:IsQueued() then
 						self:settext("QUEUED")
 						self:diffuse(accentColor)
@@ -1065,7 +1083,7 @@ t[#t + 1] = Def.ActorFrame {
 						if selectedRow == i then
 							-- Already selected, trigger download
 							local pack = currentPacks[i]
-							if pack and not installedFlags[i] and not pack:IsQueued() then
+							if pack and not installedFlags[i] and not pack:IsQueued() and not isPackDownloading(pack) then
 								if pack:GetSize() > 2000000000 then
 									pack:DownloadExternally()
 								else
@@ -1120,7 +1138,7 @@ t[#t + 1] = Def.ActorFrame {
 			elseif btn == "DeviceButton_enter" or gameBtn == "Start" then
 				-- Enter/Start = download/queue selected pack
 				local pack = currentPacks[selectedRow]
-				if pack and not installedFlags[selectedRow] and not pack:IsQueued() then
+				if pack and not installedFlags[selectedRow] and not pack:IsQueued() and not isPackDownloading(pack) then
 					if pack:GetSize() > 2000000000 then
 						pack:DownloadExternally()
 					else
@@ -1189,7 +1207,10 @@ t[#t + 1] = Def.ActorFrame {
 				local packRows = af:GetParent():GetChild("PackRows")
 				for i = 1, math.min(#currentPacks, packsPerPage) do
 					local pack = currentPacks[i]
-					if pack and pack:IsQueued() then
+					if pack then
+						-- Installation can finish after the page was loaded, so do not
+						-- rely solely on the initial installedFlags cache.
+						installedFlags[i] = isPackInstalled(pack)
 						packRows:playcommand("UpdateRow" .. i)
 					end
 				end

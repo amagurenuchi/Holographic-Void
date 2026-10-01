@@ -29,9 +29,7 @@ local function isOnlineEvaluation()
 	return HV.OnlineEvaluationActive == true or HV.OnlineReplayActive == true
 end
 
--- Each evaluation screen starts in normal Etterna mode. This prevents a
--- previous evaluation screen from leaking temporary osu!mania state into the
--- normal score display while actors are being constructed.
+-- This is here to make sure that osu!mania state doesn't leak into the normal score display
 HV.ResetManiaMode()
 
 local function isManiaModeEnabled()
@@ -330,9 +328,18 @@ local function formatEvaluationPercent(pct)
 	return formatWifePercent(pct)
 end
 
-local function getOsuManiaGrade(accuracy)
+local function getOsuManiaGrade(accuracy, rescoreData)
 	accuracy = tonumber(accuracy) or 0
-	if accuracy >= 100 then return "X" end
+	-- ScoreV2: X rank requires every hit to be 300 or MAX (no 200/100/50/miss)
+	if HV.ManiaState and HV.ManiaState.useScoreV2 and rescoreData and rescoreData.counts then
+		local c = rescoreData.counts
+		if (c[3] or 0) == 0 and (c[4] or 0) == 0 and (c[5] or 0) == 0 and (c[6] or 0) == 0 then
+			return "X"
+		end
+	-- ScoreV1: X rank requires 100% accuracy
+	elseif accuracy >= 100 then
+		return "X"
+	end
 	if accuracy >= 95 then return "S" end
 	if accuracy >= 90 then return "A" end
 	if accuracy >= 80 then return "B" end
@@ -1430,7 +1437,7 @@ local function scoreBoard(pn)
 			Name = "GradeScoreLabel",
 			InitCommand = function(self) self:halign(0):valign(0):xy(0, 0):zoom(0.85):diffuse(mainText):diffusealpha(0) end,
 			OnCommand = function(self)
-				local grade = isManiaModeEnabled() and getOsuManiaGrade(rescoredPercentage) or (rescoredPercentage and GetGradeFromPercent(rescoredPercentage / 100) or pss:GetWifeGrade())
+				local grade = isManiaModeEnabled() and getOsuManiaGrade(rescoredPercentage, maniaRescore) or (rescoredPercentage and GetGradeFromPercent(rescoredPercentage / 100) or pss:GetWifeGrade())
 				if isManiaModeEnabled() then
 					self:settext(grade)
 					self:diffuse(getOsuManiaGradeColor(grade))
@@ -1446,7 +1453,7 @@ local function scoreBoard(pn)
 				if usingCustomWindows then return end
 				if rescoredPercentage then
 					if isManiaModeEnabled() then
-						local grade = getOsuManiaGrade(rescoredPercentage)
+						local grade = getOsuManiaGrade(rescoredPercentage, maniaRescore)
 						self:settext(grade)
 						self:diffuse(getOsuManiaGradeColor(grade))
 						return
@@ -1505,7 +1512,7 @@ local function scoreBoard(pn)
 				
 				-- Incremental counting
 				local val = math.max(0, wife)
-				local duration = 0.8 -- Return to fast fixed duration, well under 2s limit
+				local duration = 0.2
 				local curTime = 0
 				local targetWife = wife
 				self:SetUpdateFunction(function(self, delta)
@@ -1625,6 +1632,38 @@ local function scoreBoard(pn)
 			LoadFont("Common Normal") .. { Name = "Value", InitCommand = function(self) self:halign(0.5):x(135):y(-1):zoom(0.32):diffuse(accentColor) end }
 		},
 
+		-- ScoreV2 toggle button (visible only in mania mode)
+		Def.ActorFrame {
+			Name = "ManiaScoreV2Toggle",
+			InitCommand = function(self) self:xy(110, 56):visible(false) end,
+			ManiaModeChangedMessageCommand = function(self)
+				local active = isManiaModeEnabled()
+				self:visible(active)
+				if active then self:playcommand("Refresh") end
+			end,
+			RefreshCommand = function(self)
+				local v2 = HV.ManiaState.useScoreV2
+				self:GetChild("Bg"):diffuse(v2 and accentColor or color("0.12,0.12,0.14,0.9"))
+					:diffusealpha(v2 and 0.35 or 0.9)
+				self:GetChild("Label")
+					:settext(v2 and "ScoreV2" or "ScoreV1")
+					:diffuse(v2 and accentColor or dimText)
+			end,
+			-- Background pill
+			Def.Quad {
+				Name = "Bg",
+				InitCommand = function(self)
+					self:halign(0):x(85):zoomto(100, 18):diffuse(color("0.12,0.12,0.14,0.9")):diffusealpha(0.9)
+				end
+			},
+			LoadFont("Common Normal") .. {
+				Name = "Label",
+				InitCommand = function(self)
+					self:halign(0.5):x(135):y(-1):zoom(0.28):diffuse(dimText):settext("ScoreV1")
+				end
+			}
+		},
+
 		-- Chart Progress (Percentage completion on fail)
 		Def.ActorFrame {
 			Name = "ChartProgressWrapper",
@@ -1682,7 +1721,7 @@ local function scoreBoard(pn)
 				local dp = maniaRescore and maniaRescore.points or ((displayPct / 100) * songMaxPoints)
 				local targetDP = dp
 				
-				local duration = 0.8
+				local duration = 0.2
 				local curTime = 0
 
 				self:stoptweening():sleep(0.4):linear(0.15):diffusealpha(1)
@@ -1710,7 +1749,7 @@ local function scoreBoard(pn)
 			-- Whole part
 			LoadFont("Common Normal") .. {
 				Name = "WholeDP",
-				InitCommand = function(self) self:halign(0):valign(1):xy(0, 5):zoom(0.8):diffuse(color("#55b0ff")) end,
+				InitCommand = function(self) self:halign(0):valign(1):xy(0, 5):zoom(0.8):diffuse(accentColor) end,
 				SetJudgeCommand = function(self)
 					self:GetParent():SetUpdateFunction(nil)
 					if rescoredPercentage then
@@ -1724,7 +1763,7 @@ local function scoreBoard(pn)
 			-- Decimal part
 			LoadFont("Common Normal") .. {
 				Name = "DecimalDP",
-				InitCommand = function(self) self:halign(0):valign(1):xy(0, 5):zoom(0.35):diffuse(color("#55b0ff")) end,
+				InitCommand = function(self) self:halign(0):valign(1):xy(0, 5):zoom(0.35):diffuse(accentColor) end,
 				OnCommand = function(self)
 					-- Handled by WholeDP UpdateFunction
 				end,
@@ -2248,6 +2287,13 @@ t[#t + 1] = Def.ActorFrame {
 					local odFieldX, odFieldY = 207, 201
 					if mx >= odFieldX and mx <= odFieldX + 110 and my >= odFieldY - 14 and my <= odFieldY + 14 then
 						editManiaOD()
+						return true
+					end
+					-- ScoreV2 toggle button: same X band, 22px lower than OD (at y ~223)
+					local v2FieldY = odFieldY + 22
+					if mx >= odFieldX and mx <= odFieldX + 110 and my >= v2FieldY - 11 and my <= v2FieldY + 11 then
+						HV.ToggleManiaScoreV2()
+						if refreshEvaluationDisplays then refreshEvaluationDisplays() end
 						return true
 					end
 				end

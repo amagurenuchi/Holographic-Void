@@ -11,6 +11,7 @@
 local HVThemePrefsPath = "Save/Holographic Void_settings/themeConfig.lua"
 local NewIniPath = "Save/Holographic Void_settings/ThemePrefs.ini"
 local OldIniPath = "Save/ThemePrefs.ini"
+local ThemeName = THEME:GetThemeDisplayName()
 
 -- Internal storage for preferences (since _fallback's table is local to its script)
 local PrefsTable = {}
@@ -18,7 +19,8 @@ local PrefDefinitions = {}
 local FallbackTheme = "_fallback"
 
 local function GetThemeName()
-	return (themeInfo and themeInfo.Name) or THEME:GetThemeDisplayName()
+	return ThemeName
+	-- return (themeInfo and themeInfo.Name) or THEME:GetThemeDisplayName()
 end
 
 local function coerce_pref_value(pref, value)
@@ -166,6 +168,7 @@ ThemePrefs = {
 		ThemePrefs.Save()
 	end,
 	Get = function(name)
+		--Trace("ThemePrefs Get "..name)
 		local tbl = ResolveTable(name)
 		if tbl and tbl[name] ~= nil then
 			local value = coerce_pref_value(name, tbl[name])

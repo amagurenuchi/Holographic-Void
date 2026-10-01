@@ -5,6 +5,50 @@
 
 local wheelItemW = 280
 
+-- MusicWheel reuses its rows continuously while scrolling.  These values do
+-- not change during a Select Music visit, so avoid re-querying score history.
+local wheelMSDCache = {}
+local wheelGradeCache = {}
+
+local function cachedMSD(steps, rate)
+	local chartKey = steps:GetChartKey()
+	local key = chartKey and (chartKey .. "@" .. tostring(rate))
+	local value = key and wheelMSDCache[key]
+	if value == nil then
+		value = steps:GetMSD(rate, 1) or 0
+		if key then wheelMSDCache[key] = value end
+	end
+	return value
+end
+
+local function cachedBestGrade(chartKey)
+	local cached = wheelGradeCache[chartKey]
+	if cached ~= nil then return cached end
+
+	local bestWife, bestGrade = -1, nil
+	local scoresByRate = SCOREMAN:GetScoresByKey(chartKey)
+	if scoresByRate then
+		for _, scoresAtRate in pairs(scoresByRate) do
+			local scoreList = scoresAtRate:GetScores()
+			if scoreList then
+				for _, score in ipairs(scoreList) do
+					if not IsScoreInvalid(score) then
+						local wife = score:GetWifeScore()
+						if wife > bestWife then
+							bestWife = wife
+							bestGrade = score:GetWifeGrade()
+						end
+					end
+				end
+			end
+		end
+	end
+
+	-- false is a cache entry for charts with no usable score.
+	wheelGradeCache[chartKey] = bestGrade or false
+	return wheelGradeCache[chartKey]
+end
+
 local function isSongFavorited(song)
 	if not song then return false end
 
@@ -106,7 +150,7 @@ t[#t + 1] = LoadFont("Common Normal") .. {
 			for _, st in ipairs(allSteps) do
 				if st:GetDifficulty() == targetDiffOption then
 					if showMSD then
-						local msd = st:GetMSD(getCurRateValue(), 1)
+						local msd = cachedMSD(st, getCurRateValue())
 						if msd and msd > 0 then
 							self:settext(string.format("%.2f", msd)) -- Standardized to 2 decimal points
 							self:diffuse(HVColor.GetMSDRatingColor(msd))
@@ -160,31 +204,13 @@ t[#t + 1] = LoadFont("Common Normal") .. {
 					if profile then
 						local chartKey = st:GetChartKey()
 						if chartKey then
-							local scoresByRate = SCOREMAN:GetScoresByKey(chartKey)
-							if scoresByRate then
-								local bestWife = -1
-								local bestGrade = nil
-								for _, scoresAtRate in pairs(scoresByRate) do
-									local scoreList = scoresAtRate:GetScores()
-									if scoreList then
-										for _, s in ipairs(scoreList) do
-											if not IsScoreInvalid(s) then
-												local w = s:GetWifeScore()
-												if w > bestWife then
-													bestWife = w
-													bestGrade = s:GetWifeGrade()
-												end
-											end
-										end
-									end
-								end
-								if bestGrade and bestGrade ~= "Grade_Failed" then
-									local gs = ToEnumShortString(bestGrade)
-									local displayGrade = HV.GetGradeName(bestGrade)
-									self:settext(displayGrade)
-									self:diffuse(HVColor.GetGradeColor(gs))
-									return
-								end
+							local bestGrade = cachedBestGrade(chartKey)
+							if bestGrade and bestGrade ~= "Grade_Failed" then
+								local gs = ToEnumShortString(bestGrade)
+								local displayGrade = HV.GetGradeName(bestGrade)
+								self:settext(displayGrade)
+								self:diffuse(HVColor.GetGradeColor(gs))
+								return
 							end
 						end
 					end

@@ -17,6 +17,42 @@ local scale = 0.65
 
 local categories = HVCustomColors.GetCategories()
 
+local function exportColors()
+	local encoded = HVCustomColors.ExportBase64()
+	local ok, result = false, false
+	if Arch and Arch.setClipboardText then
+		-- Thanks jole for the correct function call name
+		ok, result = pcall(Arch.setClipboardText, encoded, "text")
+
+	end
+	if ok and result ~= false then
+		SCREENMAN:SystemMessage("Color configuration copied to clipboard")
+	else
+		Trace("Holographic Void color configuration export: " .. encoded)
+		SCREENMAN:SystemMessage("Clipboard export failed\n\n" .. encoded)
+	end
+end
+
+local function applyImportedColors(encoded)
+	local imported, message = HVCustomColors.ImportBase64(encoded)
+	SCREENMAN:SystemMessage(imported and "Color configuration imported" or message)
+	if imported then MESSAGEMAN:Broadcast("RowChanged", { level = 2 }) end
+end
+
+local function importColors()
+	local initialText = ""
+	if Arch and Arch.getClipboard then
+		local ok, clipboard = pcall(Arch.getClipboard)
+		if ok and clipboard then initialText = clipboard end
+	end
+	easyInputStringOKCancel("Paste color configuration (base64):", 12000, false, applyImportedColors, nil, initialText)
+end
+
+local function buttonHit(x, y, width, height)
+	local mx, my = INPUTFILTER:GetMouseX(), INPUTFILTER:GetMouseY()
+	return mx >= x - width / 2 and mx <= x + width / 2 and my >= y - height / 2 and my <= y + height / 2
+end
+
 local function findIndex(tbl, value)
 	for i, v in ipairs(tbl) do
 		if v == value then return i end
@@ -331,6 +367,10 @@ local t = Def.ActorFrame {
 
 		SCREENMAN:GetTopScreen():AddInputCallback(function(event)
 			if event.type ~= "InputEventType_FirstPress" then return end
+			if event.DeviceInput and event.DeviceInput.button == "DeviceButton_left mouse button" then
+				if buttonHit(SCREEN_RIGHT - 120, SCREEN_BOTTOM - 48, 120, 24) then exportColors() return true end
+				if buttonHit(SCREEN_RIGHT - 250, SCREEN_BOTTOM - 48, 120, 24) then importColors() return true end
+			end
 
 			if event.button == "MenuUp" then
 				if curLevel == 1 then
@@ -372,6 +412,10 @@ local t = Def.ActorFrame {
 
 			elseif event.button == "Back" then
 				SCREENMAN:GetTopScreen():Cancel()
+			elseif event.DeviceInput and event.DeviceInput.button == "DeviceButton_e" then
+				exportColors()
+			elseif event.DeviceInput and event.DeviceInput.button == "DeviceButton_i" then
+				importColors()
 			end
 		end)
 	end
@@ -421,12 +465,28 @@ t[#t + 1] = generateElementList()
 -- Color preview panel
 t[#t + 1] = generateColorPreview()
 
+-- Clipboard actions
+local function actionButton(name, label, x)
+	return Def.ActorFrame {
+		InitCommand = function(self) self:xy(x, SCREEN_BOTTOM - 48) end,
+		Def.Quad {
+			InitCommand = function(self) self:zoomto(120, 24):diffuse(HVColor.Accent):diffusealpha(0.16) end,
+		},
+		LoadFont("Common Normal") .. {
+			InitCommand = function(self) self:zoom(0.35):diffuse(HVColor.Accent):settext(label) end,
+		},
+	}
+end
+
+t[#t + 1] = actionButton("ExportButton", "EXPORT", SCREEN_RIGHT - 120)
+t[#t + 1] = actionButton("ImportButton", "IMPORT", SCREEN_RIGHT - 250)
+
 -- Footer help text
 t[#t + 1] = LoadFont("Common Normal") .. {
 	InitCommand = function(self)
 		self:xy(SCREEN_CENTER_X, SCREEN_BOTTOM - 20):zoom(0.28)
 		self:diffuse(color("#666666"))
-		self:settext("Up/Down: Navigate  ·  Left/Right: Switch Columns  ·  Enter: Edit Color  ·  Esc: Back")
+		self:settext("Up/Down: Navigate  ·  Left/Right: Switch Columns  ·  Enter: Edit  ·  E: Export  ·  I: Import  ·  Esc: Back")
 	end
 }
 

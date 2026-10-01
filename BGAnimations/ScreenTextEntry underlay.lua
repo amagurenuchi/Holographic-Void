@@ -169,5 +169,8 @@ return Def.ActorFrame {
 			Text = THEME:GetString("ScreenTextEntry", "RightClickCancel"),
 			InitCommand = function(self) self:xy(boxWidth/2 - 80, boxHeight/2 - 25):zoom(0.3):diffuse(dimText) end
 		}
-	}
+	},
+
+	-- Mouse cursor (must render above the dialog)
+	LoadActor("_cursor"),
 }
