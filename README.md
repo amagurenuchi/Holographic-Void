@@ -32,7 +32,7 @@ A futuristic, high-performance Etterna theme built for technical players who dem
 
 | Title Screen | Song Selection |
 | :---: | :---: |
-| <img width="400" alt="Title" src="https://github.com/user-attachments/assets/dc650ff8-c05d-4eeb-92b4-20fa51b631b0" /> | <img width="400" alt="SongSelect" src="https://github.com/user-attachments/assets/4e01b345-e267-485d-b64c-8ba5810c4d08" /> |
+| <img width="400" alt="Title" src="https://github.com/user-attachments/assets/dc650ff8-c05d-4eeb-92b4-20fa51b631b0" /> | <img width="400" alt="Song Select" src="https://github.com/user-attachments/assets/639ddab9-ae63-44ab-98ad-0aa1d6faf9cf" /> |
 
 | Gameplay | Evaluation Screen |
 | :---: | :---: |
@@ -43,7 +43,7 @@ A futuristic, high-performance Etterna theme built for technical players who dem
 <img width="1599" height="896" alt="image" src="https://github.com/user-attachments/assets/cbb407f1-8652-4083-96e0-d555e421815b" />
 <img width="1599" height="896" alt="image" src="https://github.com/user-attachments/assets/abd0845c-d528-439a-91bf-46223e738efd" />
 <img width="1599" height="896" alt="image" src="https://github.com/user-attachments/assets/16703a8d-8996-44f2-b19b-2e399d650527" />
-<img width="1599" height="896" alt="image" src="https://github.com/user-attachments/assets/639ddab9-ae63-44ab-98ad-0aa1d6faf9cf" />
+<img width="1599" height="896" alt="image" src="https://github.com/user-attachments/assets/4e01b345-e267-485d-b64c-8ba5810c4d08" />
 <img width="1599" height="896" alt="image" src="https://github.com/user-attachments/assets/3fb77040-62c8-4ae9-b5be-8a8cc1a5668d" />
 <img width="1599" height="896" alt="image" src="https://github.com/user-attachments/assets/683cd979-1b70-4742-b27a-a7e57924fc7e" />
 <img width="1599" height="896" alt="image" src="https://github.com/user-attachments/assets/8428e811-a3ea-4c33-a13e-d193f981084f" />
