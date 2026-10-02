@@ -110,6 +110,12 @@ local t = Def.ActorFrame {
 			end
 		end
 
+		-- The engine judgment actor is hidden in metrics.ini; this custom actor
+		-- must honor the theme option before rendering a hit judgment.
+		if HV.ShowJudgment and not HV.ShowJudgment() then
+			return
+		end
+
 		local emulateRidiculous = HV.EmulateRidiculousEnabled()
 		local numStates = sprite:GetNumStates()
 		local state
