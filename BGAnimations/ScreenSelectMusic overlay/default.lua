@@ -74,6 +74,22 @@ local function isScoreForActiveLocalProfile(score, profileName)
 	return not hasProfileName
 end
 
+-- Online top-score entries are not guaranteed to be native HighScore objects;
+-- some Etterna versions return plain tables.  Keep the validation indicator
+-- useful for both shapes without making online entries toggleable locally.
+local function isProfileScoreInvalid(score)
+	if not score then return false end
+	if type(score.GetEtternaValid) == "function" then
+		local ok, valid = pcall(score.GetEtternaValid, score)
+		if ok and valid == false then return true end
+	end
+	if type(score) == "table" then
+		return score.etternaValid == false or score.etterna_valid == false
+			or score.valid == false or score.invalid == true or score.invalidated == true
+	end
+	return IsScoreInvalid(score)
+end
+
 local function getLocalProfileScores(endIndex, isRecent, skillset)
 	local scores = {}
 	local profileName = getActiveLocalProfileName()
@@ -1663,6 +1679,9 @@ local profileOverlay = Def.ActorFrame {
 					else
 						metadata = string.format("%s  |  ONLINE", THEME:GetString("ClearTypes", ct))
 					end
+					if isProfileScoreInvalid(score) then
+						metadata = "INVALID  |  " .. metadata
+					end
 				else
 					local ck = score:GetChartKey()
 					local thssong = SONGMAN:GetSongByChartKey(ck)
@@ -1698,6 +1717,9 @@ local profileOverlay = Def.ActorFrame {
 						end
 					end
 					metadata = string.format("J%d  |  %s  |  %d/%d/%d/%d/%d/%d", jIndex, THEME:GetString("ClearTypes", ct), w1, w2, w3, w4, w5, m)
+					if isProfileScoreInvalid(score) then
+						metadata = "INVALID  |  " .. metadata
+					end
 				end
 				
 				local ssrLabel = row:GetChild("SSR")
@@ -1718,7 +1740,7 @@ local profileOverlay = Def.ActorFrame {
 				
 				row:GetChild("Validation"):settext(metadata)
 				
-				local isInvalid = type(score) ~= "table" and not score:GetEtternaValid()
+				local isInvalid = isProfileScoreInvalid(score)
 				row:GetChild("InvalidIndicator"):visible(isInvalid)
 				if isInvalid then
 					row:GetChild("Bg"):diffuse(color("0.5,0.05,0.05,0.4"))

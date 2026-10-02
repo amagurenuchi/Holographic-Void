@@ -48,6 +48,15 @@ local function IsOnlineScoreInvalid(score)
 	return IsScoreInvalid(score)
 end
 
+local function IsLocalScoreInvalid(score)
+	if not score then return false end
+	if type(score.GetEtternaValid) == "function" then
+		local ok, valid = pcall(score.GetEtternaValid, score)
+		if ok and valid == false then return true end
+	end
+	return IsScoreInvalid(score)
+end
+
 local function GetScoreDisplayName(score)
 	if not score then return nil end
 	local fallback
@@ -561,7 +570,8 @@ for i = 1, pageSize do
 				self:visible(true)
 				self:stoptweening():diffusealpha(0):sleep(i * 0.04):linear(0.15):diffusealpha(1)
 				local rowScore = scores[idx].score or scores[idx]
-				local rowInvalid = currentView == VIEW_ONLINE and IsOnlineScoreInvalid(rowScore)
+				local rowInvalid = (currentView == VIEW_ONLINE and IsOnlineScoreInvalid(rowScore))
+					or (currentView == VIEW_LOCAL and IsLocalScoreInvalid(rowScore))
 				self:GetChild("Bg"):diffuse(rowInvalid and color("#7A1018") or color("0,0,0,0.2"))
 				self:GetChild("Rank"):settext(tostring(idx))
 
@@ -623,6 +633,7 @@ for i = 1, pageSize do
 					self:GetChild("Rate"):settextf("%.2fx", s:GetMusicRate())
 
 					local ct = getDetailedClearType(s)
+					if IsLocalScoreInvalid(s) then ct = "Invalid" end
 					self:GetChild("Clear"):settext(ct):diffuse(HVColor.GetClearTypeColor(ct))
 					self:GetChild("Date"):settext(s:GetDate())
 
@@ -735,6 +746,34 @@ t[#t + 1] = Def.ActorFrame {
 			
 			local btn = event.DeviceInput.button
 			local isPress = event.type == "InputEventType_FirstPress"
+
+			-- Right-clicking the online filter toggles invalid-score visibility.
+			-- Right-clicking a local row toggles that score's validation state.
+			if isPress and btn == "DeviceButton_right mouse button" then
+				if currentView == VIEW_ONLINE and IsMouseOverCentered(SCREEN_CENTER_X - overlayW/2 + 75, SCREEN_CENTER_Y - overlayH/2 + 40, 100, 18) then
+					showInvalidScores = not showInvalidScores
+					currentPage = 1
+					scoresActor:playcommand("RefreshScores")
+					return true
+				end
+
+				if currentView == VIEW_LOCAL then
+					for ri = 1, pageSize do
+						local ry = SCREEN_CENTER_Y + rowsStartY + (ri - 1) * rowH + rowH / 2
+						if IsMouseOverCentered(SCREEN_CENTER_X, ry, overlayW - 50, rowH) then
+							local entry = displayedScores[(currentPage - 1) * pageSize + ri]
+							local score = entry and (entry.score or entry)
+							if score and type(score) ~= "table" and type(score.ToggleEtternaValidation) == "function" then
+								score:ToggleEtternaValidation()
+								ms.ok(score:GetEtternaValid() and "Score validated" or "Score invalidated")
+								scoresActor:playcommand("RefreshScores")
+								return true
+							end
+						end
+					end
+				end
+				return true
+			end
 
 			if isPress and btn == "DeviceButton_left mouse button" then
 				-- Close on outside click
