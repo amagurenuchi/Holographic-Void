@@ -406,6 +406,48 @@ local function formatEvaluationPercent(pct)
 	return formatWifePercent(pct)
 end
 
+-- osu!mania ScoreV1 long-form score, ported from Fatigue.
+-- This is deliberately separate from the 320-point accuracy rescore: osu!'s
+-- displayed score is normalized to 1,000,000 and includes combo bonus.
+local function getOsuManiaLongScore()
+	if not maniaRescore then return 0 end
+	local counts = maniaRescore.counts or {}
+	local maxScore, totalTaps = 1000000, (steps and steps:GetRadarValues(pn):GetValue("RadarCategory_Notes") or 0)
+	local holds = 0
+	if pss and pss.GetRadarPossible then
+		holds = (pss:GetRadarPossible():GetValue("RadarCategory_Holds") or 0)
+			+ (pss:GetRadarPossible():GetValue("RadarCategory_Rolls") or 0)
+	end
+	local totalNotes = math.max(1, totalTaps + holds)
+	local w1, w2, w3, w4, w5, miss = counts[1] or 0, counts[2] or 0, counts[3] or 0, counts[4] or 0, counts[5] or 0, counts[6] or 0
+	local helds = pss and pss:GetHoldNoteScores("HoldNoteScore_Held") or 0
+	local letGos = pss and pss:GetHoldNoteScores("HoldNoteScore_LetGo") or 0
+	local baseValue = w1 * 320 + w2 * 300 + w3 * 200 + w4 * 100 + w5 * 50 + helds * 320
+	local baseScore = (maxScore * 0.5 / totalNotes) * (baseValue / 320)
+	local bonusValue, combo = 0, 100
+	local bonus = {{32, 2}, {32, 1}, {16, -8}, {8, -24}, {4, -44}}
+	if dvt and #dvt > 0 then
+		for _, offset in ipairs(dvt) do
+			local e = math.abs(offset or math.huge)
+			local j = e <= 16 and 1 or (e <= 64 - 3 * HV.ManiaState.od and 2 or (e <= 97 - 3 * HV.ManiaState.od and 3 or (e <= 127 - 3 * HV.ManiaState.od and 4 or (e <= 151 - 3 * HV.ManiaState.od and 5 or 6))))
+			if j == 6 then combo = 0 else bonusValue = bonusValue + bonus[j][1] * math.sqrt(combo) / 320; combo = math.max(0, math.min(100, combo + bonus[j][2])) end
+		end
+	end
+	for _ = 1, miss + letGos + math.max(0, totalTaps - (w1 + w2 + w3 + w4 + w5 + miss) - math.max(0, #dvt)) do combo = 0 end
+	for _ = 1, helds do bonusValue = bonusValue + 32 * math.sqrt(combo) / 320; combo = math.min(100, combo + 2) end
+	return math.max(0, math.min(maxScore, math.floor(baseScore + (maxScore * 0.5 / totalNotes) * bonusValue + 0.5)))
+end
+
+local function formatOsuManiaLongScore(score)
+	local value = tostring(math.max(0, math.floor(tonumber(score) or 0)))
+	while true do
+		local replaced
+		value, replaced = value:gsub("^(%-?%d+)(%d%d%d)", "%1,%2")
+		if replaced == 0 then break end
+	end
+	return value
+end
+
 local function getOsuManiaGrade(accuracy, rescoreData)
 	accuracy = tonumber(accuracy) or 0
 	-- ScoreV2: X rank requires every hit to be 300 or MAX (no 200/100/50/miss)
@@ -1794,16 +1836,16 @@ local function scoreBoard(pn)
 		-- DP (WifeDP)
 		Def.ActorFrame {
 			Name = "WifeDPDisplay",
-			InitCommand = function(self) self:xy(110, 45):diffusealpha(0):visible(not isManiaModeEnabled()) end,
+			InitCommand = function(self) self:xy(110, 45):diffusealpha(0):visible(true) end,
 			ManiaModeChangedMessageCommand = function(self)
-				self:visible(not isManiaModeEnabled())
+				self:visible(true)
 				self:playcommand("On")
 			end,
 			OnCommand = function(self)
 				local wholePart = self:GetChild("WholeDP")
 				local decimalPart = self:GetChild("DecimalDP")
 				local displayPct = rescoredPercentage or (evaluationWifeScore() * 100)
-				local dp = maniaRescore and maniaRescore.points or ((displayPct / 100) * songMaxPoints)
+				local dp = isManiaModeEnabled() and getOsuManiaLongScore() or ((displayPct / 100) * songMaxPoints)
 				local targetDP = dp
 				
 				local duration = 0.2
@@ -1815,8 +1857,8 @@ local function scoreBoard(pn)
 					curTime = curTime + delta
 					local progress = math.min(1, curTime / duration)
 					local currentDP = targetDP * math.sin(progress * (math.pi / 2))
-					local precision = (displayPct >= 99) and 4 or 2
-					setDPTextActors(wholePart, decimalPart, currentDP, precision)
+					if isManiaModeEnabled() then wholePart:settext(formatOsuManiaLongScore(currentDP + 0.5)); decimalPart:settext("")
+					else setDPTextActors(wholePart, decimalPart, currentDP, (displayPct >= 99) and 4 or 2) end
 					
 					if progress >= 1 then
 						self:SetUpdateFunction(nil)
@@ -1838,10 +1880,10 @@ local function scoreBoard(pn)
 				SetJudgeCommand = function(self)
 					self:GetParent():SetUpdateFunction(nil)
 					if rescoredPercentage then
-						local dp = maniaRescore and maniaRescore.points or ((rescoredPercentage / 100) * songMaxPoints)
+						local dp = isManiaModeEnabled() and getOsuManiaLongScore() or ((rescoredPercentage / 100) * songMaxPoints)
 						local decimalPart = self:GetParent():GetChild("DecimalDP")
-						local precision = (rescoredPercentage >= 99) and 4 or 2
-						setDPTextActors(self, decimalPart, dp, precision)
+						if isManiaModeEnabled() then self:settext(formatOsuManiaLongScore(dp)); decimalPart:settext("")
+						else setDPTextActors(self, decimalPart, dp, (rescoredPercentage >= 99) and 4 or 2) end
 					end
 				end,
 			},
@@ -1863,11 +1905,12 @@ local function scoreBoard(pn)
 			Name = "DPTotal",
 			InitCommand = function(self) self:halign(0):valign(0):xy(110, 52):zoom(0.35):diffuse(subText) end,
 			OnCommand = function(self)
-				self:settextf("/ %.2f", maniaRescore and maniaRescore.maxPoints or songMaxPoints)
+				self:visible(not isManiaModeEnabled())
+				self:settextf("/ %s", string.format("%.2f", songMaxPoints))
 			end,
 			ManiaModeChangedMessageCommand = function(self)
 				self:visible(not isManiaModeEnabled())
-				self:settextf("/ %.2f", maniaRescore and maniaRescore.maxPoints or songMaxPoints)
+				self:settextf("/ %s", string.format("%.2f", songMaxPoints))
 			end,
 		},
 		-- Personal Best / Record Comparison (Pacemaker Text)
