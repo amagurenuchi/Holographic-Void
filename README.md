@@ -1,5 +1,4 @@
 # Holographic Void
-Happy 10th Anniversary, Etterna! 
 
 Note: This theme has some parts automated by AI (for screen building)
 ---
@@ -101,3 +100,4 @@ A futuristic, high-performance Etterna theme built for technical players who dem
 * nonyu for being bald
 * mainebow for being the living rainbow
 * the Fatigue theme for inspo for theme creation, this is basically what Fatigue could have been
+* ilysia for being a frequent theme maintainer

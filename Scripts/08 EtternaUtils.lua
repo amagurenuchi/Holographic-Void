@@ -1435,18 +1435,56 @@ function HV.ScoreCommentKey(score)
 		end
 		return tostring((select(1, ...)) or "")
 	end
-	return table.concat({
+	-- Keep the old fields, but encode them unambiguously before hashing.  The
+	-- previous `a|b|c` key could alias when a value contained `|` (and made
+	-- the save file needlessly large).  A score does not expose a portable
+	-- UUID on every Etterna build, so this is the most compatible identity we
+	-- can make from the HighScore API.
+	local fields = {
 		call("GetChartKey"), call("GetMusicRate", 1), call("GetDate"),
 		call("GetScore", 0), call("GetWifeScore", 0), call("GetMaxCombo", 0),
 		call("GetModifiers"), call("GetTapNoteScore", "TapNoteScore_W1"),
 		call("GetTapNoteScore", "TapNoteScore_W2"), call("GetTapNoteScore", "TapNoteScore_W3"),
 		call("GetTapNoteScore", "TapNoteScore_W4"), call("GetTapNoteScore", "TapNoteScore_W5"),
 		call("GetTapNoteScore", "TapNoteScore_Miss")
-	}, "|")
+	}
+	local canonical = "HVSC2\0"
+	for _, value in ipairs(fields) do
+		canonical = canonical .. #value .. ":" .. value
+	end
+
+	-- Two independent 32-bit rolling hashes.  The arithmetic stays below the
+	-- exact-integer range of Lua numbers, unlike a 64-bit multiplication.
+	local h1, h2 = 2166136261, 3144134277
+	for i = 1, #canonical do
+		local byte = string.byte(canonical, i)
+		h1 = (h1 * 31 + byte) % 4294967291
+		h2 = (h2 * 33 + byte) % 4294967279
+	end
+	return string.format("v2-%08x-%08x", h1, h2)
+end
+
+local function hvLegacyScoreCommentKey(score)
+	if not score then return nil end
+	local function call(name, ...)
+		if type(score[name]) == "function" then
+			local ok, value = pcall(score[name], score, ...)
+			if ok and value ~= nil then return tostring(value) end
+		end
+		return tostring((select(1, ...)) or "")
+	end
+	return table.concat({call("GetChartKey"), call("GetMusicRate", 1), call("GetDate"),
+		call("GetScore", 0), call("GetWifeScore", 0), call("GetMaxCombo", 0),
+		call("GetModifiers"), call("GetTapNoteScore", "TapNoteScore_W1"),
+		call("GetTapNoteScore", "TapNoteScore_W2"), call("GetTapNoteScore", "TapNoteScore_W3"),
+		call("GetTapNoteScore", "TapNoteScore_W4"), call("GetTapNoteScore", "TapNoteScore_W5"),
+		call("GetTapNoteScore", "TapNoteScore_Miss")}, "|")
 end
 
 function HV.LoadScoreComments()
-	HV.ScoreComments = hvReadLuaTable(HV.ScoreCommentsPath)
+	local loaded = hvReadLuaTable(HV.ScoreCommentsPath)
+	HV.ScoreComments = type(loaded) == "table" and loaded or {}
+	HV.ScoreCommentsLoaded = true
 	return HV.ScoreComments
 end
 
@@ -1468,7 +1506,21 @@ end
 
 function HV.GetScoreComment(score)
 	local key = HV.ScoreCommentKey(score)
-	return key and HV.ScoreComments[key] or ""
+	if not key then return "" end
+	if HV.ScoreComments[key] then return HV.ScoreComments[key] end
+
+	-- Convert old entries as soon as their score is seen.  There is no score
+	-- index in the theme API that can enumerate every historical HighScore,
+	-- so lazy conversion is the only complete and safe migration strategy.
+	local legacyKey = hvLegacyScoreCommentKey(score)
+	local legacyComment = legacyKey and HV.ScoreComments[legacyKey]
+	if legacyComment then
+		HV.ScoreComments[key] = legacyComment
+		HV.ScoreComments[legacyKey] = nil
+		HV.SaveScoreComments()
+		return legacyComment
+	end
+	return ""
 end
 
 function HV.SetScoreComment(score, comment)
@@ -1479,7 +1531,9 @@ function HV.SetScoreComment(score, comment)
 	HV.SaveScoreComments()
 end
 
-HV.LoadScoreComments()
+-- Load once while the theme scripts are initialized, before any screen can
+-- request a comment.  This also guarantees a table when the file is absent.
+if not HV.ScoreCommentsLoaded then HV.LoadScoreComments() end
 
 ------------------------------------------------------------
 -- OSU!MANIA TAP RESCORING

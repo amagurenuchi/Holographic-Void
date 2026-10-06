@@ -146,6 +146,7 @@ t[#t + 1] = Def.Quad {
 }
 
 -- 7. 10th Anniversary Celebratory Subtitle
+local anniversaryFeaturesEnabled = false
 local anniversaryGroup = Def.ActorFrame {
 	InitCommand = function(self) self:Center():y(SCREEN_CENTER_Y + 54):draworder(1500) end,
 	-- Subtle glow layer
@@ -177,7 +178,9 @@ local anniversaryGroup = Def.ActorFrame {
 		end
 	}
 }
-t[#t + 1] = anniversaryGroup
+if anniversaryFeaturesEnabled then
+	t[#t + 1] = anniversaryGroup
+end
 
 -- 8. Confetti Cannon System (Launches from both sides when text finishes tweening at 1.35s)
 local numConfetti = 140
@@ -271,6 +274,8 @@ for i = 1, numConfetti do
 	end
 end
 
-t[#t + 1] = confettiFrame
+if anniversaryFeaturesEnabled then
+	t[#t + 1] = confettiFrame
+end
 
 return t
