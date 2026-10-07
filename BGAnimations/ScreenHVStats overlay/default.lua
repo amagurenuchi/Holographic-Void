@@ -220,7 +220,7 @@ function getDeltaScoreForScore(score, steps)
 	local leftScore = leftTaps > 0 and (leftPts / (leftTaps * 2)) or 0
 	local rightScore = rightTaps > 0 and (rightPts / (rightTaps * 2)) or 0
 
-	return (leftScore - rightScore) * 100
+	return leftScore, rightScore
 end
 
 function calculatePerHandBreakdownData()
@@ -233,7 +233,8 @@ function calculatePerHandBreakdownData()
 	perHandMaxDelta = 1
 
 	local msdBuckets = {}
-	local totalDelta = 0
+	local totalLeftScore = 0
+	local totalRightScore = 0
 	local validCount = 0
 
 	for _, entry in ipairs(overallLocalScoreEntries or {}) do
@@ -243,17 +244,22 @@ function calculatePerHandBreakdownData()
 		local scoreKey = score:GetDate() .. "_" .. score:GetChartKey()
 		local delta = perHandDeltaCache[scoreKey]
 		if delta == nil then
-			delta = getDeltaScoreForScore(score, steps)
-			if delta ~= nil then
+			local leftScore, rightScore = getDeltaScoreForScore(score, steps)
+			if leftScore ~= nil and rightScore ~= nil then
+				delta = {left = leftScore, right = rightScore}
 				perHandDeltaCache[scoreKey] = delta
 			else
+				delta = false
 				perHandDeltaCache[scoreKey] = false
 			end
 		end
 
 		if delta and delta ~= false then
-			totalDelta = totalDelta + delta
+			totalLeftScore = totalLeftScore + delta.left
+			totalRightScore = totalRightScore + delta.right
 			validCount = validCount + 1
+			local scoreTotal = delta.left + delta.right
+			local scoreDelta = scoreTotal > 0 and ((delta.left - delta.right) / scoreTotal) * 100 or 0
 
 			local rate = score and score.GetMusicRate and score:GetMusicRate() or 1
 			local chartMsd = steps and steps.GetMSD and steps:GetMSD(rate, 1) or 0
@@ -264,7 +270,7 @@ function calculatePerHandBreakdownData()
 				if not msdBuckets[bucketKey] then
 					msdBuckets[bucketKey] = {start = intervalStart, total = 0, count = 0}
 				end
-				msdBuckets[bucketKey].total = msdBuckets[bucketKey].total + delta
+				msdBuckets[bucketKey].total = msdBuckets[bucketKey].total + scoreDelta
 				msdBuckets[bucketKey].count = msdBuckets[bucketKey].count + 1
 			end
 		end
@@ -272,9 +278,12 @@ function calculatePerHandBreakdownData()
 
 	perHandValidScoreCount = validCount
 	if validCount > 0 then
-		perHandOverallDelta = totalDelta / validCount
-		perHandOverallLeftRatio = 50 + (perHandOverallDelta / 2)
-		perHandOverallRightRatio = 50 - (perHandOverallDelta / 2)
+		local totalScore = totalLeftScore + totalRightScore
+		if totalScore > 0 then
+			perHandOverallLeftRatio = totalLeftScore / totalScore * 100
+			perHandOverallRightRatio = totalRightScore / totalScore * 100
+			perHandOverallDelta = perHandOverallLeftRatio - perHandOverallRightRatio
+		end
 	end
 
 	for _, bucket in pairs(msdBuckets) do

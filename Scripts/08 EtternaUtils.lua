@@ -1441,7 +1441,10 @@ function HV.ScoreCommentKey(score)
 	-- UUID on every Etterna build, so this is the most compatible identity we
 	-- can make from the HighScore API.
 	local fields = {
-		call("GetChartKey"), call("GetMusicRate", 1), call("GetDate"),
+		-- GetDate() is not guaranteed to have the same representation when a
+		-- HighScore is reconstructed after restarting Etterna.  It must not be
+		-- part of the persistent score identity.
+		call("GetChartKey"), call("GetMusicRate", 1),
 		call("GetScore", 0), call("GetWifeScore", 0), call("GetMaxCombo", 0),
 		call("GetModifiers"), call("GetTapNoteScore", "TapNoteScore_W1"),
 		call("GetTapNoteScore", "TapNoteScore_W2"), call("GetTapNoteScore", "TapNoteScore_W3"),
