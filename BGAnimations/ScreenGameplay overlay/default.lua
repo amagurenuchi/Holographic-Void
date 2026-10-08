@@ -2137,8 +2137,9 @@ if not isSync then
 			local iconPB = self:GetChild("IconPB")
 			local iconTarget = self:GetChild("IconTarget")
 			if iconWife then iconWife:visible(condition == "Wife Percent") end
+			if iconTarget then iconTarget:visible(condition == "Judgement Count" or condition == "Sync to Goal") end
 			if iconPB then iconPB:visible(condition == "Personal Best") end
-			if iconTarget then iconTarget:visible(condition == "Judgement Count") end
+			if iconTarget then iconTarget:visible(condition == "Judgement Count" or condition == "Sync to Goal") end
 			local txt = self:GetChild("Value")
 			if not txt then return end
 			local display = ""
@@ -2146,6 +2147,13 @@ if not isSync then
 			if condition == "Wife Percent" then
 				local threshold = tonumber(ThemePrefs.Get("HV_AutoFailThreshold_Wife")) or 93.00
 				local subtractiveWife = ((HV_MaxPoints - HV_PointsLost) / HV_MaxPoints) * 100
+				display = string.format("%.4f%%", threshold)
+				txt:xy(11, 20)
+			elseif condition == "Sync to Goal" then
+				local threshold = tonumber(ThemePrefs.Get("HV_PacemakerTargetGoal")) or 93.00
+				if GetDisplayScore() then
+					threshold = getJ4NormalizedPercentage(GetDisplayScore())
+				end
 				display = string.format("%.4f%%", threshold)
 				txt:xy(11, 20)
 			elseif condition == "Personal Best" then
@@ -2490,6 +2498,12 @@ t[#t + 1] = Def.Actor {
 		self.hasTriggered = false
 	end,
 	HV_PointsUpdateMessageCommand = function(self)
+		-- Let the engine finish updating PlayerStageStats before reading the
+		-- current Wife percentage.  Reading it in the message handler can see a
+		-- transient zero on the first note and trigger Absolute incorrectly.
+		self:queuecommand("Evaluate")
+	end,
+	EvaluateCommand = function(self)
 		local actionMode = ThemePrefs.Get("HV_AutoFailMode")
 		if GAMESTATE:IsPracticeMode() or actionMode == "Off" or not actionMode or self.hasTriggered then return end
 		
@@ -2502,6 +2516,13 @@ t[#t + 1] = Def.Actor {
 			local subtractiveWife = ((HV_MaxPoints - HV_PointsLost) / HV_MaxPoints) * 100
 			if subtractiveWife <= threshold then 
 				triggered = true 
+			end
+		elseif condition == "Sync to Goal" then
+			local threshold = tonumber(ThemePrefs.Get("HV_PacemakerTargetGoal")) or 93.00
+			if GetDisplayScore() then threshold = getJ4NormalizedPercentage(GetDisplayScore()) end
+			local subtractiveWife = ((HV_MaxPoints - HV_PointsLost) / HV_MaxPoints) * 100
+			if subtractiveWife <= threshold then
+				triggered = true
 			end
 		elseif condition == "Personal Best" then
 			local subtractiveWife = ((HV_MaxPoints - HV_PointsLost) / HV_MaxPoints) * 100

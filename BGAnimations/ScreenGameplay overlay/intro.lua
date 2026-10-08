@@ -19,6 +19,10 @@ local totalH = bannerH + 10
 local gradientPad = 60  -- extra fade on each side
 local accentColor = HVColor.Accent or color("#5ABAFF")
 
+local function formatIntroPercent(percent)
+	return string.format(percent > 99.9 and "%.4f%%" or "%.2f%%", percent)
+end
+
 -- Invalidating mods (fetched at BeginCommand)
 local invalidMods = {}
 
@@ -259,14 +263,14 @@ t[#t+1] = Def.ActorFrame{
 			if pacemakerMode == "PB" or pacemakerMode == "PBReplay" then
 				local best = GetDisplayScore()
 				if best then
-					targetActor:settext(string.format("Target: PB %.2f%%", getJ4NormalizedPercentage(best)))
+					targetActor:settext("Target: PB " .. formatIntroPercent(getJ4NormalizedPercentage(best)))
 				else
 					local goal = ThemePrefs.Get("HV_PacemakerTargetGoal") or 93
-					targetActor:settext(string.format("Target: %.2f%%", goal))
+					targetActor:settext("Target: " .. formatIntroPercent(goal))
 				end
 			else
 				local goal = ThemePrefs.Get("HV_PacemakerTargetGoal") or 93
-				targetActor:settext(string.format("Target: %.2f%%", goal))
+				targetActor:settext("Target: " .. formatIntroPercent(goal))
 			end
 			targetActor:visible(true)
 		else
@@ -279,8 +283,9 @@ t[#t+1] = Def.ActorFrame{
 		if hasFail then
 			local condition = ThemePrefs.Get("HV_AutoFailCondition")
 			local threshold = ""
-			if condition == "Wife Percent" then
-				threshold = string.format("< %.2f%%", ThemePrefs.Get("HV_AutoFailThreshold_Wife") or 93)
+			if condition == "Wife Percent" or condition == "Sync to Goal" then
+				local goal = condition == "Sync to Goal" and (tonumber(ThemePrefs.Get("HV_PacemakerTargetGoal")) or 93) or (ThemePrefs.Get("HV_AutoFailThreshold_Wife") or 93)
+				threshold = (condition == "Sync to Goal" and "Goal < " or "< ") .. formatIntroPercent(goal)
 			elseif condition == "Judgement Count" then
 				local judge = ThemePrefs.Get("HV_AutoFailJudgement") or "Miss"
 				local judgeName = THEME:GetString("TapNoteScore", judge)
@@ -289,7 +294,7 @@ t[#t+1] = Def.ActorFrame{
 				local best = GetDisplayScore()
 				local pbStr = ""
 				if best then
-					pbStr = string.format(" (%.2f%%)", getJ4NormalizedPercentage(best))
+					pbStr = " (" .. formatIntroPercent(getJ4NormalizedPercentage(best)) .. ")"
 				end
 				threshold = "PB" .. pbStr
 			end

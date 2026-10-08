@@ -119,6 +119,33 @@ local function movePage(n)
 	MESSAGEMAN:Broadcast("UpdateOnlineList")
 end
 
+local function selectLocalScore(index)
+	local selected = scoreList and scoreList[index]
+	if not isLocal or not selected then return end
+	-- Keep the selected score in theme state; this Etterna build exposes no
+	-- SCOREMAN setter for replacing the stage's most-recent score.
+	HV.SelectedEvaluationScore = selected
+	if HV.SelectEvaluationScore then HV.SelectEvaluationScore(selected) end
+	MESSAGEMAN:Broadcast("ScoreChanged")
+end
+
+local function selectLocalScoreAtMouse(self)
+	if not isLocal then return false end
+	local mx, my = INPUTFILTER:GetMouseX(), INPUTFILTER:GetMouseY()
+	for i = 1, scoresPerPage do
+		local row = self:GetChild("OnlineRow" .. i)
+		if row and row:GetVisible() then
+			local x, y = row:GetTrueX(), row:GetTrueY()
+			local w, h = SCREEN_CENTER_X - 40, 42
+			if mx >= x and mx <= x + w and my >= y and my <= y + h then
+			selectLocalScore((curPage - 1) * scoresPerPage + i)
+			return true
+			end
+		end
+	end
+	return false
+end
+
 local function refreshScores(self)
 	local targetRateValue = getViewedRateValue()
 	local targetRate = getViewedRateString()
@@ -208,6 +235,7 @@ local function refreshScores(self)
 end
 
 local function scoreItem(i)
+	local rowIndex = 0
 	return Def.ActorFrame {
 		Name = "OnlineRow" .. i,
 		InitCommand = function(self) self:y((i - 1) * 46):diffusealpha(0) end,
@@ -216,6 +244,7 @@ local function scoreItem(i)
 		RefreshOnlineScoreboardMessageCommand = function(self) self:playcommand("UpdateRow") end,
 		UpdateRowCommand = function(self)
 			local idx = (curPage - 1) * scoresPerPage + i
+			rowIndex = idx
 			if scoreList and scoreList[idx] then
 				self:visible(true)
 				self:stoptweening():diffusealpha(0):sleep(i * 0.05):linear(0.15):diffusealpha(1)
@@ -224,6 +253,23 @@ local function scoreItem(i)
 				self:visible(false)
 			end
 		end,
+
+		-- The visible card spans the entire leaderboard width.  Keep the hitbox
+		-- on the row itself so clicking any part of a local card opens its stats.
+		Def.Quad {
+			Name = "ClickArea",
+			InitCommand = function(self)
+				self:halign(0):valign(0):zoomto(SCREEN_CENTER_X - 40, 42):diffusealpha(0)
+			end,
+			MouseDownCommand = function(self)
+				if isOver(self) then selectLocalScore(rowIndex) end
+			end,
+			-- ScreenEvaluation's shared mouse callback broadcasts this message
+			-- for every left click; use the theme-wide hit test here.
+			MouseLeftClickMessageCommand = function(self)
+				if isOver(self) then selectLocalScore(rowIndex) end
+			end
+		},
 
 		-- Row BG
 		Def.Quad {
@@ -363,6 +409,7 @@ local t = Def.ActorFrame {
 				elseif event.button == "MenuRight" or event.DeviceInput.button == "DeviceButton_right" or event.button == "Right" then movePage(1) end
 				
 				if event.DeviceInput.button == "DeviceButton_left mouse button" then
+					if selectLocalScoreAtMouse(self) then return true end
 					self:RunCommandsOnChildren(function(child) child:playcommand("MouseDown", {event = event}) end)
 				end
 			end

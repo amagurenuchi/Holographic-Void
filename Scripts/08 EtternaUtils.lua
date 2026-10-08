@@ -1216,6 +1216,12 @@ function HV.GetCurrentWifePercentage(pss)
 		local ok, count = pcall(pss.GetTapNoteScores, pss, "TapNoteScore_" .. judgment)
 		if ok then notesPassed = notesPassed + (tonumber(count) or 0) end
 	end
+	if type(pss.GetWifeScore) == "function" then
+		local ok, score = pcall(pss.GetWifeScore, pss)
+		if ok and tonumber(score) then
+			return tonumber(score) * 100
+		end
+	end
 	if notesPassed > 0 and type(pss.GetWifePoints) == "function" then
 		local ok, points = pcall(pss.GetWifePoints, pss)
 		if ok and tonumber(points) then

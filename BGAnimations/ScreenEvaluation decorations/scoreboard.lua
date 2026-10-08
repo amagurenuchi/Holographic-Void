@@ -37,9 +37,6 @@ if #hsTable > 0 then
 	if ok and idx then scoreIndex = idx end
 end
 
--- Initialize selected score to current play
-selectedScoreIndex = scoreIndex
-
 -- Sort by J4 Normalized% (descending)
 table.sort(hsTable, function(a, b)
 	local wa = getJ4NormalizedPercentage(a)
@@ -55,6 +52,11 @@ for i, s in ipairs(hsTable) do
 		break
 	end
 end
+
+-- The table is sorted above, so initialize the selection only after the
+-- final row indices are known.  Otherwise the selected row can point at a
+-- different score than the one shown by the evaluation panel.
+selectedScoreIndex = scoreIndex
 
 local curPage = scoreIndex > 0 and math.ceil(scoreIndex / lines) or 1
 local maxPages = math.max(1, math.ceil(#hsTable / lines))
@@ -75,7 +77,8 @@ local function selectScore(idx)
 	selectedScoreIndex = idx
 	-- Set the score for viewing in the main eval screen
 	if hsTable[idx] then
-		SCOREMAN:SetMostRecentScore(hsTable[idx])
+		HV.SelectedEvaluationScore = hsTable[idx]
+		if HV.SelectEvaluationScore then HV.SelectEvaluationScore(hsTable[idx]) end
 		MESSAGEMAN:Broadcast("ScoreChanged")
 		MESSAGEMAN:Broadcast("UpdateLocalScoreboard")
 	end

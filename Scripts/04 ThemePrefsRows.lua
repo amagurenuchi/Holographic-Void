@@ -380,8 +380,8 @@ local HVPrefRows = {
 	-- Auto-Fail Trigger Condition
 	HV_AutoFailCondition = {
 		Default = "Wife Percent",
-		Choices = {"Wife Percent", "Judgement Count", "Personal Best"},
-		Values = {"Wife Percent", "Judgement Count", "Personal Best"},
+		Choices = {"Wife Percent", "Sync to Goal", "Judgement Count", "Personal Best"},
+		Values = {"Wife Percent", "Sync to Goal", "Judgement Count", "Personal Best"},
 	},
 
 	-- Auto-Fail Judgement

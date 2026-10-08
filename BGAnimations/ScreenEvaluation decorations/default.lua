@@ -65,18 +65,26 @@ if scoringVoided then
 end
 
 function evaluationWifeScore()
-	return scoringVoided and 0 or (pss:GetWifeScore() or 0)
+	if scoringVoided then return 0 end
+	if curScore and curScore.GetWifeScore then return curScore:GetWifeScore() or 0 end
+	return pss:GetWifeScore() or 0
 end
 function evaluationGrade()
-	return scoringVoided and "Grade_None" or pss:GetWifeGrade()
+	if scoringVoided then return "Grade_None" end
+	if curScore and curScore.GetWifeGrade then return curScore:GetWifeGrade() end
+	return pss:GetWifeGrade()
 end
 
 function evaluationTapCount(name)
-	return scoringVoided and 0 or pss:GetTapNoteScores(name)
+	if scoringVoided then return 0 end
+	if curScore and curScore.GetTapNoteScore then return curScore:GetTapNoteScore(name) or 0 end
+	return pss:GetTapNoteScores(name)
 end
 
 function evaluationHoldCount(name)
-	return scoringVoided and 0 or pss:GetHoldNoteScores(name)
+	if scoringVoided then return 0 end
+	if curScore and curScore.GetHoldNoteScore then return curScore:GetHoldNoteScore(name) or 0 end
+	return pss:GetHoldNoteScores(name)
 end
 
 -- State variables (declared early for function visibility)
@@ -399,6 +407,32 @@ refreshEvaluationDisplays = function()
 	refreshRescoredPercentage()
 	MESSAGEMAN:Broadcast("RefreshJudgeDisplay")
 	MESSAGEMAN:Broadcast("ManiaModeChanged")
+end
+
+-- Direct entry point for the local score leaderboard.  Some Etterna builds
+-- do not deliver a theme-broadcast ScoreChanged command back to this actor
+-- while ScreenEvaluation is active.
+HV.SelectEvaluationScore = function(selected)
+	if scoringVoided or not selected then return false end
+	curScore = selected
+	judge = getJudgeForScore(curScore)
+	local screen = SCREENMAN:GetTopScreen()
+	if curScore.GetReplay and curScore:GetReplay() and screen then
+		pcall(function()
+			local tso = tst[judge] or 1
+			if screen.SetPlayerStageStatsFromReplayData then
+				screen:SetPlayerStageStatsFromReplayData(pss, tso, curScore)
+			elseif screen.RescoreReplay then
+				screen:RescoreReplay(pss, tso, curScore, false)
+			end
+		end)
+	end
+	updateVectors()
+	clearRatioCache()
+	refreshRescoredPercentage()
+	MESSAGEMAN:Broadcast("RefreshJudgeDisplay")
+	MESSAGEMAN:Broadcast("ScoreChanged")
+	return true
 end
 
 local function formatEvaluationPercent(pct)
@@ -881,11 +915,27 @@ local t = Def.ActorFrame {
 		if scoringVoided then return end
 		pss = STATSMAN:GetCurStageStats():GetPlayerStageStats()
 		
-		local mss = SCOREMAN:GetMostRecentScore()
-		if mss and mss:GetScore() > 0 then
+		local selectedScore = HV.SelectedEvaluationScore
+		local mss = selectedScore or SCOREMAN:GetMostRecentScore()
+		if selectedScore or (mss and mss:GetScore() > 0) then
 			curScore = mss
 		else
 			curScore = pss:GetHighScore()
+		end
+		judge = getJudgeForScore(curScore)
+		-- Historical score cards keep a different HighScore object, but the
+		-- evaluation widgets read judgment data from PlayerStageStats. Rebuild
+		-- those stats from the selected score's replay before refreshing them.
+		if curScore and curScore.GetReplay and curScore:GetReplay() then
+			pcall(function()
+				local screen = SCREENMAN:GetTopScreen()
+				local tso = tst[judge] or 1
+				if screen and screen.SetPlayerStageStatsFromReplayData then
+					screen:SetPlayerStageStatsFromReplayData(pss, tso, curScore)
+				elseif screen and screen.RescoreReplay then
+					screen:RescoreReplay(pss, tso, curScore, false)
+				end
+			end)
 		end
 		hsTable = getScoreTable(pn, rate)
 		scoreIndex = 0
@@ -895,7 +945,6 @@ local t = Def.ActorFrame {
 		recScore = getBestScore(pn, scoreIndex, rate, true)
 		clearType = getClearType(pn, steps, curScore)
 
-		judge = getJudgeForScore(curScore)
 		updateVectors()
 		clearRatioCache()
 		refreshRescoredPercentage()
@@ -1549,11 +1598,17 @@ local function scoreBoard(pn)
 		LoadFont("Common Normal") .. {
 			Name = "ChordCohesionIndicator",
 			InitCommand = function(self) self:xy(0, -25):halign(0):zoom(0.6):diffuse(color("#FF0000")):visible(false) end,
-			ManiaModeChangedMessageCommand = function(self) self:visible(not isManiaModeEnabled() and curScore and curScore:GetChordCohesion()) end,
+			ManiaModeChangedMessageCommand = function(self)
+				local active = not isManiaModeEnabled() and curScore and curScore:GetChordCohesion()
+				self:visible(active == true)
+				if not active then self:settext("") end
+			end,
 			OnCommand = function(self)
-				if curScore and curScore:GetChordCohesion() then
+				if not isManiaModeEnabled() and curScore and curScore:GetChordCohesion() then
 					self:visible(true):pulse():effectmagnitude(1, 1.1, 1):effecttiming(0.25, 0.25, 0.25, 0.25)
 					self:settext("Chord Cohesion ON")
+				else
+					self:visible(false):settext("")
 				end
 			end,
 			ScoreChangedMessageCommand = function(self) self:playcommand("On") end
@@ -1714,12 +1769,13 @@ local function scoreBoard(pn)
 				Name = "CCBelowWife",
 				InitCommand = function(self) self:halign(0):valign(0):xy(0, 24):zoom(0.35):diffuse(color("#FF0000")):settext("Chord Cohesion ON"):visible(false) end,
 				OnCommand = function(self)
-					if curScore and curScore:GetChordCohesion() then
+					if not isManiaModeEnabled() and curScore and curScore:GetChordCohesion() then
 						self:visible(true)
 					else
-						self:visible(false)
+						self:visible(false):settext("")
 					end
 				end,
+				ManiaModeChangedMessageCommand = function(self) self:playcommand("On") end,
 				ScoreChangedMessageCommand = function(self) self:playcommand("On") end
 			},
 			
@@ -1937,13 +1993,17 @@ local function scoreBoard(pn)
 		LoadFont("Common Normal") .. {
 			Name = "BestScoreCC",
 			InitCommand = function(self) self:halign(0):valign(0):xy(110, 84):zoom(0.35):diffuse(color("#FF0000")):settext("Beat with Chord Cohesion ON"):visible(false) end,
-			ManiaModeChangedMessageCommand = function(self) self:visible(not isManiaModeEnabled() and not isOnlineEvaluation()) end,
+			ManiaModeChangedMessageCommand = function(self)
+				local active = not isManiaModeEnabled() and not isOnlineEvaluation() and recScore and recScore:GetChordCohesion()
+				self:visible(active == true)
+				if not active then self:settext("") end
+			end,
 			OnCommand = function(self)
 				if isOnlineEvaluation() then self:visible(false); return end
-				if recScore and recScore:GetChordCohesion() then
+				if not isManiaModeEnabled() and recScore and recScore:GetChordCohesion() then
 					self:visible(true)
 				else
-					self:visible(false)
+					self:visible(false):settext("")
 				end
 			end
 		},
