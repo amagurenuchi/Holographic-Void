@@ -34,7 +34,7 @@ return Def.ActorFrame {
 	OffCommand = function(self)
 		if allowedCustomization then
 			-- save CustomizeGameplay changes when leaving the screen
-			playerConfig:save(pn_to_profile_slot(PLAYER_1))
+			SavePlayerConfig(pn_to_profile_slot(PLAYER_1))
 			GAMESTATE:SetAutoplay(false)
 		end
 	end,

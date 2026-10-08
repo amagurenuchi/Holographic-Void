@@ -175,12 +175,21 @@ playerConfig.load = function(self, slot)
 	end
 	force_table_elements_to_match_type = tmp
 	local loaded = tmp2(self, slot)
+	-- Customization is an editing mode, not a gameplay preference.  Keep the
+	-- saved layout, but always require it to be enabled again after a reboot.
 	if loaded then
 		loaded.CustomizeGameplay = false
 	end
 	return loaded
 end
 playerConfig:load()
+
+-- Persist in-place edits consistently, including changes made by option rows.
+function SavePlayerConfig(slot)
+	if not slot then return end
+	playerConfig:set_dirty(slot)
+	playerConfig:save(slot)
+end
 
 function LoadProfileCustom(profile, dir)
 	local players = GAMESTATE:GetEnabledPlayers()
@@ -210,7 +219,6 @@ function SaveProfileCustom(profile, dir)
 	end
 
 	if pn then
-		playerConfig:set_dirty(pn_to_profile_slot(pn))
-		playerConfig:save(pn_to_profile_slot(pn))
+		SavePlayerConfig(pn_to_profile_slot(pn))
 	end
 end

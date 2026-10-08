@@ -948,6 +948,7 @@ function OptionRowCustomizeGameplay()
 				playerConfig:get_data(pn_to_profile_slot(PLAYER_1)).CustomizeGameplay = false
 				GAMESTATE:SetAutoplay(false)
 			end
+			SavePlayerConfig(pn_to_profile_slot(PLAYER_1))
 		end
 	}
 end

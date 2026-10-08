@@ -242,6 +242,10 @@ local t = Def.ActorFrame {
 			Def.Sprite {
 				Name = "JudgmentSprite",
 				InitCommand = function(self)
+					-- The customization cursor marks the center of the judgment
+					-- element.  Set the sprite's anchor explicitly so texture
+					-- alignment cannot introduce a half-width/half-height offset.
+					self:halign(0.5):valign(0.5)
 					local path = getAssetPath("judgment")
 					if path and path ~= "" then
 						self:Load(path)
@@ -253,7 +257,10 @@ local t = Def.ActorFrame {
 			LoadFont("Common Normal") .. {
 				Name = "OffsetText",
 				InitCommand = function(self)
-					self:y(18):zoom(0.455):visible(false):diffusealpha(0):maxwidth(180)
+					-- Keep the timing offset legible at a constant size when the
+					-- judgment itself is resized in Customize Gameplay.
+					local judgeZoom = (MovableValues and MovableValues.JudgeZoom) or getDefaultGameplaySize("JudgeZoom") or 1
+					self:y(18):zoom(0.455 / judgeZoom):visible(false):diffusealpha(0):maxwidth(180)
 				end
 			},
 			LoadFont("Common Normal") .. {

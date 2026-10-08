@@ -183,7 +183,11 @@ Movable = {
 		children = {"Judgment", "Border"},
 		properties = {"X", "Y"},
 		mouseRelativeToCenter = true,
-		actorUsesAbsolutePosition = true,
+		-- PlayerJudgment is already centered by the gameplay player actor.
+		-- JudgeX/JudgeY are offsets from that origin, so applying the mouse
+		-- position as an absolute screen coordinate double-adds half the
+		-- screen width/height and separates the label from its cursor.
+		actorUsesAbsolutePosition = false,
 		propertyOffsets = nil,	-- manual offsets for stuff hardcoded to be relative to center and maybe other things (init in wifejudgmentspotting)
 		elementTree = "GameplayXYCoordinates",
 		DeviceButton_up = {
@@ -211,6 +215,13 @@ Movable = {
 		properties = {"Zoom"},
 		elementTree = "GameplaySizes",
 		noBorder = true,
+		arbitraryFunction = function(val)
+			local actor = Movable.DeviceButton_2.actor
+			if not actor then return end
+			actor:zoom(val)
+			local offsetText = actor:GetChild("JudgmentContainer"):GetChild("OffsetText")
+			if offsetText then offsetText:zoom(0.455 / val) end
+		end,
 		DeviceButton_up = {
 			property = "Zoom",
 			inc = 0.01
