@@ -562,7 +562,7 @@ main_af[#main_af + 1] = Def.ActorFrame {
 					end
 				end
 
-				-- Skip general overlay buttons (Login, etc.) if a tab is busy
+				-- Keep Profile tab controls reachable; other decoration tabs own their input.
 				if HV.ActiveTab ~= "" and HV.ActiveTab ~= "PROFILE" then return false end
 
 				local virtualX = INPUTFILTER:GetMouseX()
@@ -571,7 +571,7 @@ main_af[#main_af + 1] = Def.ActorFrame {
 				-- Check Login Button logic (btnCX/btnCY defined above)
 				local loginOver = virtualX >= btnCX - btnW/2 and virtualX <= btnCX + btnW/2
 						 and virtualY >= btnCY - btnH/2 and virtualY <= btnCY + btnH/2
-				if loginOver then
+				if HV.ActiveTab == "" and loginOver then
 					if DLMAN:IsLoggedIn() then
 						ThemePrefs.Set("HV_Username", "")
 						ThemePrefs.Set("HV_PasswordToken", "")

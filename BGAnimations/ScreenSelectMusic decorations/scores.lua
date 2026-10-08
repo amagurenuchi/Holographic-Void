@@ -39,6 +39,11 @@ local showInvalidScores = false
 local displayAsJ4 = PREFSMAN:GetPreference("SortBySSRNormPercent")
 local hoveredCommentScore = nil
 
+-- Shared with ScreenScoreTabOffsetPlot, matching Til Death's score-tab flow.
+local scoreForOffsetPlot = nil
+function setScoreForPlot(score) scoreForOffsetPlot = score end
+function getScoreForPlot() return scoreForOffsetPlot end
+
 local function IsOnlineScoreInvalid(score)
 	if not score then return false end
 	if type(score.GetEtternaValid) == "function" then
@@ -216,6 +221,56 @@ local function ViewScore(score)
 			SCREENMAN:SetNewScreen("ScreenEvaluation")
 		end
 	end
+end
+
+local function GetOnlineScoreID(score)
+	if not score then return nil end
+	for _, getterName in ipairs({"GetOnlineScoreID", "GetScoreid", "GetScoreID", "GetID"}) do
+		local getter = score[getterName]
+		if type(getter) == "function" then
+			local ok, id = pcall(getter, score)
+			if ok and id ~= nil and tostring(id) ~= "" then return id end
+		end
+	end
+	return nil
+end
+
+local function ShowScoreOffsetPlot(score)
+	-- Keep this compatible with the offset-plot screen provided by Etterna/Til Death.
+	-- The score is intentionally stored before changing screens because the plot
+	-- screen reads it during its first update.
+	if type(setScoreForPlot) == "function" and SCREENMAN.AddNewScreenToTop then
+		local open = function()
+			setScoreForPlot(score)
+			SCREENMAN:AddNewScreenToTop("ScreenScoreTabOffsetPlot")
+		end
+		if currentView == VIEW_ONLINE and type(DLMAN.RequestOnlineScoreReplayData) == "function" then
+			DLMAN:RequestOnlineScoreReplayData(score, open)
+		else
+			open()
+		end
+		return true
+	end
+	return false
+end
+
+local function OpenOnlinePlayer(score)
+	local name = GetScoreDisplayName(score)
+	if name and name ~= "" and type(DLMAN.ShowUserPage) == "function" then
+		DLMAN:ShowUserPage(name)
+		return true
+	end
+	return false
+end
+
+local function OpenOnlineScore(score)
+	local name = GetScoreDisplayName(score)
+	local id = GetOnlineScoreID(score)
+	if name and id and type(DLMAN.ShowScorePage) == "function" then
+		DLMAN:ShowScorePage(name, id)
+		return true
+	end
+	return false
 end
 
 -- ============================================================
@@ -889,7 +944,23 @@ t[#t + 1] = Def.ActorFrame {
 						local idx = (currentPage - 1) * pageSize + ri
 						local s = displayedScores[idx]
 						if s then
-							ViewScore(s)
+							local ss = s.score or s
+							local rowLeft = SCREEN_CENTER_X - overlayW / 2 + 25
+							local localX = INPUTFILTER:GetMouseX() - rowLeft
+							-- Online name and Wife% cells link to EO. If score metadata
+							-- is incomplete, retain the normal evaluation behavior.
+							if currentView == VIEW_ONLINE and localX >= 30 and localX < 180 then
+								if not OpenOnlinePlayer(ss) then ViewScore(s) end
+							elseif currentView == VIEW_ONLINE and localX >= 180 and localX < 280 then
+								-- GetScoreid is the Etterna online-score API method.
+								if not OpenOnlineScore(ss) then ms.ok("Online score page unavailable") end
+							else
+								if currentView == VIEW_LOCAL then
+									ViewScore(s)
+								elseif not ShowScoreOffsetPlot(ss) then
+									ViewScore(s)
+								end
+							end
 						end
 						return true
 					end
