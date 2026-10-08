@@ -1244,10 +1244,6 @@ function HV.GetReplayCurrentWifePercentage(pss)
 			return (tonumber(points) / (notesPassed * 2)) * 100
 		end
 	end
-	if type(pss.GetWifeScore) == "function" then
-		local ok, value = pcall(pss.GetWifeScore, pss)
-		if ok and tonumber(value) then return tonumber(value) * 100 end
-	end
 	return nil
 end
 
