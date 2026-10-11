@@ -1238,6 +1238,39 @@ function HV.GetCurrentWifePercentage(pss)
 	return nil
 end
 
+function getMainBPM(song, steps)
+	if not song then return 0 end
+	local bpms = song:GetDisplayBpms(true)
+	if not bpms or not bpms[1] then return 0 end
+	if bpms[1] == bpms[2] then return bpms[1] end
+	local timing = song:GetTimingData()
+	local lastSecond = 0
+	if steps and steps.GetLastSecond then
+		local ok, value = pcall(function() return steps:GetLastSecond() end)
+		if ok then lastSecond = tonumber(value) or 0 end
+	end
+	if lastSecond <= 0 and song.GetLastSecond then
+		local ok, value = pcall(function() return song:GetLastSecond() end)
+		if ok then lastSecond = tonumber(value) or 0 end
+	end
+	if not timing or lastSecond <= 0 then return bpms[1] end
+	local durations = {}
+	local sampleStep = 0.1
+	for second = 0, math.max(0, lastSecond - sampleStep), sampleStep do
+		local beat = timing:GetBeatFromElapsedTime(second + sampleStep / 2)
+		local bpm = timing:GetBPMAtBeat(beat)
+		if bpm and bpm > 0 then
+			local key = math.round(bpm * 1000) / 1000
+			durations[key] = (durations[key] or 0) + sampleStep
+		end
+	end
+	local main, longest = bpms[1], 0
+	for bpm, duration in pairs(durations) do
+		if duration > longest then main, longest = bpm, duration end
+	end
+	return main
+end
+
 function HV.GetReplayCurrentWifePercentage(pss)
 	if not pss then return nil end
 	local notesPassed = 0

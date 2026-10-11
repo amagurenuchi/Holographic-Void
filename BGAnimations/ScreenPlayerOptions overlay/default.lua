@@ -47,6 +47,13 @@ local function hasAssistEnabled(po, modStr)
 	return string.find(modStr, "AssistClap") or string.find(modStr, "AssistTick") or string.find(modStr, "AutoPlay")
 end
 
+-- Cache the selected song's main BPM before the overlay actor is created.
+local bpms = {0, 0}
+if GAMESTATE:GetCurrentSong() then
+	local main = getMainBPM(GAMESTATE:GetCurrentSong(), GAMESTATE:GetCurrentSteps())
+	bpms = {main, main}
+end
+
 t[#t + 1] = Def.ActorFrame {
 	Name = "ModIcons",
 	InitCommand = function(self)
@@ -121,6 +128,11 @@ t[#t + 1] = Def.ActorFrame {
 		speedActor:diffuse(accent)
 
 		local rateActor = self:GetChild("Rate")
+		local bpmActor = self:GetChild("BPM")
+		if bpmActor then
+			bpmActor:settext(bpms[1] > 0 and string.format("[%d]", math.round(bpms[1] * tRate)) or "[???]")
+			bpmActor:diffuse(accent)
+		end
 		rateActor:settext(formatRateValue(tRate))
 		rateActor:diffuse(accent)
 
@@ -176,7 +188,7 @@ t[#t + 1] = Def.ActorFrame {
 		end
 		local receptorSize = tonumber(ThemePrefs.Get("HV_Mini")) or 100
 		if math.abs(receptorSize - 100) > 0.001 then
-			table.insert(active, "MN" .. math.round(receptorSize))
+			table.insert(active, "RS" .. math.round(receptorSize))
 		end
 
 		local modsText = table.concat(active, "  ")
@@ -213,7 +225,8 @@ t[#t + 1] = Def.ActorFrame {
 
 	-- Prefix Icons (L, J, F, AST)
 	LoadFont("Common Normal") .. { Name = "Speed", InitCommand = function(self) self:zoom(0.4):halign(0) end },
-	LoadFont("Common Normal") .. { Name = "Rate", InitCommand = function(self) self:x(42):zoom(0.4):halign(0) end },
+	LoadFont("Common Normal") .. { Name = "Rate", InitCommand = function(self) self:x(42):y(-4):zoom(0.4):halign(0) end },
+	LoadFont("Common Normal") .. { Name = "BPM", InitCommand = function(self) self:x(42):y(6):zoom(0.4):halign(0):diffuse(HVColor and HVColor.Accent or color("#5ABAFF")) end },
 	LoadFont("Common Normal") .. { Name = "Life", InitCommand = function(self) self:x(82):zoom(0.4):halign(0) end },
 	LoadFont("Common Normal") .. { Name = "Judge", InitCommand = function(self) self:x(110):zoom(0.4):halign(0):diffuse(HVColor and HVColor.Accent or color("#5ABAFF")) end },
 	LoadFont("Common Normal") .. { Name = "Fail", InitCommand = function(self) self:x(138):zoom(0.4):halign(0):diffuse(color("#CF9898")) end },
@@ -267,14 +280,6 @@ t[#t + 1] = Def.Quad {
 			:diffusealpha(0.3)
 	end,
 }
-
--- Cache song BPMs at screen load time
-local bpms = {}
-if GAMESTATE:GetCurrentSong() then
-	bpms = GAMESTATE:GetCurrentSong():GetDisplayBpms(true)
-	bpms[1] = math.round(bpms[1])
-	bpms[2] = math.round(bpms[2])
-end
 
 -- ============================================================
 -- SPEED DISPLAY (top-left, above the options rows)
