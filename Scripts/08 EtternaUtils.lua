@@ -1081,7 +1081,16 @@ end
 
 function HV.ScoreEmulationLabel(selection)
 	selection = tostring(selection or HV.ScoreEmulationSelection())
-	if selection:sub(1, 7) == "Custom:" then return selection:sub(8) end
+	if selection:sub(1, 7) == "Custom:" then
+		local configName = selection:sub(8)
+		local store = rawget(_G, "customWindowsConfig")
+		if store and type(store.get_data) == "function" then
+			local ok, data = pcall(function() return store:get_data() end)
+			local config = ok and data and data.customWindowConfigs and data.customWindowConfigs[configName]
+			if config and config.displayName then return tostring(config.displayName) end
+		end
+		return configName
+	end
 	local labels = {
 		J4 = "Normal (J4)", J5 = "Pro (J5)", J6 = "Master (J6)",
 		J7 = "Insane (J7)", J8 = "Godly (J8)", J9 = "Justice (J9)"

@@ -651,11 +651,11 @@ local recScore = scoringVoided and nil or getBestScore(pn, scoreIndex, rate, tru
 
 function getComparisonWifePercent(score, currentPss, currentJudge)
 	if not score then return nil end
-	local rst = getRescoreElements(currentPss, score)
-	if rst then
-		rst.dvt = getFilteredDvt()
-		-- getRescoredWife3Judge already returns a percentage (e.g. 94.25).
-		return getRescoredWife3Judge(3, currentJudge, rst)
+	-- Do not rescore the current PSS here: that compares the current play
+	-- against itself and can incorrectly produce a zero differential.
+	if score.GetRescoredWifeScore then
+		local ok, value = pcall(score.GetRescoredWifeScore, score, currentJudge)
+		if ok and tonumber(value) then return tonumber(value) * 100 end
 	end
 	return score.GetWifeScore and score:GetWifeScore() * 100 or nil
 end
@@ -1829,12 +1829,16 @@ local function scoreBoard(pn)
 				Name = "WifeComparison",
 				InitCommand = function(self) self:halign(0):valign(0):xy(0, 20):zoom(0.5):diffuse(subText):diffusealpha(0) end,
 				OnCommand = function(self)
-					self:visible(not usingCustomWindows and not isManiaModeEnabled())
+					local failed = curScore and curScore.GetWifeGrade and curScore:GetWifeGrade() == "Grade_Failed"
+					self:visible(not usingCustomWindows and not isManiaModeEnabled() and not failed)
+					if failed then return end
 					local current = rescoredPercentage or (evaluationWifeScore() * 100)
 					local best = getComparisonWifePercent(recScore, pss, judge)
 					if best then
 						local diff = current - best
-						self:settextf("%s %+.2f%%", comparisonArrow(diff), diff)
+						-- Keep small but real Wife% differences visible instead of
+						-- rounding them away to 0.00%.
+						self:settextf("%s %+.3f%%", comparisonArrow(diff), diff)
 					else self:settext("▲ New!") end
 					self:sleep(0.35):linear(0.15):diffusealpha(1)
 				end,
