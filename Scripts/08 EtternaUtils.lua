@@ -494,6 +494,12 @@ function getClearLevel(pn, steps, score)
 
 	local totalTaps = tns.W1 + tns.W2 + tns.W3 + tns.W4 + tns.W5 + tns.Miss
 	if totalTaps ~= maxNotes then return 20 end -- note count mismatch
+	local mineHits
+	if score.GetTapNoteScore then
+		mineHits = score:GetTapNoteScore("TapNoteScore_HitMine")
+	else
+		mineHits = score:GetTapNoteScores("TapNoteScore_HitMine")
+	end
 
 	local ridiculous = HV.GetRidiculousCountFromScore(score)
 	if ridiculous and tns.W1 == maxNotes and hns.Held == maxHolds then
@@ -520,6 +526,9 @@ function getClearLevel(pn, steps, score)
 		ngCount = score:GetHoldNoteScore("HoldNoteScore_LetGo") + score:GetHoldNoteScore("HoldNoteScore_MissedHold")
 	else
 		ngCount = score:GetHoldNoteScores("HoldNoteScore_LetGo") + score:GetHoldNoteScores("HoldNoteScore_MissedHold")
+	end
+	if mineHits > 0 and tns.W4 + tns.W5 + tns.Miss == 0 and ngCount == 0 then
+		return 11 -- NGFC (FC or higher with hit mines)
 	end
 	if missCount == 0 then
 		if ngCount > 0 then return 11    -- NGFC
@@ -572,6 +581,7 @@ function getDetailedClearType(obj)
 	if not obj then return "Failed" end
 	local miss, w5, w4, w3, w2, w1 = 0, 0, 0, 0, 0, 0
 	local missedHolds = 0
+	local mineHits = 0
 	local grade = "Grade_None"
 	local wifeScore = 0
 
@@ -583,6 +593,7 @@ function getDetailedClearType(obj)
 		w2 = obj:GetTapNoteScores("TapNoteScore_W2")
 		w1 = obj:GetTapNoteScores("TapNoteScore_W1")
 		missedHolds = obj:GetHoldNoteScores("HoldNoteScore_LetGo") + obj:GetHoldNoteScores("HoldNoteScore_MissedHold")
+		mineHits = obj:GetTapNoteScores("TapNoteScore_HitMine")
 		grade = obj:GetGrade()
 		wifeScore = obj:GetWifeScore()
 	elseif obj.GetTapNoteScore then -- HighScore
@@ -593,6 +604,7 @@ function getDetailedClearType(obj)
 		w2 = obj:GetTapNoteScore("TapNoteScore_W2")
 		w1 = obj:GetTapNoteScore("TapNoteScore_W1")
 		missedHolds = obj:GetHoldNoteScore("HoldNoteScore_LetGo") + obj:GetHoldNoteScore("HoldNoteScore_MissedHold")
+		mineHits = obj:GetTapNoteScore("TapNoteScore_HitMine")
 		grade = obj:GetGrade()
 		wifeScore = obj:GetWifeScore()
 	end
@@ -604,6 +616,7 @@ function getDetailedClearType(obj)
 	end
 
 	local cb = miss + w5 + w4 + missedHolds
+	if cb == 0 and mineHits > 0 then return "NGFC" end
 	if miss + w5 + w4 == 0 and missedHolds > 0 then return "NGFC" end
 	if cb > 0 then
 		if cb == 1 then return "MF"
