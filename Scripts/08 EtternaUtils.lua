@@ -281,11 +281,10 @@ local clearTypeNames = {
 	[1]="ClearType_RFC", [2]="ClearType_RF", [3]="ClearType_SDM",
 	[4]="ClearType_MFC", [5]="ClearType_WF", [6]="ClearType_SDP",
 	[7]="ClearType_PFC", [8]="ClearType_BF", [9]="ClearType_SDG",
-	[10]="ClearType_FC",  [11]="ClearType_MF", [12]="ClearType_SDCB",
-	[13]="ClearType_EXHC", [14]="ClearType_HClear", [15]="ClearType_Clear",
-	[16]="ClearType_EClear", [17]="ClearType_AClear", [18]="ClearType_Failed",
-	[19]="ClearType_Invalid", [20]="ClearType_Noplay", [21]="ClearType_None",
-	[22]="ClearType_SoftInvalid",
+	[10]="ClearType_FC", [11]="ClearType_NGFC", [12]="ClearType_MF", [13]="ClearType_SDCB",
+	[14]="ClearType_EXHC", [15]="ClearType_HClear", [16]="ClearType_Clear",
+	[17]="ClearType_EClear", [18]="ClearType_AClear", [19]="ClearType_Failed",
+	[20]="ClearType_Invalid", [21]="ClearType_Noplay", [22]="ClearType_None",
 }
 
 local clearTypeReverse = {}
@@ -449,16 +448,16 @@ function getClearTypeShortText(ct)
 end
 
 function getClearLevel(pn, steps, score)
-	if score == nil or steps == nil then return 20 end
+	if score == nil or steps == nil then return 21 end
 	
 	local grade
 	if score.GetWifeGrade then grade = score:GetWifeGrade()
 	else grade = score:GetGrade() end
 
-	if grade == nil then return 20 end
+	if grade == nil then return 21 end
 	-- Check invalid mods FIRST: a failed invalid score should still be Invalid
-	if IsScoreInvalid(score) then return 19 end
-	if grade == "Grade_Failed" then return 18 end
+	if IsScoreInvalid(score) then return 20 end
+	if grade == "Grade_Failed" then return 19 end
 
 	local tns = {}
 	if score.GetTapNoteScore then
@@ -494,7 +493,7 @@ function getClearLevel(pn, steps, score)
 		+ (steps:GetRadarValues(pn):GetValue("RadarCategory_Rolls") or 0)
 
 	local totalTaps = tns.W1 + tns.W2 + tns.W3 + tns.W4 + tns.W5 + tns.Miss
-	if totalTaps ~= maxNotes then return 19 end -- note count mismatch
+	if totalTaps ~= maxNotes then return 20 end -- note count mismatch
 
 	local ridiculous = HV.GetRidiculousCountFromScore(score)
 	if ridiculous and tns.W1 == maxNotes and hns.Held == maxHolds then
@@ -516,15 +515,22 @@ function getClearLevel(pn, steps, score)
 
 	-- FC variants
 	local missCount = tns.W4 + tns.W5 + tns.Miss
+	local ngCount
+	if score.GetHoldNoteScore then
+		ngCount = score:GetHoldNoteScore("HoldNoteScore_LetGo") + score:GetHoldNoteScore("HoldNoteScore_MissedHold")
+	else
+		ngCount = score:GetHoldNoteScores("HoldNoteScore_LetGo") + score:GetHoldNoteScores("HoldNoteScore_MissedHold")
+	end
 	if missCount == 0 then
-		if tns.W3 == 1 then return 8      -- BF
+		if ngCount > 0 then return 11    -- NGFC
+		elseif tns.W3 == 1 then return 8 -- BF
 		elseif tns.W3 < 10 then return 9  -- SDG
 		else return 10 end                -- FC
-	elseif missCount == 1 then return 11  -- MF
-	elseif missCount < 10 then return 12  -- SDCB
+	elseif missCount == 1 then return 12  -- MF
+	elseif missCount < 10 then return 13  -- SDCB
 	end
 
-	return 15 -- Clear
+	return 16 -- Clear
 end
 
 function getClearType(pn, steps, score)
@@ -542,14 +548,14 @@ end
 
 function getHighestClearType(pn, steps, scoreList, ignore)
 	if steps == nil then return clearTypeNames[21] end
-	local highest = 20
+	local highest = 21
 	if scoreList ~= nil then
 		for i = 1, #scoreList do
 			if i ~= ignore then
 				local hScore = scoreList[i]
 				if hScore ~= nil then
 					local cl = getClearLevel(pn, steps, hScore)
-					if cl ~= 19 then
+					if cl ~= 20 then
 						highest = math.min(highest, cl)
 					end
 				end
@@ -598,6 +604,7 @@ function getDetailedClearType(obj)
 	end
 
 	local cb = miss + w5 + w4 + missedHolds
+	if miss + w5 + w4 == 0 and missedHolds > 0 then return "NGFC" end
 	if cb > 0 then
 		if cb == 1 then return "MF"
 		elseif cb < 10 then return "SDCB"

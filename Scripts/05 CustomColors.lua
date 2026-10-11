@@ -62,6 +62,7 @@ local defaultCustomColors = {
 		BF      = "#B898CF",
 		SDG     = "#A0CFAB",
 		FC      = "#A0CFAB",
+		NGFC    = "#80C0CF",
 		MF      = "#CF9898",
 		SDCB    = "#80C0CF",
 		Clear   = "#5ABAFF",
@@ -69,7 +70,6 @@ local defaultCustomColors = {
 		Invalid = "#454545",
 		NoPlay  = "#252525",
 		None    = "#252525",
-		SoftInvalid = "#A68060",
 	},
 	
 	goalTracker = {
@@ -327,8 +327,8 @@ function HVCustomColors.GetElements(category)
 		judgment = { "Ridiculous", "W1", "W2", "W3", "W4", "W5", "Miss", "Held", "LetGo" },
 		difficulty = { "Beginner", "Easy", "Medium", "Hard", "Challenge", "Edit" },
 		clearType = {
-			"RFC", "RF", "SDM", "MFC", "WF", "SDP", "PFC", "BF", "SDG", "FC", "MF", "SDCB",
-			"Clear", "Failed", "NoPlay", "Invalid", "None", "SoftInvalid",
+			"RFC", "RF", "SDM", "MFC", "WF", "SDP", "PFC", "BF", "SDG", "FC", "NGFC", "MF", "SDCB",
+			"Clear", "Failed", "NoPlay", "Invalid", "None",
 		},
 	}
 

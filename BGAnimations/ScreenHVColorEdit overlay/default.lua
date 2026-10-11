@@ -269,7 +269,7 @@ local function inputeater(event)
 				grades = { AAAAA = "#FFFFFF", AAAA = "#80C0CF", AAA = "#CFD198", AA = "#A0CFAB", A = "#CF9898", B = "#98B8CF", C = "#B898CF", D = "#CF98B8", F = "#606060", None = "#454545" },
 				judgment = { Ridiculous = "#FFD7FF", W1 = "#f1ffff", W2 = "#FFFFB7", W3 = "#A0E0A0", W4 = "#A0C8E0", W5 = "#C8A0E0", Miss = "#E0A0A0", Held = "#8fbb84ff", LetGo = "#E0A0A0" },
 				difficulty = { Beginner = "#98B8CF", Easy = "#A0CFAB", Medium = "#CFD198", Hard = "#CF9898", Challenge = "#B898CF", Edit = "#8C8C8C" },
-				clearType = { RFC = "#FFD7FF", RF = "#E8C8F8", SDM = "#D8C0F0", MFC = "#E0F8FF", WF = "#E0E0E0", SDP = "#CFD198", PFC = "#CFD198", BF = "#B898CF", SDG = "#A0CFAB", FC = "#A0CFAB", MF = "#CF9898", SDCB = "#80C0CF", Clear = "#5ABAFF", Failed = "#CF9898", Invalid = "#454545", NoPlay = "#252525", None = "#252525", SoftInvalid = "#A68060" },
+				clearType = { RFC = "#FFD7FF", RF = "#E8C8F8", SDM = "#D8C0F0", MFC = "#E0F8FF", WF = "#E0E0E0", SDP = "#CFD198", PFC = "#CFD198", BF = "#B898CF", SDG = "#A0CFAB", FC = "#A0CFAB", NGFC = "#80C0CF", MF = "#CF9898", SDCB = "#80C0CF", Clear = "#5ABAFF", Failed = "#CF9898", Invalid = "#454545", NoPlay = "#252525", None = "#252525" },
 				goalTracker = { Positive = "#A0CFAB", Negative = "#CF9898" },
 				lifeBar = { L1 = "#A0CFAB", L2 = "#A0CFAB", L3 = "#5ABAFF", L4 = "#5ABAFF", L5 = "#CFD198", L6 = "#E0B080", L7 = "#CF9898", Danger = "#FF4444" },
 				radar = { Power = "#E0B080", Chaos = "#B898CF", Hell = "#CF9898", Mach = "#80C0CF", Freeze = "#CFD198", Earth = "#A0CFAB" },

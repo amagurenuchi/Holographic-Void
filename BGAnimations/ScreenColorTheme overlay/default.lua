@@ -786,8 +786,8 @@ t[#t+1] = Def.ActorFrame {
 	Def.ActorFrame {
 		InitCommand = function(self) self:xy(-chunkW/2 + 38, 9) end,
 		(function()
-			local cts = {"MFC", "WF", "SDP", "PFC", "BF", "SDG", "FC", "MF", "SDCB", "Clear", "Failed", "SoftInvalid", "NoPlay"}
-			local labels = {"MFC", "WF", "SDP", "PFC", "BF", "SDG", "FC", "MF", "SDCB", "CLR", "FAIL", "SINV", "NOP"}
+			local cts = {"MFC", "WF", "SDP", "PFC", "BF", "SDG", "FC", "NGFC", "MF", "SDCB", "Clear", "Failed", "NoPlay"}
+			local labels = {"MFC", "WF", "SDP", "PFC", "BF", "SDG", "FC", "NGFC", "MF", "SDCB", "CLR", "FAIL", "NOP"}
 			local am = Def.ActorFrame {}
 			for i, ct in ipairs(cts) do
 				am[#am+1] = LoadFont("Common Normal") .. {

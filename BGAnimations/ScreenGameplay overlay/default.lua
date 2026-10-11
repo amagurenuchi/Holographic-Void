@@ -695,7 +695,6 @@ t[#t + 1] = Def.ActorFrame {
 				if HV.ScoreEmulationEnabled and HV.ScoreEmulationEnabled() then
 					self.emulatedPoints = self.emulatedPoints + HV.GetCosmeticHoldPointValue(HV.ScoreEmulationSelection(), msg.HoldNoteScore)
 				end
-				self.currWifePoints = self.currWifePoints - 4.5
 				self:playcommand("Update")
 			end
 		end,
@@ -708,7 +707,6 @@ t[#t + 1] = Def.ActorFrame {
 				if HV.ScoreEmulationEnabled and HV.ScoreEmulationEnabled() then
 					self.emulatedPoints = self.emulatedPoints + HV.GetCosmeticHoldPointValue(HV.ScoreEmulationSelection(), msg.RollNoteScore)
 				end
-				self.currWifePoints = self.currWifePoints - 4.5
 				self:playcommand("Update")
 			end
 		end,
@@ -758,32 +756,25 @@ t[#t + 1] = Def.ActorFrame {
 				wifePct = ((HV_MaxPoints - HV_PointsLost) / HV_MaxPoints) * 100
 			else
 				if pss then
-					-- GetWifePoints includes hold/roll NG penalties. Prefer it over
-					-- the local tap accumulator so an NG is normalized against the
-					-- same number of scored notes as the engine's Wife3 score.
 					local notesPassed = pss:GetTapNoteScores("TapNoteScore_W1") +
 						pss:GetTapNoteScores("TapNoteScore_W2") +
 						pss:GetTapNoteScores("TapNoteScore_W3") +
 						pss:GetTapNoteScores("TapNoteScore_W4") +
 						pss:GetTapNoteScores("TapNoteScore_W5") +
 						pss:GetTapNoteScores("TapNoteScore_Miss")
-					local ok, engineWifePoints = false, nil
-					if notesPassed > 0 and type(pss.GetWifePoints) == "function" then
-						ok, engineWifePoints = pcall(pss.GetWifePoints, pss)
-						engineWifePoints = ok and tonumber(engineWifePoints) or nil
+					local ngCount = pss:GetHoldNoteScores("HoldNoteScore_LetGo") +
+						pss:GetHoldNoteScores("HoldNoteScore_MissedHold")
+					if type(pss.GetRollNoteScores) == "function" then
+						ngCount = ngCount + pss:GetRollNoteScores("RollNoteScore_LetGo") +
+							pss:GetRollNoteScores("RollNoteScore_MissedRoll")
 					end
-					if engineWifePoints then
-						wifePct = math.min((engineWifePoints / (notesPassed * 2)) * 100, 100)
+					local currentMaxPoints = self.currScoredTaps * 2
+					if currentMaxPoints > 0 then
+						wifePct = math.min(((self.currWifePoints - ngCount * 4.5) / currentMaxPoints) * 100, 100)
+					elseif self.currWifePoints - ngCount * 4.5 < 0 then
+						wifePct = ((self.currWifePoints - ngCount * 4.5) / 2) * 100
 					else
-						local currentMaxPoints = self.currScoredTaps * 2
-						if currentMaxPoints > 0 then
-							local raw = (self.currWifePoints / currentMaxPoints) * 100
-							wifePct = math.min(raw, 100)
-						elseif self.currWifePoints < 0 then
-							wifePct = (self.currWifePoints / 2) * 100
-						else
-							wifePct = 100.0000
-						end
+						wifePct = 100.0000
 					end
 				end
 			end			
@@ -901,6 +892,7 @@ t[#t + 1] = Def.ActorFrame {
 				-- Implement mean like Rebirth does
 				self.meansum = 0
 				self.meancount = 0
+				self.lastTapOffsetMs = nil
 				-- Implement SD like Rebirth does
 				self.runningmean = 0
 				self.runningvariance = 0
@@ -931,6 +923,10 @@ t[#t + 1] = Def.ActorFrame {
 						elseif msg.TapNoteScore ~= "TapNoteScore_None" then
 							self.currWifePoints = self.currWifePoints + 2.0
 						end
+					end
+				elseif self.statType == "TapOffset" then
+					if msg.TapNoteOffset ~= nil and msg.TapNoteScore ~= "TapNoteScore_Miss" then
+						self.lastTapOffsetMs = msg.TapNoteOffset * 1000
 					end
 				elseif self.statType == "StdDev" then
 			        if msg.TapNoteOffset ~= nil and msg.TapNoteScore ~= "TapNoteScore_Miss" then
@@ -1019,6 +1015,8 @@ t[#t + 1] = Def.ActorFrame {
 					else
 						self:settext("0.0000%")
 					end
+				elseif self.statType == "TapOffset" then
+					self:settextf("%+.2fms", self.lastTapOffsetMs or 0)
 				elseif self.statType == "StdDev" then
 					if self.tapcount > 1 then
 						self:settextf("%.2fms", math.sqrt(self.runningvariance / (self.tapcount - 1)))

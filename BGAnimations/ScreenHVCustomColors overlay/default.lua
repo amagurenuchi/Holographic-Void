@@ -80,9 +80,9 @@ local function getDisplayNameForElement(category, element)
 		},
 		clearType = {
 			MFC = "MFC", WF = "WF", SDP = "SDP", PFC = "PFC", BF = "BF",
-			SDG = "SDG", FC = "FC", MF = "MF", SDCB = "SDCB",
+			SDG = "SDG", FC = "FC", NGFC = "NGFC", MF = "MF", SDCB = "SDCB",
 			Clear = "Clear", Failed = "Failed", Invalid = "Invalid",
-			NoPlay = "NoPlay", None = "None", SoftInvalid = "SoftInvalid",
+			NoPlay = "NoPlay", None = "None",
 		},
 		goalTracker = {
 			Positive = "Positive (Ahead)", Negative = "Negative (Behind)",

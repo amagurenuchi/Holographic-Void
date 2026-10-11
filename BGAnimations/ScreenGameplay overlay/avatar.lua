@@ -202,7 +202,7 @@ local t = Def.ActorFrame {
 	-- MSD value
 	LoadFont("Common Normal") .. {
 		InitCommand = function(self)
-			self:xy(avatarSize + 8, 22):zoom(fontZoom * 1.1):halign(0):maxwidth(65 / fontZoom)
+			self:xy(avatarSize + 8, 22):zoom(fontZoom * 1.65):halign(0):maxwidth(100 / fontZoom)
 		end,
 		BeginCommand = function(self) self:queuecommand("Set") end,
 		SetCommand = function(self)
@@ -221,7 +221,7 @@ local t = Def.ActorFrame {
 	-- Difficulty name
 	LoadFont("Common Normal") .. {
 		InitCommand = function(self)
-			self:xy(avatarSize + 60, 22):zoom(fontZoomSmall):halign(0):maxwidth(150 / fontZoomSmall)
+			self:xy(avatarSize + 72, 22):zoom(fontZoomSmall):halign(0):maxwidth(150 / fontZoomSmall)
 		end,
 		BeginCommand = function(self) self:queuecommand("Set") end,
 		SetCommand = function(self)

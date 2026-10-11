@@ -246,6 +246,7 @@ HVColor.ClearTypeHolographic = {
 	BF      = color("#B898CF"), -- Muted Purple (Black Flag - 1xW3 FC)
 	SDG     = color("#A0CFAB"), -- Muted Green (Single Digit Greats)
 	FC      = color("#A0CFAB"), -- Muted Green (Full Combo)
+	NGFC    = color("#80C0CF"), -- Cyan (Full Combo with hold NGs)
 	MF      = color("#CF9898"), -- Muted Red (Miss Flag - 1xMiss)
 	SDCB    = color("#80C0CF"), -- Muted Cyan (Single Digit Combo Breakers)
 	Clear   = color("#5ABAFF"), -- Accent Blue
@@ -253,7 +254,6 @@ HVColor.ClearTypeHolographic = {
 	Invalid = color("#454545"), -- Dim Gray
 	NoPlay  = color("#252525"), -- Darkest Gray
 	None    = color("#252525"), -- Darkest Gray
-	SoftInvalid = color("#A68060"), -- Muted Bronze/Amber
 }
 
 HVColor.ClearTypeClassic = {
@@ -267,6 +267,7 @@ HVColor.ClearTypeClassic = {
 	BF      = color("#999999"),
 	SDG     = color("#448844"),
 	FC      = color("#66CC66"),
+	NGFC    = color("#33BBFF"),
 	MF      = color("#CC6666"),
 	SDCB    = color("#33BBFF"),
 	Clear   = color("#33AAFF"),
@@ -274,7 +275,6 @@ HVColor.ClearTypeClassic = {
 	Invalid = color("#E61E25"),
 	NoPlay  = color("#666666"),
 	None    = color("#666666"),
-	SoftInvalid = color("#CC8844"),
 }
 
 --- Refresh global clear type colors based on style.
@@ -293,6 +293,7 @@ function HVColor.RefreshClearTypeColors()
 			BF      = color(HVCustomColors.GetColor("clearType", "BF")),
 			SDG     = color(HVCustomColors.GetColor("clearType", "SDG")),
 			FC      = color(HVCustomColors.GetColor("clearType", "FC")),
+			NGFC    = color(HVCustomColors.GetColor("clearType", "NGFC")),
 			MF      = color(HVCustomColors.GetColor("clearType", "MF")),
 			SDCB    = color(HVCustomColors.GetColor("clearType", "SDCB")),
 			Clear   = color(HVCustomColors.GetColor("clearType", "Clear")),
@@ -300,7 +301,6 @@ function HVColor.RefreshClearTypeColors()
 			Invalid = color(HVCustomColors.GetColor("clearType", "Invalid")),
 			NoPlay  = color(HVCustomColors.GetColor("clearType", "NoPlay")),
 			None    = color(HVCustomColors.GetColor("clearType", "None")),
-			SoftInvalid = color(HVCustomColors.GetColor("clearType", "SoftInvalid")),
 		}
 	elseif s == "classic" then
 		HVColor.ClearType = HVColor.ClearTypeClassic
@@ -324,7 +324,6 @@ function HVColor.GetClearTypeColor(ct)
 	if s:find("PERFECT")   then return palette.PFC end
 	if s:find("COMBO")     then return palette.FC end
 	if s:find("FAILED")    then return palette.Failed end
-	if s:find("SOFT")      then return palette.SoftInvalid end
 	if s:find("INVALID")   then return palette.Invalid end
 	return palette.Clear
 end
