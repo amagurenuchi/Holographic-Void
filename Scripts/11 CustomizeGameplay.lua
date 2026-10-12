@@ -30,6 +30,8 @@ local function loadValuesTable()
 	MovableValues.ComboX = coord("ComboX")
 	MovableValues.ComboY = coord("ComboY")
 	MovableValues.ComboZoom = size("ComboZoom")
+	MovableValues.MiniProgressBarX = coord("MiniProgressBarX")
+	MovableValues.MiniProgressBarY = coord("MiniProgressBarY")
 	MovableValues.ErrorBarX = coord("ErrorBarX")
 	MovableValues.ErrorBarY = coord("ErrorBarY")
 	MovableValues.TargetTrackerX = coord("TargetTrackerX")
@@ -383,6 +385,14 @@ Movable = {
 			property = "AddX",
 			inc = 5
 		}
+	},
+	DeviceButton_q = {
+		name = "MiniProgressBar",
+		textHeader = "Mini Progress Bar Position:",
+		element = {}, properties = {"X", "Y"},
+		elementTree = "GameplayXYCoordinates",
+		DeviceButton_up = { property = "AddY", inc = -3 }, DeviceButton_down = { property = "AddY", inc = 3 },
+		DeviceButton_left = { property = "AddX", inc = -5 }, DeviceButton_right = { property = "AddX", inc = 5 }
 	},
 	DeviceButton_w = {
 		name = "DisplayPercent",
@@ -1191,6 +1201,7 @@ local function elementtobutton(name)
 		CenteredScore = "DisplayPercent",
 		TextPacemaker = "TargetTracker",
 		ProgressBarContainer = "FullProgressBar",
+		MiniProgressBarContainer = "MiniProgressBar",
 		VerticalLifeBar = "LifeP1",
 		TallyAndMetrics = "JudgeCounter",
 		NotefieldMean = "DisplayMean",

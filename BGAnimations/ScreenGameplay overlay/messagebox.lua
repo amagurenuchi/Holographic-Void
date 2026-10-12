@@ -69,6 +69,7 @@ return Def.ActorFrame {
 				"7: "..transStr("TargetTrackerPosition"),
 				"8: "..transStr("TargetTrackerSize"),
 				"9: "..transStr("FullProgressBarPosition"),
+				"q: "..transStr("MiniProgressBarPosition"),
 				"w: "..transStr("DisplayPercentPosition"),
 				"e: "..transStr("DisplayPercentSize"),
 				"r: "..transStr("NotefieldPosition"),

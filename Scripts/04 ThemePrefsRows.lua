@@ -203,8 +203,8 @@ local HVPrefRows = {
 	-- Show Mean on Notefield
 	HV_ShowMean = {
 		Default = "Mean",
-		Choices = {"Off", "Mean", "Tap Offset", "Std Dev", "J4 Score", "MA Ratio", "Delta Hand", "Time Remaining"},
-		Values = {"Off", "Mean", "TapOffset", "StdDev", "J4", "MARatio", "DeltaHand", "TimeRemaining"},
+		Choices = {"Off", "Mean", "Tap Offset", "Std Dev", "J4 Score", "MA Ratio", "Delta Hand"},
+		Values = {"Off", "Mean", "TapOffset", "StdDev", "J4", "MARatio", "DeltaHand"},
 	},
 	
 	-- Accent Color
@@ -542,6 +542,10 @@ local function HVThemePrefRow(name, title)
 		row.Choices = hvPref.Choices
 		row.Values = hvPref.Values
 	end
+	-- ThemePrefRow may omit layout metadata for custom rows; the options
+	-- screen requires this to be a string.
+	row.LayoutType = "ShowAllInRow"
+	row.SelectType = "SelectOne"
 	
 	row.ExportOnChange = true
 	
@@ -953,6 +957,11 @@ function OptionRowCustomizeGameplay()
 	}
 end
 _G["OptionRowCustomizeGameplay"] = OptionRowCustomizeGameplay
+
+function OptionRowMiniProgressBar()
+	return HVThemePrefRow("HV_MiniProgressBar", "Mini Progress Bar")
+end
+_G["OptionRowMiniProgressBar"] = OptionRowMiniProgressBar
 
 -- Practice Mode toggle (used in ScreenPlayerOptions)
 function PracticeMode()
