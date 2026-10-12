@@ -13,6 +13,12 @@ local profile = PROFILEMAN:GetProfile(pn)
 -- Autoplay results are not player scores.  Keep this local to the evaluation
 -- screen so autoplay can still be used normally during gameplay.
 local function isAutoplayEvaluation()
+	-- Replay evaluations (including online replays) are playback of an
+	-- existing score.  Their replay/controller metadata may contain
+	-- autoplay-like values, but they must never be treated as autoplay runs.
+	if HV.IsReplayPlayback and HV.IsReplayPlayback() then return false end
+	if HV.OnlineReplayActive == true or HV.OnlineEvaluationActive == true then return false end
+
 	-- A score opened from Song Select's Scores tab is a historical score
 	-- view, not the result of the current gameplay session.  This gate keeps
 	-- the persistent autoplay setting from affecting those evaluations.
