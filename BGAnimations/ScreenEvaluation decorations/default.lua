@@ -96,6 +96,9 @@ end
 -- State variables (declared early for function visibility)
 local curScore = scoringVoided and nil or pss:GetHighScore()
 local judge = 4
+-- The judge used for the play is the fixed baseline for PB comparisons.
+-- `judge` may be changed while inspecting the replay.
+local playedJudge = 4
 local judges = HV.EmulateRidiculousEnabled() and {"Ridiculous","TapNoteScore_W1","TapNoteScore_W2","TapNoteScore_W3","TapNoteScore_W4","TapNoteScore_W5","TapNoteScore_Miss"} or {"TapNoteScore_W1","TapNoteScore_W2","TapNoteScore_W3","TapNoteScore_W4","TapNoteScore_W5","TapNoteScore_Miss"}
 
 -- Rescoring/offset plot state
@@ -423,6 +426,7 @@ HV.SelectEvaluationScore = function(selected)
 	if scoringVoided or not selected then return false end
 	curScore = selected
 	judge = getJudgeForScore(curScore)
+	playedJudge = judge
 	local screen = SCREENMAN:GetTopScreen()
 	if curScore.GetReplay and curScore:GetReplay() and screen then
 		pcall(function()
@@ -521,6 +525,7 @@ local function getOsuManiaGradeColor(grade)
 	return maniaGradeColors[grade] or brightText
 end
 judge = getJudgeForScore(curScore)
+playedJudge = judge
 updateVectors()
 refreshRescoredPercentage()
 
@@ -660,7 +665,7 @@ function getComparisonWifePercent(score, currentPss, currentJudge)
 	-- Do not rescore the current PSS here: that compares the current play
 	-- against itself and can incorrectly produce a zero differential.
 	if score.GetRescoredWifeScore then
-		local ok, value = pcall(score.GetRescoredWifeScore, score, currentJudge)
+		local ok, value = pcall(score.GetRescoredWifeScore, score, playedJudge)
 		if ok and tonumber(value) then return tonumber(value) * 100 end
 	end
 	return score.GetWifeScore and score:GetWifeScore() * 100 or nil
@@ -970,6 +975,7 @@ local t = Def.ActorFrame {
 			curScore = pss:GetHighScore()
 		end
 		judge = getJudgeForScore(curScore)
+		playedJudge = judge
 		-- Historical score cards keep a different HighScore object, but the
 		-- evaluation widgets read judgment data from PlayerStageStats. Rebuild
 		-- those stats from the selected score's replay before refreshing them.
@@ -1838,13 +1844,17 @@ local function scoreBoard(pn)
 					local failed = curScore and curScore.GetWifeGrade and curScore:GetWifeGrade() == "Grade_Failed"
 					self:visible(not usingCustomWindows and not isManiaModeEnabled() and not failed)
 					if failed then return end
-					local current = rescoredPercentage or (evaluationWifeScore() * 100)
-					local best = getComparisonWifePercent(recScore, pss, judge)
+					-- Keep both sides on the judge used for the play. The displayed
+					-- judge may change, but it must not move this differential.
+					local current = getComparisonWifePercent(curScore, pss, playedJudge)
+						or rescoredPercentage or (evaluationWifeScore() * 100)
+					local best = getComparisonWifePercent(recScore, pss, playedJudge)
 					if best then
 						local diff = current - best
 						-- Keep small but real Wife% differences visible instead of
 						-- rounding them away to 0.00%.
-						self:settextf("%s %+.3f%%", comparisonArrow(diff), diff)
+						local judgeLabel = judge ~= playedJudge and string.format(" (J%d)", playedJudge) or ""
+						self:settextf("%s %+.3f%%%s", comparisonArrow(diff), diff, judgeLabel)
 					else self:settext("▲ New!") end
 					self:sleep(0.35):linear(0.15):diffusealpha(1)
 				end,
@@ -2085,11 +2095,16 @@ local function scoreBoard(pn)
 				if isOnlineEvaluation() or usingCustomWindows or isManiaModeEnabled() then self:settext(""):visible(false); return end
 				self:visible(true)
 				if recScore then
-					local pbDp = recScore.GetWifePoints and recScore:GetWifePoints() or (recScore:GetWifeScore() * songMaxPoints)
-					local curDp = evaluationWifeScore() * songMaxPoints
+					local pbPercent = getComparisonWifePercent(recScore, pss, playedJudge)
+					local currentPercent = getComparisonWifePercent(curScore, pss, playedJudge)
+					local pbDp = pbPercent and (pbPercent / 100) * songMaxPoints
+						or (recScore.GetWifePoints and recScore:GetWifePoints() or (recScore:GetWifeScore() * songMaxPoints))
+					local curDp = currentPercent and (currentPercent / 100) * songMaxPoints
+						or (evaluationWifeScore() * songMaxPoints)
 					local diff = curDp - pbDp
-					
-					self:settextf("%s %+.2f", comparisonArrow(diff), diff)
+					local judgeLabel = judge ~= playedJudge and string.format(" (J%d)", playedJudge) or ""
+
+					self:settextf("%s %+.2f%s", comparisonArrow(diff), diff, judgeLabel)
 				else
 					self:settext("▲ New!"):diffuse(accentColor)
 				end
