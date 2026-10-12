@@ -2297,6 +2297,9 @@ local function scoreBoard(pn)
 				local pct = count / songTotalNotes
 				self:finishtweening():linear(0.2):zoomto((col2X - pad - col1X) * pct, rowH - 2)
 			end,
+			LoadedCustomWindowMessageCommand = function(self) self:playcommand("SetJudge") end,
+			UnloadedCustomWindowMessageCommand = function(self) self:playcommand("SetJudge") end,
+			CustomWindowStateChangedMessageCommand = function(self) self:playcommand("SetJudge") end,
 			RATallyChangedCommand = function(self)
 				local count = 0
 				if showRATally then
@@ -2347,6 +2350,7 @@ local function scoreBoard(pn)
 				local count = getEvaluationRescoredJudgeCount(dvt, judge, v, k)
 				self:settext(count)
 			end,
+			CustomWindowStateChangedMessageCommand = function(self) self:playcommand("SetJudge") end,
 			RATallyChangedCommand = function(self)
 				if showRATally then
 					self:settext(k <= #raLabels and getRATallyCount(k) or "")
@@ -2379,6 +2383,9 @@ local function scoreBoard(pn)
 					self:settextf("%.1f%%", count / totalTaps * 100)
 				end
 			end,
+			LoadedCustomWindowMessageCommand = function(self) self:playcommand("SetJudge") end,
+			UnloadedCustomWindowMessageCommand = function(self) self:playcommand("SetJudge") end,
+			CustomWindowStateChangedMessageCommand = function(self) self:playcommand("SetJudge") end,
 			RATallyChangedCommand = function(self)
 				if showRATally then
 					local count = getRATallyCount(k)
@@ -2411,18 +2418,28 @@ local function scoreBoard(pn)
 		local ry = ratioStartY + row * 26
 		
 		board[#board + 1] = LoadFont("Common Normal") .. {
-			InitCommand = function(self) self:halign(col == 1 and 1 or 0):xy(col == 1 and rx + 30 or rx, ry):zoom(0.48):diffuse(ratioColors[ri]):settext(rlabel .. ":"):diffusealpha(0):visible(true) end,
+			InitCommand = function(self) self:halign(col == 1 and 1 or 0):xy(col == 1 and rx + 30 or rx, ry):zoom(0.48):diffuse(ratioColors[ri]):settext(rlabel .. ":"):diffusealpha(0):visible(ri > 2) end,
 			OnCommand = function(self)
+				self:visible(ri > 2 or not usingCustomWindows)
 				self:stoptweening():sleep(0.65 + ri * 0.05):linear(0.2):diffusealpha(1)
 			end,
-			ManiaModeChangedMessageCommand = function(self) self:visible(ri > 2 or not isManiaModeEnabled()) end
+			ManiaModeChangedMessageCommand = function(self) self:visible(ri > 2 or not isManiaModeEnabled()) end,
+			CustomWindowStateChangedMessageCommand = function(self) self:visible(ri > 2 or not usingCustomWindows) end,
+			LoadedCustomWindowMessageCommand = function(self) self:visible(ri > 2) end,
+			UnloadedCustomWindowMessageCommand = function(self) self:visible(ri > 2) end
 		}
 		board[#board + 1] = LoadFont("Common Normal") .. {
-			InitCommand = function(self) self:halign(col == 1 and 1 or 0):xy(col == 1 and rx + 75 or rx + 40, ry):zoom(0.5):diffuse(mainText):diffusealpha(0):visible(true) end,
+			InitCommand = function(self) self:halign(col == 1 and 1 or 0):xy(col == 1 and rx + 75 or rx + 40, ry):zoom(0.5):diffuse(mainText):diffusealpha(0):visible(ri > 2) end,
 			ManiaModeChangedMessageCommand = function(self)
 				self:visible(ri > 2 or not isManiaModeEnabled())
 				self:playcommand("SetJudge")
 			end,
+			CustomWindowStateChangedMessageCommand = function(self)
+				self:visible(ri > 2 or not usingCustomWindows)
+				self:playcommand("SetJudge")
+			end,
+			LoadedCustomWindowMessageCommand = function(self) self:visible(ri > 2); self:playcommand("SetJudge") end,
+			UnloadedCustomWindowMessageCommand = function(self) self:visible(ri > 2); self:playcommand("SetJudge") end,
 			OnCommand = function(self)
 				if maniaRescore then
 					self:settext(getManiaRatioText(ri)):diffuse(ratioColors[ri])
