@@ -2197,14 +2197,22 @@ local function scoreBoard(pn)
 							local diff
 							local currentIsNoPlay = currentCT == "ClearType_Noplay" or currentCT == "Noplay"
 							local recordIsNoPlay = recCT == "ClearType_Noplay" or recCT == "Noplay"
+							local function comparisonLevel(ct, isNoPlay)
+								if isNoPlay or ct == "ClearType_Noplay" or ct == "Noplay" then return 21 end
+								-- Failed is below every other result except No Play.
+								if ct == "ClearType_Failed" or ct == "Failed" then return 20 end
+								if ct == "ClearType_Invalid" or ct == "Invalid" then return 19 end
+								return getClearTypeLevel(ct)
+							end
 							if currentIsNoPlay and not recordIsNoPlay then
 								diff = -1
 							elseif not currentIsNoPlay and recordIsNoPlay then
 								diff = 1
 							else
-								diff = getClearTypeLevel(currentCT) - getClearTypeLevel(recCT)
+								diff = comparisonLevel(currentCT, currentIsNoPlay) - comparisonLevel(recCT, recordIsNoPlay)
 							end
-							self:settextf("Best: %s %s", getClearTypeText(recCT), comparisonArrow(diff))
+							local arrow = diff == 0 and "" or comparisonArrow(diff)
+							self:settextf("Best: %s%s", getClearTypeText(recCT), arrow == "" and "" or " " .. arrow)
 							self:diffuse(getClearTypeColor(recCT)):diffusealpha(0.6)
 						end
 					end
