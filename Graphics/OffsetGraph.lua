@@ -1030,7 +1030,8 @@ for i = 1, #fantabars do
 			
 			local c = offsetToJudgeColor(fit + 1, tso)
 			if usingCustomWindows and customOffsetToJudgeColor then
-				c = customOffsetToJudgeColor(fit + 1, getCurrentCustomWindowConfigJudgmentWindowTable())
+				local customWindows = getCurrentCustomWindowConfigJudgmentWindowTable()
+				if customWindows then c = customOffsetToJudgeColor(fit + 1, customWindows) end
 			end
 
 			local visible = math.abs(fit) <= maxOffset
@@ -1056,7 +1057,8 @@ for i = 1, #fantabars do
 			
 			local c = offsetToJudgeColor(fit + 1, tso)
 			if usingCustomWindows and customOffsetToJudgeColor then
-				c = customOffsetToJudgeColor(fit + 1, getCurrentCustomWindowConfigJudgmentWindowTable())
+				local customWindows = getCurrentCustomWindowConfigJudgmentWindowTable()
+				if customWindows then c = customOffsetToJudgeColor(fit + 1, customWindows) end
 			end
 
 			local visible = math.abs(fit) <= maxOffset
@@ -1305,7 +1307,8 @@ t[#t+1] = Def.ActorMultiVertex{
 				local rawOffset = offsetMs
 				local c = offsetToJudgeColor(offsetMs, tso)
 				if usingCustomWindows and customOffsetToJudgeColor then
-					c = customOffsetToJudgeColor(offsetMs, getCurrentCustomWindowConfigJudgmentWindowTable())
+					local customWindows = getCurrentCustomWindowConfigJudgmentWindowTable()
+					if customWindows then c = customOffsetToJudgeColor(offsetMs, customWindows) end
 				end
 				c = {c[1], c[2], c[3], 1}
 
