@@ -904,6 +904,8 @@ t[#t + 1] = Def.ActorFrame {
 					self:settext("0.00:1")
 				elseif statType == "DeltaHand" then
 					self:settext("0.0000%")
+				elseif statType == "TimeRemaining" then
+					self:settext("0:00")
 				else
 					self:settext("0.00ms")
 				end
@@ -1067,6 +1069,14 @@ t[#t + 1] = Def.ActorFrame {
 							self:settext("0.0000%")
 						end
 					end
+				elseif self.statType == "TimeRemaining" then
+					local steps = GAMESTATE:GetCurrentSteps()
+					local songPosition = GAMESTATE:GetSongPosition()
+					local chartEnd = steps and steps.GetLastSecond and steps:GetLastSecond() or 0
+					local current = songPosition and songPosition:GetMusicSeconds() or 0
+					local rate = math.max(0.01, getCurRateValue and getCurRateValue() or 1)
+					local remaining = math.max(0, (chartEnd - current) / rate)
+					self:settextf("%d:%02d", math.floor(remaining / 60), math.floor(remaining % 60))
 				else -- mean
 					if self.meancount > 0 then
 				        self:settextf("%.2fms", self.meansum / self.meancount)

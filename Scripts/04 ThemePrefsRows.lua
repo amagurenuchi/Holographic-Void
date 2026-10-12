@@ -203,8 +203,8 @@ local HVPrefRows = {
 	-- Show Mean on Notefield
 	HV_ShowMean = {
 		Default = "Mean",
-		Choices = {"Off", "Mean", "Tap Offset", "Std Dev", "J4 Score", "MA Ratio", "Delta Hand"},
-		Values = {"Off", "Mean", "TapOffset", "StdDev", "J4", "MARatio", "DeltaHand"},
+		Choices = {"Off", "Mean", "Tap Offset", "Std Dev", "J4 Score", "MA Ratio", "Delta Hand", "Time Remaining"},
+		Values = {"Off", "Mean", "TapOffset", "StdDev", "J4", "MARatio", "DeltaHand", "TimeRemaining"},
 	},
 	
 	-- Accent Color

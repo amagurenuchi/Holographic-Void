@@ -455,15 +455,15 @@ local HVPrefs = {
 	-- Gameplay: Show Hit Mean Display
 	HV_ShowHitMean = {
 		Default = "Mean",
-		Choices = {"Off", "Mean", "Tap Offset", "Std Dev", "J4 Score", "MA Ratio", "Delta Hand"},
-		Values = {"Off", "Mean", "TapOffset", "StdDev", "J4", "MARatio", "DeltaHand"}
+		Choices = {"Off", "Mean", "Tap Offset", "Std Dev", "J4 Score", "MA Ratio", "Delta Hand", "Time Remaining"},
+		Values = {"Off", "Mean", "TapOffset", "StdDev", "J4", "MARatio", "DeltaHand", "TimeRemaining"}
 	},
 
 	-- Gameplay: Show Hit Mean Display (Legacy compatibility)
 	HV_ShowMean = {
 		Default = "Mean",
-		Choices = {"Off", "Mean", "Std Dev", "J4 Score", "MA Ratio", "Delta Hand"},
-		Values = {"Off", "Mean", "StdDev", "J4", "MARatio", "DeltaHand"}
+		Choices = {"Off", "Mean", "Std Dev", "J4 Score", "MA Ratio", "Delta Hand", "Time Remaining"},
+		Values = {"Off", "Mean", "StdDev", "J4", "MARatio", "DeltaHand", "TimeRemaining"}
 	},
 
 	-- Gameplay: Mini (Receptor Size)
