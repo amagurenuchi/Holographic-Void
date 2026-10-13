@@ -499,7 +499,7 @@ local function GetCurrentBannerPath()
 end
 
 local function GetCurrentSongBackgroundPath()
-	local song = HV.CurrentSongData.song
+	local song = (HV.CurrentSongData and HV.CurrentSongData.song) or GAMESTATE:GetCurrentSong()
 	if song and song.GetBackgroundPath then
 		local bgPath = song:GetBackgroundPath()
 		if bgPath and bgPath ~= "" then
@@ -2474,17 +2474,15 @@ root[#root + 1] = Def.ActorFrame {
 	UpdateBannerCommand = function(self)
 		local bg = self:GetChild("PeekSongBackground")
 		if not bg then return end
-		if HV.GetSongBackgroundBrightness() <= 0 then
-			bg:visible(false)
-			return
-		end
 		local bgPath = GetCurrentSongBackgroundPath()
 		if not bgPath then
 			bg:visible(false)
 			return
 		end
 		if bg.lastPath ~= bgPath then
-			bg:LoadBackground(bgPath)
+			-- This overlay is the visible zoomed background.  Do not use the
+			-- engine brightness-gated loader: mouse hold always reveals it.
+			bg:Load(bgPath)
 			bg.lastPath = bgPath
 		end
 		bg:visible(true):diffuse(color("1,1,1,1")):diffusealpha(self.hv_holdLerp)

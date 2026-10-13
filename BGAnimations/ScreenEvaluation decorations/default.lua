@@ -2441,7 +2441,7 @@ local function scoreBoard(pn)
 		local ry = ratioStartY + row * 26
 		
 		board[#board + 1] = LoadFont("Common Normal") .. {
-			InitCommand = function(self) self:halign(col == 1 and 1 or 0):xy(col == 1 and rx + 30 or rx, ry):zoom(0.48):diffuse(ratioColors[ri]):settext(rlabel .. ":"):diffusealpha(0):visible(ri > 2) end,
+			InitCommand = function(self) self:halign(col == 1 and 1 or 0):xy(col == 1 and rx + 20 or rx, ry):zoom(0.48):diffuse(ratioColors[ri]):settext(rlabel .. ":"):diffusealpha(0):visible(ri > 2) end,
 			OnCommand = function(self)
 				self:visible(ri > 2 or not usingCustomWindows)
 				self:stoptweening():sleep(0.65 + ri * 0.05):linear(0.2):diffusealpha(1)
@@ -2452,7 +2452,7 @@ local function scoreBoard(pn)
 			UnloadedCustomWindowMessageCommand = function(self) self:visible(ri > 2) end
 		}
 		board[#board + 1] = LoadFont("Common Normal") .. {
-			InitCommand = function(self) self:halign(col == 1 and 1 or 0):xy(col == 1 and rx + 75 or rx + 40, ry):zoom(0.5):diffuse(mainText):diffusealpha(0):visible(ri > 2) end,
+			InitCommand = function(self) self:halign(col == 1 and 1 or 0):xy(col == 1 and rx + 75 or rx + 40, ry):zoom(0.5):diffuse(mainText):diffusealpha(0):visible(true) end,
 			ManiaModeChangedMessageCommand = function(self)
 				self:visible(ri > 2 or not isManiaModeEnabled())
 				self:playcommand("SetJudge")
