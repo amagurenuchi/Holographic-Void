@@ -884,16 +884,25 @@ t[#t + 1] = Def.ActorFrame {
 					local npsV = vectors[1]
 					local maxNPS = 0
 					local startMaxNPS = 0
-					local sumNPS = 0
+					local weightedNPS = 0
+					local includedWeight = 0
 					local length = (data.steps.GetLengthSeconds and data.steps:GetLengthSeconds() or 0) / rate
 					local firstCount = length > 0 and math.max(1, math.ceil(#npsV * math.min(20, length) / length)) or #npsV
 					for i = 1, #npsV do
 						local nps = npsV[i] or 0
 						if nps > maxNPS then maxNPS = nps end
 						if i <= firstCount and nps > startMaxNPS then startMaxNPS = nps end
-						sumNPS = sumNPS + nps
 					end
-					local averageNPS = sumNPS / #npsV
+					local sectionWeight = length > 0 and length / #npsV or 1
+					local npsFloor = maxNPS * 0.5
+					for i = 1, #npsV do
+						local nps = npsV[i] or 0
+						if nps >= npsFloor then
+							weightedNPS = weightedNPS + nps * sectionWeight
+							includedWeight = includedWeight + sectionWeight
+						end
+					end
+					local averageNPS = includedWeight > 0 and weightedNPS / includedWeight or 0
 					if maxNPS >= 2 then
 						self:GetChild("Start"):settextf("%.0f", startMaxNPS):diffuse(accentColor)
 						self:GetChild("Max"):settextf("%.0f", maxNPS):diffuse(accentColor)

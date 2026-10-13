@@ -315,6 +315,7 @@ local function updateSync(self)
 
 	-- Update info bar below CDG
 	if cdgInfoTimeRef and cdgInfoBPMRef and cdgInfoNPSRef and steps then
+		local displayRate = math.max(MIN_MUSIC_RATE, getCurRateValue())
 		if inGraph then
 			-- Hover mode: show hovered timestamp, BPM, and NPS in accent color
 			local relX    = mx - cdgX
@@ -323,7 +324,7 @@ local function updateSync(self)
 			local hoverBPM = getBPMAt(hoverT)
 			local hoverNPS = getNPSAt(p)
 
-			cdgInfoTimeRef:settextf("%s",         formatTime(hoverT)):diffuse(accentColor)
+			cdgInfoTimeRef:settextf("%s",         formatTime(hoverT / displayRate)):diffuse(accentColor)
 			cdgInfoBPMRef :settextf("%.0f BPM",   hoverBPM):diffuse(accentColor)
 			cdgInfoNPSRef :settextf("%.1f NPS",   hoverNPS):diffuse(accentColor)
 		else
@@ -332,7 +333,7 @@ local function updateSync(self)
 			local curBPM = getBPMAt(pos)
 			local curNPS = getNPSAt(p)
 
-			cdgInfoTimeRef:settextf("%s",         formatTime(pos)):diffuse(textDim)
+			cdgInfoTimeRef:settextf("%s",         formatTime(pos / displayRate)):diffuse(textDim)
 			cdgInfoBPMRef :settextf("%.0f BPM",   curBPM):diffuse(textSub)
 			cdgInfoNPSRef :settextf("%.1f NPS",   curNPS):diffuse(textSub)
 		end
@@ -771,9 +772,9 @@ local function densityGraphComp()
 			end
 		},
 
-		-- 70% Peak NPS Reference Line (drawn on top of graph)
+		-- Mean NPS Reference Line (drawn on top of graph)
 		Def.ActorFrame {
-			Name = "Peak70Container",
+			Name = "MeanNPSContainer",
 			InitCommand = function(self)
 				self:xy(-(SCREEN_WIDTH - 120)/2, 0)
 				self:halign(0)
@@ -786,24 +787,28 @@ local function densityGraphComp()
 					if vectors and vectors[1] then
 						local npsV = vectors[1]
 						local mNPS = 0
-						local maxRaw = 0
-						for i=1, #npsV do
-							local raw = npsV[i]
-							if raw > maxRaw then maxRaw = raw end
-							local val = npsV[i]  -- NPS values are already correct, don't multiply by 2
-							if val > mNPS then mNPS = val end
-						end
+						for i=1, #npsV do if npsV[i] > mNPS then mNPS = npsV[i] end end
 						if mNPS >= 2 then
-							local peak70 = mNPS * 0.7
-							-- Graph height is 70, center is 0, range is -35 to +35
-							-- 70% line should be 70% of the way up from bottom
-							local yPos = 35 - (0.7 * 70)  -- = 35 - 49 = -14
+							local chartLength = steps.GetLengthSeconds and (steps:GetLengthSeconds() or 0) / rate or 0
+							local sectionWeight = chartLength > 0 and chartLength / #npsV or 1
+							local npsFloor = mNPS * 0.5
+							local weightedNPS, includedWeight = 0, 0
+							for i=1, #npsV do
+								local nps = npsV[i] or 0
+								if nps >= npsFloor then
+									weightedNPS = weightedNPS + nps * sectionWeight
+
+									includedWeight = includedWeight + sectionWeight
+								end
+							end
+							local meanNPS = includedWeight > 0 and weightedNPS / includedWeight or 0
+							local yPos = 40 - (meanNPS / mNPS) * 80
 							self:y(yPos)
 							self:visible(true)
 							-- Update the text with the actual 70% NPS value
-							local textActor = self:GetChild("Peak70Text")
+							local textActor = self:GetChild("MeanNPSText")
 							if textActor then
-								textActor:settextf("%.1f (70%%)", peak70)
+								textActor:settextf("%.1f", meanNPS)
 							end
 						else
 							self:visible(false)
@@ -816,7 +821,7 @@ local function densityGraphComp()
 
 			-- The line (thicker with accent color)
 			Def.Quad {
-				Name = "Peak70Line",
+				Name = "MeanNPSLine",
 				InitCommand = function(self)
 					self:zoomto(SCREEN_WIDTH - 120, 2)
 					self:diffuse(accentColor)
@@ -827,14 +832,14 @@ local function densityGraphComp()
 
 			-- The text label (with accent color)
 			LoadFont("Common Normal") .. {
-				Name = "Peak70Text",
+				Name = "MeanNPSText",
 				InitCommand = function(self)
 					self:x(SCREEN_WIDTH - 130)
 					self:y(-4)
 					self:zoom(0.28)
 					self:diffuse(accentColor)
 					self:halign(1)
-					self:settext("-- (70%)")
+					self:settext("--")
 				end
 			}
 		},
