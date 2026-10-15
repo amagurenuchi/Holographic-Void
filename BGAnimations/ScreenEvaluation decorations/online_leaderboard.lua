@@ -125,6 +125,7 @@ local function selectLocalScore(index)
 	-- Keep the selected score in theme state; this Etterna build exposes no
 	-- SCOREMAN setter for replacing the stage's most-recent score.
 	HV.SelectedEvaluationScore = selected
+	HV.ViewingHistoricalEvaluationScore = true
 	if HV.SelectEvaluationScore then HV.SelectEvaluationScore(selected) end
 	MESSAGEMAN:Broadcast("ScoreChanged")
 end

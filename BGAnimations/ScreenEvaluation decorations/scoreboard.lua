@@ -78,6 +78,7 @@ local function selectScore(idx)
 	-- Set the score for viewing in the main eval screen
 	if hsTable[idx] then
 		HV.SelectedEvaluationScore = hsTable[idx]
+		HV.ViewingHistoricalEvaluationScore = true
 		if HV.SelectEvaluationScore then HV.SelectEvaluationScore(hsTable[idx]) end
 		MESSAGEMAN:Broadcast("ScoreChanged")
 		MESSAGEMAN:Broadcast("UpdateLocalScoreboard")

@@ -676,7 +676,10 @@ function comparisonArrow(diff)
 end
 
 local function isCurrentBestScore()
-	return scoreIndex == 1
+	-- A newly completed play can become rank 1, but it should still show
+	-- the advantage over the previous best.  "Best!" is for a best score
+	-- opened from the evaluation leaderboard.
+	return scoreIndex == 1 and HV.ViewingHistoricalEvaluationScore == true
 end
 
 function nearestGradeComparison(percent)

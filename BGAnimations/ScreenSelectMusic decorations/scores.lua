@@ -208,6 +208,11 @@ end
 local function ViewScore(score)
 	if not score then return end
 	local ss = score.score or score
+	-- Preserve the historical-score context for ScreenEvaluation.  This lets
+	-- the evaluation comparison distinguish a viewed best from a newly set
+	-- best produced by the most recent play.
+	HV.SelectedEvaluationScore = ss
+	HV.ViewingHistoricalEvaluationScore = true
 	HV.OnlineEvaluationActive = (currentView == VIEW_ONLINE)
 	HV.OnlineEvaluationName = HV.OnlineEvaluationActive and GetScoreDisplayName(ss) or nil
 	local screen = SCREENMAN:GetTopScreen()

@@ -1,5 +1,11 @@
 --- Holographic Void: ScreenSelectMusic Decorations
 
+-- A saved score is only being viewed while ScreenEvaluation was opened from
+-- the Scores tab. Reset this state whenever returning to song select so it
+-- cannot be mistaken for a newly completed play.
+HV.SelectedEvaluationScore = nil
+HV.ViewingHistoricalEvaluationScore = false
+
 -- ============================================================
 -- LAYOUT CONSTANTS
 -- ============================================================
