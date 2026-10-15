@@ -675,6 +675,10 @@ function comparisonArrow(diff)
 	return diff >= 0 and "▲" or "▼"
 end
 
+local function isCurrentBestScore()
+	return scoreIndex == 1
+end
+
 function nearestGradeComparison(percent)
 	if not percent or isManiaModeEnabled() then return "" end
 	local baseTiers = {
@@ -1849,7 +1853,9 @@ local function scoreBoard(pn)
 					local current = getComparisonWifePercent(curScore, pss, playedJudge)
 						or rescoredPercentage or (evaluationWifeScore() * 100)
 					local best = getComparisonWifePercent(recScore, pss, playedJudge)
-					if best then
+					if isCurrentBestScore() then
+						self:settext("Best!")
+					elseif best then
 						local diff = current - best
 						-- Keep small but real Wife% differences visible instead of
 						-- rounding them away to 0.00%.
@@ -2101,10 +2107,14 @@ local function scoreBoard(pn)
 						or (recScore.GetWifePoints and recScore:GetWifePoints() or (recScore:GetWifeScore() * songMaxPoints))
 					local curDp = currentPercent and (currentPercent / 100) * songMaxPoints
 						or (evaluationWifeScore() * songMaxPoints)
-					local diff = curDp - pbDp
-					local judgeLabel = judge ~= playedJudge and string.format(" (J%d)", playedJudge) or ""
+					if isCurrentBestScore() then
+						self:settext("Best!"):diffuse(accentColor)
+					else
+						local diff = curDp - pbDp
+						local judgeLabel = judge ~= playedJudge and string.format(" (J%d)", playedJudge) or ""
 
-					self:settextf("%s %+.2f%s", comparisonArrow(diff), diff, judgeLabel)
+						self:settextf("%s %+.2f%s", comparisonArrow(diff), diff, judgeLabel)
+					end
 				else
 					self:settext("▲ New!"):diffuse(accentColor)
 				end

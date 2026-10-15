@@ -47,6 +47,7 @@ local nrv = {}
 local ctt = {}
 local ntt = {}
 local wuab = {}
+local manipTrendValues = {}
 local columns = 4
 local finalSecond = 1
 local td
@@ -73,6 +74,7 @@ local trendMetricModes = {
 	{id = "sd", label = "Std Dev"},
 	{id = "ma", label = "MA"},
 	{id = "pa", label = "PA"},
+	{id = "manip", label = "Manip Factor"},
 }
 local trendColorModes = {
 	{id = "none", label = "None"},
@@ -288,6 +290,123 @@ local function getMetricValue(metricId, wifePct, judgments, mean, sd)
 	if metricId == "ma" then return judgments.W1 or 0 end
 	if metricId == "pa" then return judgments.W2 or 0 end
 	return wifePct
+end
+
+-- Build a cumulative manip-factor value for every scored note.  This stays in
+-- the graph instead of reaching into the evaluation decoration: actors loaded
+-- through LoadActor do not share a dependable Lua environment.
+local function buildManipTrend(params)
+	local values = {}
+	if not params.ctt or #params.ctt == 0 then return values end
+
+	local replayRate = 1
+	local screen = SCREENMAN:GetTopScreen()
+	if screen and screen.GetReplayRate then replayRate = screen:GetReplayRate() or 1 end
+	if replayRate <= 0 then replayRate = 1 end
+
+	local keys = {{}, {}, {}, {}}
+	for i = 1, #params.nrv do
+		local track = params.ctt[i]
+		local noteType = params.ntt and params.ntt[i]
+		if track and track >= 0 and track <= 3 and params.dvt[i] ~= nil and wuab[i] ~= nil
+			and noteType ~= "TapNoteType_Mine" and noteType ~= "TapNoteType_HoldTail" then
+			keys[track + 1][#keys[track + 1] + 1] = {
+				time = wuab[i] * 1000 / replayRate,
+				offset = params.dvt[i],
+			}
+		end
+	end
+
+	local function mean(list)
+		if #list == 0 then return 0 end
+		local sum = 0
+		for i = 1, #list do sum = sum + list[i] end
+		return sum / #list
+	end
+
+	local function percentile(sorted, p)
+		if #sorted == 0 then return nil end
+		local pos = (p / 100) * (#sorted - 1) + 1
+		local lo, hi = math.floor(pos), math.ceil(pos)
+		if lo == hi then return sorted[lo] end
+		return sorted[lo] + (pos - lo) * (sorted[hi] - sorted[lo])
+	end
+
+	local function deviations(from, previous)
+		if #from < 2 or #previous < 2 then return {} end
+		local fromTimes, previousTimes = {}, {}
+		for i = 1, #from do fromTimes[i] = from[i].time end
+		for i = 1, #previous do previousTimes[i] = previous[i].time end
+		table.sort(fromTimes)
+		table.sort(previousTimes)
+
+		local function intervals(times)
+			local result = {}
+			for i = 2, #times do
+				local diff = times[i] - times[i - 1]
+				if diff ~= 0 then result[#result + 1] = diff end
+			end
+			return result
+		end
+		local a, b = intervals(fromTimes), intervals(previousTimes)
+		if #a == 0 or #b == 0 then return {} end
+		table.sort(a); table.sort(b)
+		local lowA, highA = percentile(a, 5), percentile(a, 95)
+		local lowB, highB = percentile(b, 5), percentile(b, 95)
+		local filteredA, filteredB = {}, {}
+		for i = 1, #a do if a[i] > lowA - 0.1 and a[i] < highA + 0.1 then filteredA[#filteredA + 1] = a[i] end end
+		for i = 1, #b do if b[i] > lowB - 0.1 and b[i] < highB + 0.1 then filteredB[#filteredB + 1] = b[i] end end
+		local averageInterval = (mean(filteredA) + mean(filteredB)) / 4
+		if averageInterval <= 0 then return {} end
+
+		table.sort(from, function(x, y) return x.time < y.time end)
+		table.sort(previous, function(x, y) return x.time < y.time end)
+		local result, finder = {}, 1
+		for i = 1, #from do
+			local last
+			for j = finder, #previous do
+				if previous[j].time < from[i].time - 0.1 then last, finder = previous[j], j else break end
+			end
+			if last then
+				local value = math.abs((last.offset - from[i].offset) / averageInterval)
+				if value <= 1.5 then result[#result + 1] = {time = from[i].time, value = value} end
+			end
+		end
+		return result
+	end
+
+	local series = {deviations(keys[1], keys[2]), deviations(keys[2], keys[1]), deviations(keys[3], keys[4]), deviations(keys[4], keys[3])}
+	local cursors, sums, counts = {1, 1, 1, 1}, {0, 0, 0, 0}, {0, 0, 0, 0}
+	for i = 1, #params.nrv do
+		local time = wuab[i] and wuab[i] * 1000 / replayRate
+		if time then
+			for k = 1, 4 do
+				while series[k][cursors[k]] and series[k][cursors[k]].time <= time do
+					sums[k] = sums[k] + series[k][cursors[k]].value
+					counts[k] = counts[k] + 1
+					cursors[k] = cursors[k] + 1
+				end
+			end
+			local sum, count = 0, 0
+			for k = 1, 4 do sum, count = sum + sums[k], count + counts[k] end
+			values[i] = count > 0 and (sum / count) * 100 or 0
+		end
+	end
+	return values
+end
+
+local function getPointHoverNote(row)
+	local bestIndex, bestDistance
+	for i = 1, #nrv do
+		if dvt[i] ~= nil and nrv[i] ~= nil then
+			local distance = math.abs(nrv[i] - row)
+			if not bestDistance or distance < bestDistance then
+				bestIndex, bestDistance = i, distance
+			end
+		end
+	end
+	if not bestIndex then return nil end
+	return bestIndex, dvt[bestIndex], manipTrendValues[bestIndex] or 0
 end
 
 local function calculateSliceStats(x1, x2, params)
@@ -640,6 +759,7 @@ t[#t+1] = Def.Quad{
 				wuab[i] = stepsTD:GetElapsedTimeFromNoteRow(params.nrv[i])
 			end
 		end
+		manipTrendValues = buildManipTrend(params)
 		self:zoomto(params.width, params.height)
 		refreshSliceStats(params)
 	end,
@@ -717,8 +837,10 @@ t[#t+1] = Def.Quad{
 						local mean = snapshot:GetMean()
 						local sd = snapshot:GetStandardDeviation()
 						local timebro = td:GetElapsedTimeFromNoteRow(row) / getCurRateValue()
-						txt:settextf("%.2f%%\nMarv: %d\nPerf: %d\nGreat: %d\nGood: %d\nBad: %d\nMiss: %d\nSD: %.2fms\nMean: %.2fms\nTime: %.2fs",
+						local _, tapOffset, manipFactor = getPointHoverNote(row)
+						txt:settextf("%.2f%%\nTap: %+0.2fms\nMF: %.2f%%\nMarv: %d\nPerf: %d\nGreat: %d\nGood: %d\nBad: %d\nMiss: %d\nSD: %.2fms\nMean: %.2fms\nTime: %.2fs",
 							wifescore,
+							tapOffset or 0, manipFactor or 0,
 							judgments["W1"] or 0, judgments["W2"] or 0,
 							judgments["W3"] or 0, judgments["W4"] or 0,
 							judgments["W5"] or 0, judgments["Miss"] or 0,
@@ -926,6 +1048,7 @@ t[#t+1] = Def.ActorMultiVertex{
 		local validCount = 0
 		local runningMean = 0
 		local m2 = 0
+		local manipValues = metricId == "manip" and buildManipTrend(params) or nil
 		local points = {}
 		local minVal = math.huge
 		local maxVal = -math.huge
@@ -948,7 +1071,8 @@ t[#t+1] = Def.ActorMultiVertex{
 				local sd = validCount > 1 and math.sqrt(m2 / (validCount - 1)) or 0
 				local clearType = getClearTypeFromCounts(judgments, wifePct)
 				local grade = getWifeGradeTier and getWifeGradeTier(wifePct) or "Grade_Tier16"
-				local metricValue = getMetricValue(metricId, wifePct, judgments, runningMean, sd)
+				local metricValue = manipValues and (manipValues[i] or 0)
+					or getMetricValue(metricId, wifePct, judgments, runningMean, sd)
 
 				points[#points + 1] = {
 					x = fitX(wuab[i]) + params.width / 2,

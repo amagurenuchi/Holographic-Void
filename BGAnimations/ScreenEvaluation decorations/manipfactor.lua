@@ -24,10 +24,10 @@ local wuab = {} -- note timing vector
 local ntt = {} -- note type vector
 
 -- key data
-local key0Data
-local key1Data
-local key2Data
-local key3Data
+local key0Data = false
+local key1Data = false
+local key2Data = false
+local key3Data = false
 
 -- deviations
 local k0to1 = {}
@@ -69,6 +69,7 @@ local function ArithmeticMean(x)
 end
 
 local function ArithmeticMeanForDeviatons(x)
+    if not x or #x == 0 then return 0 end
     local sum = 0
     for i = 1, #x do
         sum = sum + x[i][2]
@@ -379,6 +380,8 @@ t[#t + 1] = Def.ActorFrame {
 
             self:diffuse(byMF(mf[1]))
             self:settextf("%2.1f%%", mf[1] * 100)
+            self:GetParent():GetChild("ManipFactorHands"):queuecommand("Set")
+            MESSAGEMAN:Broadcast("JudgeDisplayChanged")
         end,
         MouseOverCommand = function(self)
             if aspectRatio < 1.6 then
@@ -390,6 +393,26 @@ t[#t + 1] = Def.ActorFrame {
         MouseOutCommand = function(self)
             self:settextf("%2.1f%%", mf[1] * 100)
         end
+    },
+    -- Per-hand values remain visible below the overall manip factor.  The
+    -- hover state above still expands the display when more room is useful.
+    LoadFont("Common Normal") .. {
+        Name = "ManipFactorHands",
+        InitCommand = function(self)
+            self:xy(mfDisplayX + 35, mfDisplayY + 14)
+            self:zoom(mfDisplayZoom * 0.82)
+            self:halign(0)
+            self:maxwidth(480)
+            self:queuecommand("Set")
+        end,
+        SetCommand = function(self)
+            self:settextf("L: %2.1f%%  R: %2.1f%%", (mf[2] or 0) * 100, (mf[3] or 0) * 100)
+            self:diffuse(HVColor.TextSub)
+        end,
+        GetScoreMessageCommand = function(self, params)
+            if params.score then score = params.score end
+            self:queuecommand("Set")
+        end,
     }
 }
 
