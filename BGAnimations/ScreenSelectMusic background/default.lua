@@ -72,11 +72,11 @@ t[#t + 1] = Def.Sprite {
 	end,
 	SetCommand = function(self)
 		local song = GAMESTATE:GetCurrentSong()
-		-- Always load the texture when a song provides one.  BGBrightness is
-		-- applied through alpha below, so 0% keeps it hidden without preventing
-		-- mouse-hold zoom from revealing it.
-		if song and song:GetBackgroundPath() then
-			self:visible(true):Load(song:GetBackgroundPath())
+		local showBG = HV.ShowSongBackground()
+		-- The normal background stays brightness-gated.  The dedicated peek
+		-- overlay owns direct background loading while mouse hold is active.
+		if song and showBG and HV.GetSongBackgroundBrightness() > 0 and song:GetBackgroundPath() then
+			self:visible(true):LoadBackground(song:GetBackgroundPath())
 			self:zoomto(SCREEN_WIDTH * parallaxZoom, SCREEN_HEIGHT * parallaxZoom)
 			local brightness = HV.GetSongBackgroundBrightness()
 			local boosted = brightness + ((1 - brightness) * self.hv_holdLerp)

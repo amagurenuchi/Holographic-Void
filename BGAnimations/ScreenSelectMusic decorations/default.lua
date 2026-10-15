@@ -2491,12 +2491,12 @@ root[#root + 1] = Def.ActorFrame {
 		self:playcommand("Set")
 	end,
 	CurrentSongChangedMessageCommand = function(self)
-		if self:GetVisible() then
+		if self.hv_holdTarget > 0 then
 			self:playcommand("UpdateBanner")
 		end
 	end,
 	DelayedChartUpdateMessageCommand = function(self)
-		if self:GetVisible() then
+		if self.hv_holdTarget > 0 then
 			self:playcommand("UpdateBanner")
 		end
 	end,
