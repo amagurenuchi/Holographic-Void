@@ -717,7 +717,7 @@ function nearestGradeComparison(percent)
 	local threshold = WifeTiers[target] or 0
 	-- AAAAA has no higher grade tier to target; compare it directly to 100%.
 	if currentIndex == 1 then threshold = 1 end
-	local precision = currentIndex <= 4 and 4 or 2
+	local precision = targetIndex <= 2 and 4 or 2
 	return string.format("%s %+0." .. precision .. "f", HV.GetGradeName(target), wifeDP - (threshold * songMaxPoints))
 end
 local clearType = scoringVoided and nil or getClearType(pn, steps, curScore)
