@@ -181,9 +181,17 @@ local function getJudgeForScore(score)
 end
 
 local function formatWifePercent(pct)
+	if pct >= 100 then return "100%" end
 	local precision = pct >= 99 and 4 or 2
 	local rounded = roundTo(pct, precision)
 	return string.format("%." .. precision .. "f%%", rounded)
+end
+
+local function setPerfectScoreGlow(actor, perfect)
+	actor:stoptweening():glow(color("0,0,0,0"))
+	if perfect then
+		actor:glow(accent):linear(0.45):glow(color("0,0,0,0")):linear(0.45):glow(accent):queuecommand("PerfectScoreGlow")
+	end
 end
 
 local evalModShorthands = {
@@ -1786,6 +1794,7 @@ local function scoreBoard(pn)
 					
 					if progress >= 1 then
 						self:SetUpdateFunction(nil)
+						setPerfectScoreGlow(label, targetWife >= 100)
 					end
 				end)
 			end,
@@ -1830,7 +1839,8 @@ local function scoreBoard(pn)
 
 			LoadFont("Common Large") .. {
 				Name = "WifeScoreLabel",
-				InitCommand = function(self) self:halign(0):valign(0):xy(0,-3):zoom(0.72):diffuse(mainText):diffusealpha(0) end,
+				InitCommand = function(self) self:halign(0):valign(0):xy(0,-3):zoom(0.72):diffuse(mainText):diffusealpha(0):glow(color("0,0,0,0")) end,
+				PerfectScoreGlowCommand = function(self) self:linear(0.45):glow(accent):linear(0.45):glow(color("0,0,0,0")):queuecommand("PerfectScoreGlow") end,
 				SetJudgeCommand = function(self)
 					if usingCustomWindows then return end
 					if rescoredPercentage then

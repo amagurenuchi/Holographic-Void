@@ -589,7 +589,7 @@ for i = 1, pageSize do
 		Def.Quad { Name = "Bg", InitCommand = function(self) self:halign(0):valign(0):zoomto(overlayW - 50, rowH - 4):diffuse(color("0,0,0,0.2")) end },
 		LoadFont("Common Normal") .. { Name = "Rank", InitCommand = function(self) self:halign(0):valign(0.5):y(rowH/2):zoom(0.35):diffuse(dimText) end },
 		LoadFont("Common Normal") .. { Name = "Player", InitCommand = function(self) self:halign(0):valign(0.5):x(30):y(rowH/2):zoom(0.42):diffuse(mainText):maxwidth(150 / 0.42) end },
-		LoadFont("Common Normal") .. { Name = "Wife", InitCommand = function(self) self:halign(0):valign(0.5):x(190):y(rowH/2 - 5):zoom(0.40):diffuse(brightText) end },
+		LoadFont("Common Normal") .. { Name = "Wife", InitCommand = function(self) self:halign(0):valign(0.5):x(190):y(rowH/2 - 5):zoom(0.40):diffuse(brightText) end, PerfectScoreGlowCommand = function(self) self:linear(0.45):glow(accentColor):linear(0.45):glow(color("0,0,0,0")):queuecommand("PerfectScoreGlow") end },
 		LoadFont("Common Normal") .. { Name = "Judge", InitCommand = function(self) self:halign(1):valign(0.5):x(185):y(rowH/2 - 5):zoom(0.30):diffuse(subText) end },
 		LoadFont("Common Normal") .. { Name = "Judgments", InitCommand = function(self) self:halign(0):valign(0.5):x(190):y(rowH/2 + 8):zoom(0.28):diffuse(subText) end },
 		LoadFont("Common Normal") .. { Name = "SSR", InitCommand = function(self) self:halign(0):valign(0.5):x(280):y(rowH/2):zoom(0.50):diffuse(brightText):visible(HV.ShowMSD()) end },
@@ -650,10 +650,13 @@ for i = 1, pageSize do
 					end
 					
 					if wife >= 99.7 then
-						self:GetChild("Wife"):settextf("%.4f%%", wife)
+						self:GetChild("Wife"):settext(wife >= 100 and "100%" or string.format("%.4f%%", wife))
 					else
 						self:GetChild("Wife"):settextf("%.2f%%", wife)
 					end
+					local wifeLabel = self:GetChild("Wife")
+					wifeLabel:stoptweening():glow(color("0,0,0,0"))
+					if wife >= 100 then wifeLabel:glow(accentColor):linear(0.45):glow(color("0,0,0,0")):linear(0.45):glow(accentColor):queuecommand("PerfectScoreGlow") end
 					
 					local norm = PREFSMAN:GetPreference("SortBySSRNormPercent")
 					local judgeIndex = ""
@@ -714,10 +717,13 @@ for i = 1, pageSize do
 
 						local wife = s:GetWifeScore() * 100
 						if wife >= 99.7 then
-							self:GetChild("Wife"):settextf("%.4f%%", wife)
+							self:GetChild("Wife"):settext(wife >= 100 and "100%" or string.format("%.4f%%", wife))
 						else
 							self:GetChild("Wife"):settextf("%.2f%%", wife)
 						end
+						local wifeLabel = self:GetChild("Wife")
+						wifeLabel:stoptweening():glow(color("0,0,0,0"))
+						if wife >= 100 then wifeLabel:glow(accentColor):linear(0.45):glow(color("0,0,0,0")):linear(0.45):glow(accentColor):queuecommand("PerfectScoreGlow") end
 						
 						self:GetChild("Judge"):settext("")
 
