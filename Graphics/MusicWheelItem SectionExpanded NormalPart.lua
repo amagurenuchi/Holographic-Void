@@ -66,6 +66,30 @@ local function getGradeColor(tier)
 	return HVColor.GetGradeColor("Grade_" .. tier)
 end
 
+local function getPackLamp(songs)
+	local lowestLevel, lowestType = 0, nil
+	local stepsType = GAMESTATE:GetCurrentStyle():GetStepsType()
+	for _, song in ipairs(songs) do
+		local songLevel, songType
+		for _, steps in ipairs(song:GetStepsByStepsType(stepsType)) do
+			local scoreList = SCOREMAN:GetScoresByKey(steps:GetChartKey())
+			if scoreList then
+				for _, rateScores in pairs(scoreList) do
+					for _, score in ipairs(rateScores:GetScores() or {}) do
+						local ct = getClearType(PLAYER_1, steps, score)
+						local level = getClearTypeLevel(ct)
+						if level < 19 and (not songLevel or level < songLevel) then songLevel, songType = level, ct end
+					end
+				end
+			end
+		end
+		if not songLevel then return nil end
+		if songLevel > lowestLevel then lowestLevel, lowestType = songLevel, songType end
+	end
+	local key = tostring(lowestType or "")
+	return key:find("^ClearType_") and key or "ClearType_" .. key
+end
+
 local progressionBar = Def.ActorFrame {
 	Name = "ProgressionBar",
 	InitCommand = function(self)
@@ -128,7 +152,8 @@ local progressionBar = Def.ActorFrame {
 			bg:stoptweening():halign(0):x(currentX):zoomto(math.max(0, remainingW), barH):diffusealpha(0.4)
 		end
 
-		self.hv_stats = { cleared = totalCleared, total = totalSongs, percent = percent }
+		self.hv_stats = { cleared = totalCleared, total = totalSongs, percent = percent,
+			lamp = percent >= 1 and getPackLamp(songs) or nil }
 	end
 }
 
@@ -149,6 +174,21 @@ progressionBar[#progressionBar + 1] = Def.Quad {
 }
 
 t[#t + 1] = progressionBar
+
+t[#t + 1] = Def.ActorFrame {
+	Name = "PackLamp",
+	InitCommand = function(self) self:x(wheelItemW / 2 - 10):y(16):halign(1):draworder(151) end,
+	SetMessageCommand = function(self)
+		local stats = self:GetParent():GetChild("ProgressionBar").hv_stats
+		local label = self:GetChild("Text")
+		if stats and stats.lamp then
+			label:settext(getClearTypeText(stats.lamp)):diffuse(getClearTypeColor(stats.lamp)):visible(true)
+		else
+			label:visible(false)
+		end
+	end,
+	LoadFont("Common Normal") .. { Name = "Text", InitCommand = function(self) self:zoom(0.32) end }
+}
 
 -- Engine text color and title alignment override
 t[#t + 1] = Def.Actor {

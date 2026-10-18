@@ -120,16 +120,13 @@ local root = Def.ActorFrame {
 local function makePackGradeItem(grade, index)
 	return Def.ActorFrame {
 		Name = "Grade_" .. grade,
-		InitCommand = function(self)
-			self:x(((index - 1) % 4) * 68):y(38 + math.floor((index - 1) / 4) * 14)
-		end,
 		LoadFont("Common Normal") .. {
 			Name = "Label",
 			InitCommand = function(self) self:halign(0) end
 		},
 		LoadFont("Common Normal") .. {
 			Name = "Count",
-			InitCommand = function(self) self:x(37):halign(0):diffuse(subText) end
+			InitCommand = function(self) self:x(52):halign(0):diffuse(subText) end
 		}
 	}
 end
@@ -154,6 +151,37 @@ local t = Def.ActorFrame {
 		self.hv_holdTarget = held and 1 or 0
 	end
 }
+
+local function getPackLamp(songs, stepsType)
+	local lowestLevel = 0
+	local lowestType = nil
+	for _, song in ipairs(songs) do
+		local songLevel = nil
+		local songType = nil
+		for _, steps in ipairs(song:GetStepsByStepsType(stepsType)) do
+			local scoreList = SCOREMAN:GetScoresByKey(steps:GetChartKey())
+			if scoreList then
+				for _, rateScores in pairs(scoreList) do
+					for _, score in ipairs(rateScores:GetScores() or {}) do
+						local ct = getClearType(PLAYER_1, steps, score)
+						local level = getClearTypeLevel(ct)
+						if level < 19 and (not songLevel or level < songLevel) then
+							songLevel = level
+							songType = ct
+						end
+					end
+				end
+			end
+		end
+		if not songLevel then return nil end
+		if songLevel > lowestLevel then
+			lowestLevel = songLevel
+			local key = tostring(songType)
+			lowestType = key:find("^ClearType_") and key or "ClearType_" .. key
+		end
+	end
+	return lowestType
+end
 root[#root + 1] = t
 
 
@@ -175,6 +203,7 @@ HV.CurrentSongData = {
 	packMSDDistribution = {}, -- Histogram of every chart's overall MSD in the selected pack
 	packChartCount = 0,
 	packGradeDistribution = {}, -- Main grade counts for the selected pack (midgrades excluded)
+	packLamp = nil,
 	songCount = 0,
 	progress = 0,
 	rate = 1.0,
@@ -310,6 +339,7 @@ t[#t + 1] = Def.Actor {
 		data.packMSDDistribution = {}
 		data.packChartCount = 0
 		data.packGradeDistribution = {}
+		data.packLamp = nil
 		if not data.song then
 			local screen = SCREENMAN:GetTopScreen()
 			if screen and screen.GetMusicWheel then
@@ -364,6 +394,7 @@ t[#t + 1] = Def.Actor {
 						data.avgMSD = countedSongs > 0 and (totalMSD / countedSongs) or 0
 						data.packMSDDistribution = packBins
 						data.progress = data.songCount > 0 and (clearedSongs / data.songCount) * 100 or 0
+						if data.progress >= 100 then data.packLamp = getPackLamp(songs, stype) end
 					end
 				end
 			end
@@ -645,14 +676,22 @@ t[#t + 1] = Def.ActorFrame {
 			local data = HV.CurrentSongData
 			if not data.song and data.group and data.group ~= "" then
 				local counts = data.packGradeDistribution or {}
-				self:GetChild("Summary"):settextf("%d Songs\nProgress: %.1f%%", data.songCount, data.progress)
+				if data.packLamp then
+					self:GetChild("Summary"):settextf("%d Songs\nLamp: %s", data.songCount, getClearTypeText(data.packLamp))
+				else
+					self:GetChild("Summary"):settextf("%d Songs\nProgress: %.1f%%", data.songCount, data.progress)
+				end
+				local visibleGrade = 0
 				for i, grade in ipairs({"AAAAA", "AAAA", "AAA", "AA", "A", "B", "C", "D"}) do
 					local item = self:GetChild("Grade_" .. grade)
 					local count = counts[grade] or 0
 					item:visible(count > 0)
 					if count > 0 then
-						item:GetChild("Label"):settext(grade):diffuse(HVColor.GetGradeColor(grade))
-						item:GetChild("Count"):settext(tostring(count))
+						visibleGrade = visibleGrade + 1
+						item:xy(((visibleGrade - 1) % 4) * 90, 52 + math.floor((visibleGrade - 1) / 4) * 14)
+						local label = item:GetChild("Label")
+						label:settext(grade):diffuse(HVColor.GetGradeColor(grade))
+						item:GetChild("Count"):x(label:GetWidth() + 8):settext(tostring(count))
 					end
 				end
 				self:visible(true)
