@@ -1792,7 +1792,8 @@ local function scoreBoard(pn)
 				
 				-- Incremental counting
 				local val = math.max(0, wife)
-				local duration = 0.2
+				-- it is buggy idk why.
+				local duration = 0.4
 				local curTime = 0
 				local targetWife = wife
 				self:SetUpdateFunction(function(self, delta)
@@ -2041,8 +2042,8 @@ local function scoreBoard(pn)
 				local displayPct = rescoredPercentage or (evaluationWifeScore() * 100)
 				local dp = isManiaModeEnabled() and getOsuManiaLongScore() or customDP or ((displayPct / 100) * songMaxPoints)
 				local targetDP = dp
-				
-				local duration = 0.2
+
+				local duration = 0.4
 				local curTime = 0
 
 				self:stoptweening():sleep(0.4):linear(0.15):diffusealpha(1)
@@ -2075,7 +2076,6 @@ local function scoreBoard(pn)
 				Name = "WholeDP",
 				InitCommand = function(self) self:halign(0):valign(1):xy(0, 5):zoom(0.8):diffuse(accentColor) end,
 				SetJudgeCommand = function(self)
-					self:GetParent():SetUpdateFunction(nil)
 					if rescoredPercentage then
 						local dp = isManiaModeEnabled() and getOsuManiaLongScore() or ((rescoredPercentage / 100) * songMaxPoints)
 						local decimalPart = self:GetParent():GetChild("DecimalDP")
