@@ -181,16 +181,18 @@ local function getJudgeForScore(score)
 end
 
 local function formatWifePercent(pct)
-	if pct >= 100 then return "100%" end
 	local precision = pct >= 99 and 4 or 2
 	local rounded = roundTo(pct, precision)
+	if pct >= 100 then return "100%" end
 	return string.format("%." .. precision .. "f%%", rounded)
 end
 
-local function setPerfectScoreGlow(actor, perfect)
+setPerfectScoreGlow = function(actor, perfect)
+	if not actor then return end
+	local perfectGlowColor = (HVColor and HVColor.Accent) or color("#5ABAFF")
 	actor:stoptweening():glow(color("0,0,0,0"))
 	if perfect then
-		actor:glow(accent):linear(0.45):glow(color("0,0,0,0")):linear(0.45):glow(accent):queuecommand("PerfectScoreGlow")
+		actor:glow(perfectGlowColor):linear(0.45):glow(color("0,0,0,0")):linear(0.45):glow(perfectGlowColor):queuecommand("PerfectScoreGlow")
 	end
 end
 
@@ -692,6 +694,7 @@ end
 
 function nearestGradeComparison(percent)
 	if not percent or isManiaModeEnabled() then return "" end
+	if percent >= 100 then return "100%!" end
 	local baseTiers = {
 		"Grade_Tier01", "Grade_Tier04", "Grade_Tier07", "Grade_Tier10",
 		"Grade_Tier13", "Grade_Tier14", "Grade_Tier15", "Grade_Tier16",
@@ -711,8 +714,11 @@ function nearestGradeComparison(percent)
 	end
 	local target = baseTiers[targetIndex]
 	local wifeDP = score * songMaxPoints
-	local thresholdDP = (WifeTiers[target] or 0) * songMaxPoints
-	return string.format("%s %+0.2f", HV.GetGradeName(target), wifeDP - thresholdDP)
+	local threshold = WifeTiers[target] or 0
+	-- AAAAA has no higher grade tier to target; compare it directly to 100%.
+	if currentIndex == 1 then threshold = 1 end
+	local precision = currentIndex <= 4 and 4 or 2
+	return string.format("%s %+0." .. precision .. "f", HV.GetGradeName(target), wifeDP - (threshold * songMaxPoints))
 end
 local clearType = scoringVoided and nil or getClearType(pn, steps, curScore)
 
@@ -1779,6 +1785,9 @@ local function scoreBoard(pn)
 			OnCommand = function(self)
 				local label = self:GetChild("WifeScoreLabel")
 				local wife = rescoredPercentage or (evaluationWifeScore() * 100)
+				-- Set the final value immediately as a fallback.  The animated update
+				-- below may not run on every evaluation screen lifecycle.
+				label:settext(formatEvaluationPercent(wife))
 				label:sleep(0.35):linear(0.15):diffusealpha(1)
 				
 				-- Incremental counting
@@ -1840,12 +1849,10 @@ local function scoreBoard(pn)
 			LoadFont("Common Large") .. {
 				Name = "WifeScoreLabel",
 				InitCommand = function(self) self:halign(0):valign(0):xy(0,-3):zoom(0.72):diffuse(mainText):diffusealpha(0):glow(color("0,0,0,0")) end,
-				PerfectScoreGlowCommand = function(self) self:linear(0.45):glow(accent):linear(0.45):glow(color("0,0,0,0")):queuecommand("PerfectScoreGlow") end,
+				PerfectScoreGlowCommand = function(self) self:linear(0.45):glow(accentColor):linear(0.45):glow(color("0,0,0,0")):queuecommand("PerfectScoreGlow") end,
 				SetJudgeCommand = function(self)
 					if usingCustomWindows then return end
-					if rescoredPercentage then
-						self:settext(formatEvaluationPercent(rescoredPercentage))
-					end
+					self:settext(formatEvaluationPercent(rescoredPercentage or (evaluationWifeScore() * 100)))
 				end,
 				ManiaModeChangedMessageCommand = function(self) self:playcommand("SetJudge") end,
 				LoadedCustomWindowMessageCommand = function(self)

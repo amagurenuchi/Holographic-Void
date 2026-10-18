@@ -2009,6 +2009,7 @@ end
 formatPercent = function(score)
 	if not score then return "" end
 	local percent = score:GetWifeScore() * 100
+	if percent >= 100 then return "100%" end
 	return string.format(percent >= 99.7 and "%.4f%%" or "%.2f%%", percent)
 end
 
