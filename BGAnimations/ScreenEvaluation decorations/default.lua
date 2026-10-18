@@ -1803,7 +1803,6 @@ local function scoreBoard(pn)
 					
 					if progress >= 1 then
 						self:SetUpdateFunction(nil)
-						setPerfectScoreGlow(label, targetWife >= 100)
 					end
 				end)
 			end,
@@ -1849,6 +1848,10 @@ local function scoreBoard(pn)
 			LoadFont("Common Large") .. {
 				Name = "WifeScoreLabel",
 				InitCommand = function(self) self:halign(0):valign(0):xy(0,-3):zoom(0.72):diffuse(mainText):diffusealpha(0):glow(color("0,0,0,0")) end,
+				OnCommand = function(self)
+					local wife = rescoredPercentage or (evaluationWifeScore() * 100)
+					self:settext(formatEvaluationPercent(wife)):sleep(0.35):linear(0.15):diffusealpha(1)
+				end,
 				PerfectScoreGlowCommand = function(self) self:linear(0.45):glow(accentColor):linear(0.45):glow(color("0,0,0,0")):queuecommand("PerfectScoreGlow") end,
 				SetJudgeCommand = function(self)
 					if usingCustomWindows then return end
