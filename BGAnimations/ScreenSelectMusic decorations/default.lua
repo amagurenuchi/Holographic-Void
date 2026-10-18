@@ -117,6 +117,23 @@ local root = Def.ActorFrame {
 	Name = "SelectMusicDecorations"
 }
 
+local function makePackGradeItem(grade, index)
+	return Def.ActorFrame {
+		Name = "Grade_" .. grade,
+		InitCommand = function(self)
+			self:x(((index - 1) % 4) * 68):y(38 + math.floor((index - 1) / 4) * 14)
+		end,
+		LoadFont("Common Normal") .. {
+			Name = "Label",
+			InitCommand = function(self) self:halign(0) end
+		},
+		LoadFont("Common Normal") .. {
+			Name = "Count",
+			InitCommand = function(self) self:x(37):halign(0):diffuse(subText) end
+		}
+	}
+end
+
 local t = Def.ActorFrame {
 	Name = "SelectMusicContent",
 	InitCommand = function(self)
@@ -157,6 +174,7 @@ HV.CurrentSongData = {
 	avgMSD = 0,
 	packMSDDistribution = {}, -- Histogram of every chart's overall MSD in the selected pack
 	packChartCount = 0,
+	packGradeDistribution = {}, -- Main grade counts for the selected pack (midgrades excluded)
 	songCount = 0,
 	progress = 0,
 	rate = 1.0,
@@ -291,6 +309,7 @@ t[#t + 1] = Def.Actor {
 		data.group = nil
 		data.packMSDDistribution = {}
 		data.packChartCount = 0
+		data.packGradeDistribution = {}
 		if not data.song then
 			local screen = SCREENMAN:GetTopScreen()
 			if screen and screen.GetMusicWheel then
@@ -305,6 +324,15 @@ t[#t + 1] = Def.Actor {
 						local totalMSD = 0
 						local countedSongs = 0
 						local clearedSongs = 0
+						local gradeTiers = {
+							Tier01 = "AAAAA",
+							Tier02 = "AAAA", Tier03 = "AAAA", Tier04 = "AAAA",
+							Tier05 = "AAA", Tier06 = "AAA", Tier07 = "AAA",
+							Tier08 = "AA", Tier09 = "AA", Tier10 = "AA",
+							Tier11 = "A", Tier12 = "A", Tier13 = "A",
+							Tier14 = "B", Tier15 = "C", Tier16 = "D",
+						}
+						for _, label in pairs(gradeTiers) do data.packGradeDistribution[label] = 0 end
 						local packBins = {}
 						local stype = GAMESTATE:GetCurrentStyle():GetStepsType()
 						for _, s in ipairs(songs) do
@@ -328,6 +356,9 @@ t[#t + 1] = Def.Actor {
 							local grade = s:GetHighestGrade()
 							if grade and grade ~= "Grade_NoData" and grade ~= "Grade_Failed" then
 								clearedSongs = clearedSongs + 1
+								local tier = tostring(grade):match("Tier%d+")
+								local label = gradeTiers[tier]
+								if label then data.packGradeDistribution[label] = data.packGradeDistribution[label] + 1 end
 							end
 						end
 						data.avgMSD = countedSongs > 0 and (totalMSD / countedSongs) or 0
@@ -605,16 +636,25 @@ t[#t + 1] = Def.ActorFrame {
 	},
 
 	-- Pack Stats (Songs and Average MSD)
-	LoadFont("Common Normal") .. {
+	Def.ActorFrame {
 		Name = "PackStats",
 		InitCommand = function(self)
 			self:halign(0):valign(0):y(22):zoom(0.4)
-				:diffuse(subText)
 		end,
 		SetCommand = function(self)
 			local data = HV.CurrentSongData
 			if not data.song and data.group and data.group ~= "" then
-				self:settextf("%d Songs\nProgress: %.1f%%", data.songCount, data.progress)
+				local counts = data.packGradeDistribution or {}
+				self:GetChild("Summary"):settextf("%d Songs\nProgress: %.1f%%", data.songCount, data.progress)
+				for i, grade in ipairs({"AAAAA", "AAAA", "AAA", "AA", "A", "B", "C", "D"}) do
+					local item = self:GetChild("Grade_" .. grade)
+					local count = counts[grade] or 0
+					item:visible(count > 0)
+					if count > 0 then
+						item:GetChild("Label"):settext(grade):diffuse(HVColor.GetGradeColor(grade))
+						item:GetChild("Count"):settext(tostring(count))
+					end
+				end
 				self:visible(true)
 			else
 				self:visible(false)
@@ -622,7 +662,15 @@ t[#t + 1] = Def.ActorFrame {
 		end,
 		InstantChartUpdateMessageCommand = function(self)
 			self:playcommand("Set")
-		end
+		end,
+		LoadFont("Common Normal") .. {
+			Name = "Summary",
+			InitCommand = function(self) self:halign(0):valign(0):diffuse(subText) end
+		},
+		makePackGradeItem("AAAAA", 1), makePackGradeItem("AAAA", 2),
+		makePackGradeItem("AAA", 3), makePackGradeItem("AA", 4),
+		makePackGradeItem("A", 5), makePackGradeItem("B", 6),
+		makePackGradeItem("C", 7), makePackGradeItem("D", 8)
 	},
 
 	-- Artist
