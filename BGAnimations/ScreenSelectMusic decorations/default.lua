@@ -1291,7 +1291,7 @@ local diffSelectorY = msdY + 80
 local diffTabW = 64 -- Smaller
 local diffTabH = 26 -- Smaller
 local maxVisibleCharts = 6 -- Exactly 6
-local diffShort = {Beginner = "BG", Easy = "EZ", Medium = "MD", Hard = "HD", Challenge = "CH", Edit = "ED"}
+local diffShort = {Beginner = "BG", Easy = "EZ", Medium = "MD", Hard = "HD", Challenge = "IN", Edit = "ED"}
 local diffSelectorX = panelX + panelW + 14
 local diffSelectorTopY = panelY + 8
 

@@ -194,7 +194,7 @@ local function getDifficultyShort(diff)
 		Easy = "EZ",
 		Medium = "MD",
 		Hard = "HD",
-		Challenge = "CH",
+		Challenge = "IN",
 		Edit = "ED"
 	}
 	return map[d] or d:sub(1,2):upper()
@@ -665,11 +665,28 @@ local function chartPanel()
 					},
 
 					LoadFont("Common Normal") .. {
-						InitCommand = function(self) self:halign(0):x(-sidePanelWidth/2 + 10):settext(short):zoom(0.3):diffuse(textSub) end,
+						InitCommand = function(self) self:halign(0):valign(0.5):xy(-sidePanelWidth/2 + 10, -5):settext(short):zoom(0.3):diffuse(textSub) end,
 						UpdateCommand = function(self)
 							local panel = self:GetParent():GetParent():GetParent()
 							local s = panel.available and panel.available[d]
 							self:diffuse(s and textBright or textDim)
+						end
+					},
+
+					LoadFont("Common Normal") .. {
+						Name = "Author",
+						InitCommand = function(self) self:halign(0):valign(0.5):xy(-sidePanelWidth/2 + 10, 7):zoom(0.25):diffuse(textSub) end,
+						UpdateCommand = function(self)
+							local panel = self:GetParent():GetParent():GetParent()
+							local s = panel.available and panel.available[d]
+							if not s then
+								self:settext("")
+								return
+							end
+							local auth = s:GetAuthorCredit()
+							if auth == "" then auth = s:GetDescription() end
+							if #auth > 15 then auth = string.sub(auth, 1, 13) .. ".." end
+							self:settext(auth)
 						end
 					},
 
