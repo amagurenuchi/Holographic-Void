@@ -2225,24 +2225,33 @@ local function scoreBoard(pn)
 					OnCommand = function(self)
 						if isOnlineEvaluation() then self:visible(false); return end
 						if hsTable then
+							if isCurrentBestScore() then
+								self:settext("Best!"):diffuse(accentColor):diffusealpha(0.6)
+								return
+							end
 							local recCT = getHighestClearType(pn, steps, hsTable, scoreIndex) or "Clear"
 							local currentCT = clearType or (scoringVoided and "Noplay" or "Clear")
 							local diff
 							local currentIsNoPlay = currentCT == "ClearType_Noplay" or currentCT == "Noplay"
 							local recordIsNoPlay = recCT == "ClearType_Noplay" or recCT == "Noplay"
+							local comparisonOrder = {
+								RFC = 1, RF = 2, SDM = 3, MFC = 4, WF = 5, SDP = 6,
+								PFC = 7, BF = 8, SDG = 9, FC = 10, NGFC = 11, MF = 12,
+								SDCB = 13, Clear = 14, Failed = 15, Invalid = 16, Noplay = 17,
+							}
 							local function comparisonLevel(ct, isNoPlay)
-								if isNoPlay or ct == "ClearType_Noplay" or ct == "Noplay" then return 21 end
-								-- Failed is below every other result except No Play.
-								if ct == "ClearType_Failed" or ct == "Failed" then return 20 end
-								if ct == "ClearType_Invalid" or ct == "Invalid" then return 19 end
-								return getClearTypeLevel(ct)
+								if isNoPlay or ct == "ClearType_Noplay" or ct == "Noplay" then
+									return comparisonOrder.Noplay
+								end
+								ct = (ct or ""):gsub("^ClearType_", "")
+								return comparisonOrder[ct] or comparisonOrder.Clear
 							end
 							if currentIsNoPlay and not recordIsNoPlay then
 								diff = -1
 							elseif not currentIsNoPlay and recordIsNoPlay then
 								diff = 1
 							else
-								diff = comparisonLevel(currentCT, currentIsNoPlay) - comparisonLevel(recCT, recordIsNoPlay)
+								diff = comparisonLevel(recCT, recordIsNoPlay) - comparisonLevel(currentCT, currentIsNoPlay)
 							end
 							local arrow = diff == 0 and "" or comparisonArrow(diff)
 							self:settextf("Best: %s%s", getClearTypeText(recCT), arrow == "" and "" or " " .. arrow)
