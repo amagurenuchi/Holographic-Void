@@ -1052,6 +1052,11 @@ t[#t + 1] = Def.Quad {
 -- ============================================================
 local msdY = detailY + 35
 local skillsets = {"Overall", "Stream", "Jumpstream", "Handstream", "Stamina", "JackSpeed", "Chordjack", "Technical"}
+local msdTooltipMaxSSR = false
+
+local function isShiftPressed()
+	return INPUTFILTER and INPUTFILTER.IsShiftPressed and INPUTFILTER:IsShiftPressed()
+end
 
 t[#t + 1] = Def.ActorFrame {
 	Name = "MSDFrame",
@@ -1067,13 +1072,16 @@ t[#t + 1] = Def.ActorFrame {
 			self:halign(0):valign(0):zoom(0.35):diffuse(accentColor)
 		end,
 		SetCommand = function(self)
-			if not HV.CurrentSongData.song and HV.CurrentSongData.group then
+			if msdTooltipMaxSSR then
+				self:settext("MAX SSR (96.5%)")
+			elseif not HV.CurrentSongData.song and HV.CurrentSongData.group then
 				self:settext("AVERAGE MSD")
 			else
 				self:settext(THEME:GetString("ScreenSelectMusic", "MSDRatings"))
 			end
 		end,
 		InstantChartUpdateMessageCommand = function(self) self:playcommand("Set") end,
+		MSDModeChangedMessageCommand = function(self) self:playcommand("Set") end,
 	}
 }
 
@@ -1093,9 +1101,15 @@ t[#t + 1] = Def.ActorFrame {
 		end,
 		SetCommand = function(self)
 			local data = HV.CurrentSongData
-			local msd = data.skillsetMSDs[1] -- Overall
+			local msd
+			if msdTooltipMaxSSR and data.steps then
+				local ssrs = data.steps:GetSSRs(data.rate or getCurRateValue(), 0.965)
+				msd = ssrs and ssrs[1]
+			else
+				msd = data.skillsetMSDs[1] -- Overall
+			end
 			
-			if not data.song and data.avgMSD > 0 then
+			if not msdTooltipMaxSSR and not data.song and data.avgMSD > 0 then
 				msd = data.avgMSD
 			end
 			
@@ -1108,6 +1122,7 @@ t[#t + 1] = Def.ActorFrame {
 			end
 		end,
 		DelayedChartUpdateMessageCommand = function(self) self:playcommand("Set") end,
+		MSDModeChangedMessageCommand = function(self) self:playcommand("Set") end,
 	},
 	
 	-- Top 3 Skillsets Displays
@@ -1187,6 +1202,7 @@ local msdTooltipW = 280
 local msdTooltipH = 56
 
 local msdTooltipActor = nil
+
 local msdTooltip = Def.ActorFrame {
 	Name = "MSDTooltip",
 	InitCommand = function(self)
@@ -1244,9 +1260,15 @@ for i, ss in ipairs(tooltipSkillsets) do
 				if song then
 					local curSteps = GAMESTATE:GetCurrentSteps()
 					if curSteps then
-						local msd = curSteps:GetMSD(getCurRateValue(), ss.idx)
-						if msd and msd > 0 then
-							self:settext(string.format("%.2f", msd)):diffuse(HVColor.GetMSDRatingColor(msd))
+						local value
+						if msdTooltipMaxSSR then
+							local ssrs = curSteps:GetSSRs(getCurRateValue(), 0.965)
+							value = ssrs and ssrs[ss.idx]
+						else
+							value = curSteps:GetMSD(getCurRateValue(), ss.idx)
+						end
+						if value and value > 0 then
+							self:settext(string.format("%.2f", value)):diffuse(HVColor.GetMSDRatingColor(value))
 						else self:settext("-"):diffuse(dimText) end
 					else self:settext("-"):diffuse(dimText) end
 				else self:settext("-"):diffuse(dimText) end
@@ -1263,6 +1285,12 @@ t[#t + 1] = Def.ActorFrame {
 		self:queuecommand("Tick")
 	end,
 	TickCommand = function(self)
+		local maxSSR = isShiftPressed()
+		if maxSSR ~= msdTooltipMaxSSR then
+			msdTooltipMaxSSR = maxSSR
+			MESSAGEMAN:Broadcast("MSDModeChanged")
+		end
+
 		if msdTooltipActor then
 			-- The label is at msdY and the number is at msdY + 18 with zoom ~0.45.
 			-- The text height is around 40px, so 18 + 40 = 58.
