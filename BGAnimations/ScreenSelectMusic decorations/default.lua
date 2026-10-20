@@ -1209,6 +1209,9 @@ local msdTooltip = Def.ActorFrame {
 		msdTooltipActor = self
 		self:visible(false)
 	end,
+	MSDModeChangedMessageCommand = function(self)
+		self:playcommand("Set")
+	end,
 	-- Background
 	Def.Quad {
 		InitCommand = function(self)
