@@ -1290,7 +1290,8 @@ t[#t + 1] = Def.ActorFrame {
 		self:queuecommand("Tick")
 	end,
 	TickCommand = function(self)
-		local maxSSR = isShiftPressed()
+		-- Folders have an average MSD but no chart SSR data to display.
+		local maxSSR = isShiftPressed() and GAMESTATE:GetCurrentSong() ~= nil
 		if maxSSR ~= msdTooltipMaxSSR then
 			msdTooltipMaxSSR = maxSSR
 			MESSAGEMAN:Broadcast("MSDModeChanged")
