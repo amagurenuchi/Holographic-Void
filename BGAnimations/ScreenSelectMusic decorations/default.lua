@@ -258,39 +258,41 @@ local function GetPlayableChartSeconds(song, steps)
 end
 
 -- The CDTitle can receive a hover event before GAMESTATE has finished
--- updating its player-specific steps. Prefer the selection cache, then use
--- the engine's simfile author lookup before falling back to the chart/song
--- credits.
-local function GetCDTitleAuthor(song)
+-- updating its player-specific steps. The tooltip is for the simfile's
+-- Credits field, so read that value directly from the song.
+local function GetCDTitleCredit(song)
 	local function usable(value)
 		return type(value) == "string" and value ~= "" and value:lower() ~= "none defined"
 	end
-	local data = HV.CurrentSongData
-	local steps = data and data.steps
-	if not steps then
-		local ok, currentSteps = pcall(function() return GAMESTATE:GetCurrentSteps() end)
-		if ok then steps = currentSteps end
-	end
-
-	if steps then
-		local ok, author = pcall(function() return steps:GetAuthorCredit() end)
-		if ok and usable(author) then
-			return author
+	local function readCredit(path)
+		if not path or path == "" or not FILEMAN:DoesFileExist(path) then return nil end
+		local file = RageFileUtil.CreateRageFile()
+		local text = ""
+		if file:Open(path, 1) then
+			text = file:Read()
+			file:Close()
 		end
-		local okCredit, credit = pcall(function() return steps:GetCredit() end)
-		if okCredit and usable(credit) then
-			return credit
+		file:destroy()
+		local credit = text:match("#CREDIT%s*:%s*([^;]*)")
+		if credit then
+			credit = credit:gsub("^%s+", ""):gsub("%s+$", "")
+			if usable(credit) then return credit end
 		end
 	end
 
 	if song then
-		local ok, author = pcall(function() return song:GetOrTryAtLeastToGetSimfileAuthor() end)
-		if ok and usable(author) then
-			return author
-		end
 		local okCredit, credit = pcall(function() return song:GetCredit() end)
 		if okCredit and usable(credit) then
 			return credit
+		end
+
+		-- Some engine builds expose #CREDIT through the simfile parser only
+		-- after the song has finished loading. Read the selected simfile as a
+		-- fallback so the CDTitle does not incorrectly report None defined.
+		local okPath, path = pcall(function() return song:GetSongFilePath() end)
+		if okPath then
+			local credit = readCredit(path)
+			if credit then return credit end
 		end
 	end
 
@@ -808,7 +810,7 @@ t[#t + 1] = Def.ActorFrame {
 			ToolTipCommand = function(self)
 				if isOver(self) then
 					if self.song and self.song:HasCDTitle() and self:GetVisible() then
-						TOOLTIP:SetText(GetCDTitleAuthor(self.song))
+						TOOLTIP:SetText(GetCDTitleCredit(self.song))
 						TOOLTIP:Show()
 					else
 						TOOLTIP:Hide()
@@ -817,11 +819,11 @@ t[#t + 1] = Def.ActorFrame {
 			end,
 			MouseDownCommand = function(self, params)
 				if params and params.button and params.button ~= "DeviceButton_left mouse button" then return end
-				local author = GetCDTitleAuthor(self.song)
-				if type(author) ~= "string" or author == "" or author:lower() == "none defined" then return end
+				local credit = GetCDTitleCredit(self.song)
+				if type(credit) ~= "string" or credit == "" or credit:lower() == "none defined" then return end
 				local currentQuery = HV.GetMusicSearchQuery and HV.GetMusicSearchQuery() or ""
 				if HV.SetMusicSearchQuery then
-					local authorQuery = "author=" .. author
+					local authorQuery = "author=" .. credit
 					HV.SetMusicSearchQuery(currentQuery == authorQuery and "" or authorQuery)
 				end
 			end,
