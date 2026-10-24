@@ -571,13 +571,19 @@ for i = 1, 2 do
 	rays[#rays + 1] = Def.ActorFrame {
 		InitCommand = function(self) self:playcommand("UpdateSpeed") end,
 		UpdateSpeedCommand = function(self)
-			self:stopeffect():spin():effectmagnitude(getIntensitySpeed(20), getIntensitySpeed(15), getIntensitySpeed(10))
+			local speed = getIntensitySpeed(20)
+			self:stopeffect()
+			if speed <= 0 then return end
+			self:spin():effectmagnitude(speed, getIntensitySpeed(15), getIntensitySpeed(10))
 		end,
 		Def.ActorFrame {
 			Name = "Inner",
 			InitCommand = function(self) self:playcommand("UpdateSpeed") end,
 			UpdateSpeedCommand = function(self)
-				self:stopeffect():spin():effectmagnitude(getIntensitySpeed(10), getIntensitySpeed(-8), getIntensitySpeed(5))
+				local speed = getIntensitySpeed(10)
+				self:stopeffect()
+				if speed <= 0 then return end
+				self:spin():effectmagnitude(speed, getIntensitySpeed(-8), getIntensitySpeed(5))
 			end,
 			Def.Quad { 
 				InitCommand=function(self) self:zoomto(400, 2) end,
