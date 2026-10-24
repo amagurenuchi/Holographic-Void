@@ -2029,11 +2029,42 @@ t[#t + 1] = Def.ActorFrame {
 		InitCommand = function(self)
 			self:zoom(0.35):diffuse(mainText):maxwidth(SCREEN_WIDTH * 0.5 / 0.35)
 		end,
+		CurrentSongChangedMessageCommand = function(self)
+			self:stoptweening():diffusealpha(1)
+			self.cycleIndex = 1
+			local song = GAMESTATE:GetCurrentSong()
+			if song then
+				self.cycleText = {
+					song:GetDisplayMainTitle() or "",
+					song:GetDisplayArtist() or "",
+					song:GetGroupName() or ""
+				}
+				self:settext(self.cycleText[1])
+			end
+			self:queuecommand("CycleSongInfo")
+		end,
 		BeginCommand = function(self)
 			local song = GAMESTATE:GetCurrentSong()
 			if song then
-				self:settext(song:GetDisplayMainTitle())
+				self.cycleText = {
+					song:GetDisplayMainTitle() or "",
+					song:GetDisplayArtist() or "",
+					song:GetGroupName() or ""
+				}
+				self.cycleIndex = 1
+				self:settext(self.cycleText[1])
 			end
+			self:queuecommand("CycleSongInfo")
+		end,
+		CycleSongInfoCommand = function(self)
+			if not self.cycleText or #self.cycleText == 0 then return end
+			self:stoptweening():sleep(3):linear(0.1):diffusealpha(0)
+				:queuecommand("SetNextSongInfo")
+		end,
+		SetNextSongInfoCommand = function(self)
+			self.cycleIndex = (self.cycleIndex % #self.cycleText) + 1
+			self:settext(self.cycleText[self.cycleIndex])
+			self:linear(0.1):diffusealpha(1):queuecommand("CycleSongInfo")
 		end
 	}
 }
