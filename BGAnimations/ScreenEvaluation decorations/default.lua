@@ -1584,7 +1584,7 @@ local function scoreBoard(pn)
 			-- Shorthand (colored by difficulty type)
 			LoadFont("Common Normal") .. {
 				InitCommand = function(self)
-					self:halign(1):valign(1):xy(-51, 14):zoom(0.55)
+					self:halign(1):valign(1):xy(0, -5):zoom(0.55)
 				end,
 				OnCommand = function(self)
 					if steps then
@@ -1745,6 +1745,7 @@ local function scoreBoard(pn)
 		},
 		-- SSR
 		LoadFont("Common Normal") .. {
+			Name = "EvaluationSSR",
 			InitCommand = function(self) self:halign(0):valign(0):xy(10, 45):zoom(1.05):diffuse(subText):diffusealpha(0) end,
 			OnCommand = function(self)
 				if HV.ShowMSD() then
@@ -1758,6 +1759,69 @@ local function scoreBoard(pn)
 				end
 			end
 		},
+		-- Hovering the overall SSR reveals the individual skillset ratings.
+		(function()
+			local function getActorScreenPosition(actor)
+				local x, y = 0, 0
+				local current = actor
+				while current do
+					x = x + (current.GetX and current:GetX() or 0)
+					y = y + (current.GetY and current:GetY() or 0)
+					current = current.GetParent and current:GetParent() or nil
+				end
+				return x, y
+			end
+			local tooltip = Def.ActorFrame {
+			Name = "SSRSkillsetTooltip",
+			InitCommand = function(self)
+				-- Keep this above every evaluation widget, including late-loaded
+				-- graphs and scoreboard overlays.
+				self:visible(false):z(999):draworder(999)
+				self:SetUpdateFunction(function(actor)
+					local ssr = actor:GetParent():GetChild("EvaluationSSR")
+					if not ssr or not HV.ShowMSD() then actor:visible(false); return end
+					local x, y = getActorScreenPosition(ssr)
+					local mx, my = INPUTFILTER:GetMouseX(), INPUTFILTER:GetMouseY()
+					local over = mx >= x - 6 and mx <= x + 70 and my >= y - 8 and my <= y + 28
+					if over then
+						local parent = actor:GetParent()
+						local px, py = getActorScreenPosition(parent)
+						actor:playcommand("Set", {x = mx + 12 - px, y = my + 12 - py})
+					else actor:visible(false) end
+				end)
+			end,
+			SetCommand = function(self, p)
+				local score = curScore
+				if not score or not score.GetSkillsetSSR or not p or not p.x or not p.y then
+					self:visible(false)
+					return
+				end
+				self:xy(p.x, p.y):visible(true)
+				for i, ss in ipairs({"Stream", "Jumpstream", "Handstream", "Stamina", "JackSpeed", "Chordjack", "Technical"}) do
+					local label = self:GetChild("Skillset" .. i)
+					local value = score:GetSkillsetSSR(ss) or 0
+					local val = label and label:GetChild("Val")
+					if val then val:settext(string.format("%.2f", value)):diffuse(HVColor.GetMSDRatingColor(value)) end
+				end
+			end,
+			Def.Quad { Name = "Bg", InitCommand = function(self) self:halign(0):valign(1):zoomto(280, 56):diffuse(color("0.05,0.05,0.05,0.95")) end },
+			Def.Quad { Name = "Border", InitCommand = function(self) self:halign(0):valign(1):zoomto(280, 1):y(-56):diffuse(HVColor.Accent):diffusealpha(0.5) end },
+			}
+			for i = 1, 8 do
+				if i <= 7 then
+					local col, row, colW
+					if i <= 4 then row, col, colW = 0, i - 1, 280 / 4
+					else row, col, colW = 1, i - 5, 280 / 3 end
+					tooltip[#tooltip + 1] = Def.ActorFrame {
+						Name = "Skillset" .. i,
+						InitCommand = function(self) self:xy(col * colW + colW / 2, -56 + 12 + row * 24) end,
+						LoadFont("Common Normal") .. { InitCommand = function(self) self:y(-7):zoom(0.22):diffuse(subText):settext(({"Stream", "Jumpstream", "Handstream", "Stamina", "JackSpeed", "Chordjack", "Technical"})[i]) end },
+						LoadFont("Common Normal") .. { Name = "Val", InitCommand = function(self) self:y(5):zoom(0.35):diffuse(mainText) end }
+					}
+				end
+			end
+			return tooltip
+		end)(),
 
 		-- Custom Scoring Label
 		LoadFont("Common Normal") .. {

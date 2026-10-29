@@ -40,7 +40,7 @@ local profileOverlayActor = nil
 local globalTooltipActor = nil
 local previewActive = false
 local inputDebugActor = nil
-local searchString = ""
+local searchString = HV.MusicSearchQuery or ""
 
 -- SCOREMAN's ranked lists are shared by all local profiles.  Keep the
 -- Profile tab scoped to the profile that is currently selected in PLAYER_1.
@@ -115,6 +115,7 @@ end
 -- the search tab (for example, clicking a chart's CDTitle author).
 local function SetMusicSearchQuery(query)
 	searchString = tostring(query or "")
+	HV.MusicSearchQuery = searchString
 	local screen = SCREENMAN:GetTopScreen()
 	local whee = screen and screen.GetMusicWheel and screen:GetMusicWheel()
 	if whee then whee:SongSearch(searchString) end
@@ -176,6 +177,16 @@ local function ApplyNativeMusicWheelHoldTransform(p)
 end
 
 local main_af = Def.ActorFrame {
+	HV_FilterUpdatedMessageCommand = function(self)
+		searchString = ""
+		HV.MusicSearchQuery = ""
+		MESSAGEMAN:Broadcast("SearchQueryUpdated", {query = "", applied = true})
+	end,
+	HV_FilterModeChangedMessageCommand = function(self)
+		searchString = ""
+		HV.MusicSearchQuery = ""
+		MESSAGEMAN:Broadcast("SearchQueryUpdated", {query = "", applied = true})
+	end,
 	InitCommand = function(self)
 		self:SetUpdateFunction(function(af)
 			-- Hover Logic
@@ -197,6 +208,10 @@ local main_af = Def.ActorFrame {
 		HV.GameplaySessionValid = false
 		HV.ChartPreviewActive = false
 		HV.LeftMousePeekHold = false
+		local whee = HV.SSM and HV.SSM.GetMusicWheel and HV.SSM:GetMusicWheel()
+		if whee and searchString ~= "" then whee:SongSearch(searchString) end
+		if whee and searchString == "" then whee:SongSearch("") end
+		MESSAGEMAN:Broadcast("SearchQueryUpdated", {query = searchString, applied = true})
 		HV.LeftMousePeekHoldAllowed = false
 		ApplyNativeMusicWheelHoldTransform(0)
 		if INPUTFILTER and INPUTFILTER.SetMouseVisible then
@@ -827,6 +842,7 @@ main_af[#main_af + 1] = Def.ActorFrame {
 					if evType ~= "InputEventType_Release" then
 						if #searchString > 0 then
 							searchString = searchString:sub(1, -2)
+							HV.MusicSearchQuery = searchString
 							if instant and whee then whee:SongSearch(searchString) end
 							MESSAGEMAN:Broadcast("SearchQueryUpdated", {query = searchString})
 						else
@@ -840,8 +856,9 @@ main_af[#main_af + 1] = Def.ActorFrame {
 				-- Handle Delete
 				if btn:lower() == "devicebutton_delete" then
 					if evType ~= "InputEventType_Release" then
-						searchString = ""
-						if instant and whee then whee:SongSearch("") end
+							searchString = ""
+							HV.MusicSearchQuery = searchString
+							if instant and whee then whee:SongSearch(searchString) end
 						MESSAGEMAN:Broadcast("SearchQueryUpdated", {query = searchString})
 					end
 					return true
@@ -864,7 +881,8 @@ main_af[#main_af + 1] = Def.ActorFrame {
 				if isEscape then
 					if evType == "InputEventType_FirstPress" then
 						searchString = ""
-						if whee then whee:SongSearch("") end
+						HV.MusicSearchQuery = searchString
+						if whee then whee:SongSearch(searchString) end
 						MESSAGEMAN:Broadcast("SearchQueryUpdated", {query = searchString})
 						MESSAGEMAN:Broadcast("SelectMusicTabChanged", {Tab = ""})
 					end
@@ -879,6 +897,7 @@ main_af[#main_af + 1] = Def.ActorFrame {
 							local clip = Arch.getClipboard()
 							if clip then
 								searchString = searchString .. clip
+								HV.MusicSearchQuery = searchString
 								if instant and whee then whee:SongSearch(searchString) end
 								MESSAGEMAN:Broadcast("SearchQueryUpdated", {query = searchString})
 							end
@@ -898,7 +917,8 @@ main_af[#main_af + 1] = Def.ActorFrame {
 				if c and c ~= "" then
 					if c:match(whitelist) or c == " " then
 						if evType ~= "InputEventType_Release" then
-							searchString = searchString .. c
+								searchString = searchString .. c
+								HV.MusicSearchQuery = searchString
 							if instant and whee then whee:SongSearch(searchString) end
 							MESSAGEMAN:Broadcast("SearchQueryUpdated", {query = searchString})
 						end
@@ -975,7 +995,7 @@ main_af[#main_af + 1] = Def.ActorFrame {
 					if searchString ~= "" then
 						searchString = ""
 						local whee = top.GetMusicWheel and top:GetMusicWheel() or (HV.SSM and HV.SSM.GetMusicWheel and HV.SSM:GetMusicWheel())
-						if whee then whee:SongSearch("") end
+						if whee then whee:SongSearch(searchString) end
 						MESSAGEMAN:Broadcast("SearchQueryUpdated", {query = searchString})
 						return true
 					end
@@ -1935,7 +1955,12 @@ main_af[#main_af + 1] = Def.ActorFrame {
 		LoadFont("Common Normal") .. {
 			Name = "SearchPlaceholder",
 			InitCommand = function(self)
-				self:halign(0):valign(0.5):xy(32, 14):zoom(0.35):diffuse(subText):settext("Click here to Search (or Ctrl + 4)")
+				self:halign(0):valign(0.5):xy(32, 14):zoom(0.35)
+				if searchString ~= "" then
+					self:settext("Search: " .. searchString):diffuse(brightText)
+				else
+					self:settext("Click here to Search (or Ctrl + 4)"):diffuse(subText)
+				end
 			end,
 			SelectMusicTabChangedMessageCommand = function(self, params)
 				if params.Tab == "SEARCH" then

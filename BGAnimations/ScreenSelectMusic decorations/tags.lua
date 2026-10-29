@@ -22,8 +22,8 @@ local songTags = {} -- Tags for current song
 local currentChartkey = ""
 
 -- Filtering State
-local isFiltering = false
-local filterTags = {} -- Tags currently used for filtering (AND logic)
+local isFiltering = HV.TagFilteringEnabled or false
+local filterTags = HV.TagFilterTags or {} -- Tags currently used for filtering (AND logic)
 local filterChanged = false
 
 -- ============================================================
@@ -88,6 +88,8 @@ local function RefreshData()
 		end
 		filterChanged = false
 	end
+	HV.TagFilteringEnabled = isFiltering
+	HV.TagFilterTags = filterTags
 end
 
 -- ============================================================
@@ -144,6 +146,8 @@ local function DeleteTag(tagName)
 		filterTags[tagName] = nil
 		if not next(filterTags) then isFiltering = false end
 		filterChanged = true
+		HV.TagFilteringEnabled = isFiltering
+		HV.TagFilterTags = filterTags
 	end
 	RefreshData()
 	if tagsActor then tagsActor:playcommand("RefreshTags") end
@@ -375,7 +379,11 @@ t[#t + 1] = Def.ActorFrame {
 						-- If the song has no tags, don't enable filtering
 						if not next(filterTags) then isFiltering = false end
 					end
-					filterChanged = true
+						filterChanged = true
+						HV.TagFilteringEnabled = isFiltering
+						HV.TagFilterTags = filterTags
+						HV.MusicSearchQuery = ""
+						MESSAGEMAN:Broadcast("SearchQueryUpdated", {query = "", applied = true})
 					RefreshData()
 					tagsActor:playcommand("RefreshTags")
 					return true
