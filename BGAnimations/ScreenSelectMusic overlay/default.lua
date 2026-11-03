@@ -1208,7 +1208,23 @@ local profileOverlay = Def.ActorFrame {
 		-- Avatar / Info
 		Def.ActorFrame {
 			Name = "PlayerInfo",
-			InitCommand = function(self) self:y(-overlayH/2 + 50) end,
+			InitCommand = function(self)
+				self:y(-overlayH/2 + 50)
+				self:SetUpdateFunction(function(actor)
+					local rating = actor:GetChild("Rating")
+					if not rating or not rating:GetVisible() then return end
+					local infoX = SCREEN_CENTER_X - overlayW / 2 + gradeSidebarW + profileSidebarW / 2
+					local infoY = SCREEN_CENTER_Y - overlayH / 2 + 50
+					local mx, my = INPUTFILTER:GetMouseX(), INPUTFILTER:GetMouseY()
+					local hovered = mx >= infoX - 12 and mx <= infoX + 76
+						and my >= infoY + 25 and my <= infoY + 82
+					local prof = PROFILEMAN:GetProfile(PLAYER_1)
+					local val = (DLMAN:IsLoggedIn() and profileOverlayActor.isOnlineMode)
+						and DLMAN:GetSkillsetRating("Overall") or (prof and prof:GetPlayerRating() or 0)
+					local display = hovered and tostring(val) or string.format("%.2f", val)
+					if rating:GetText() ~= display then rating:settext(display) end
+				end)
+			end,
 			Def.Quad { Name = "Bg", InitCommand = function(self) self:zoomto(54, 54):diffuse(color("0,0,0,0.5")) end },
 			Def.Sprite {
 				Name = "Avatar",
@@ -1309,7 +1325,9 @@ local profileOverlay = Def.ActorFrame {
 			},
 			LoadFont("MSD 20px") .. {
 				Name = "Rating",
-				InitCommand = function(self) self:xy(22, 54):zoom(0.275):diffuse(accentColor) end,
+				InitCommand = function(self)
+					self:xy(22, 54):zoom(0.275):diffuse(accentColor)
+				end,
 				UpdateOverlaySkillsetsMessageCommand = function(self)
 					if not HV.ShowMSD() then self:visible(false); return end
 					local val = 0
@@ -1321,7 +1339,7 @@ local profileOverlay = Def.ActorFrame {
 					end
 					self:visible(true):settext(string.format("%.2f", val)):diffuse(HVColor.GetMSDRatingColor(val))
 				end
-			}
+			},
 		},
 
 		-- Vertical Skillset Tabs
