@@ -5,6 +5,7 @@ local accentColor = HVColor.Accent or color("#00CFFF")
 local ssrTextActor
 local lastWifeScore
 local currentSSR = 0
+local ssrPollInterval = 0.2
 
 local function updateSSR()
 	local steps = GAMESTATE:GetCurrentSteps(pn)
@@ -30,7 +31,11 @@ local zoom = (MovableValues and MovableValues.SSRDisplayZoom) or getDefaultGamep
 return Def.ActorFrame {
 	Name = "SSRDisplay",
 	InitCommand = function(self)
-		self:xy(x, y):zoom(zoom):SetUpdateFunction(function()
+		local elapsed = ssrPollInterval
+		self:xy(x, y):zoom(zoom):SetUpdateFunction(function(_, delta)
+			elapsed = elapsed + (delta or 0)
+			if elapsed < ssrPollInterval then return end
+			elapsed = 0
 			local ssr = updateSSR()
 			if ssrTextActor then
 				ssrTextActor:settextf("%0.2f", ssr):diffuse(HVColor.GetMSDRatingColor(ssr))
