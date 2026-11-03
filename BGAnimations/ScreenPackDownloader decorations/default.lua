@@ -37,6 +37,10 @@ local selectedRow = 1
 local packsPerPage = 14
 local currentPacks = {}
 local installedFlags = {} -- cache installed status per row
+local sortColumn = "name"
+local sortAscending = true
+packList.sortColumn = "name"
+packList.sortIsAscending = true
 local isSearching = false
 local selectLastRowOnPageLoad = false
 
@@ -113,6 +117,25 @@ local function isPackDownloading(pack)
 		end
 	end
 	return false
+end
+
+local sortKeys = {
+	name = "name",
+	avg = "overall",
+	songs = "song_count",
+	size = "bytes",
+}
+
+local function chooseSort(column)
+	if sortColumn == column then
+		sortAscending = not sortAscending
+	else
+		sortColumn = column
+		sortAscending = true
+	end
+	packList.sortColumn = sortKeys[sortColumn]
+	packList.sortIsAscending = sortAscending
+	packList:FilterAndSearch(nameInput, packList.lastTags or {}, packList.tagsMatchAny, packsPerPage)
 end
 
 -- ============================================================
@@ -410,40 +433,42 @@ local colStatusX = listW * 0.9
 t[#t + 1] = Def.ActorFrame {
 	Name = "ColumnHeaders",
 	InitCommand = function(self) self:xy(listX, listY) end,
+	UpdateSortHeadersMessageCommand = function(self) self:playcommand("Update") end,
+	UpdateCommand = function(self)
+		local arrow = sortAscending and "  \226\150\178" or "  \226\150\188"
+		self:GetChild("NameHeader"):settext("PACK NAME" .. (sortColumn == "name" and arrow or ""))
+		self:GetChild("AvgHeader"):settext("AVG MSD" .. (sortColumn == "avg" and arrow or ""))
+		self:GetChild("SongsHeader"):settext("SONGS" .. (sortColumn == "songs" and arrow or ""))
+		self:GetChild("SizeHeader"):settext("SIZE" .. (sortColumn == "size" and arrow or ""))
+	end,
 
 	LoadFont("Common Normal") .. {
-		InitCommand = function(self)
-			self:halign(0):x(colNameX):zoom(0.24):diffuse(dimText):settext("PACK NAME")
-		end
+		Name = "NameHeader",
+		InitCommand = function(self) self:halign(0):x(colNameX):zoom(0.24):diffuse(dimText):settext("PACK NAME") end
 	},
 	LoadFont("Common Normal") .. {
+		Name = "AvgHeader",
 		InitCommand = function(self)
 			self:halign(1):x(colAvgX):zoom(0.24):diffuse(dimText):settext("AVG MSD")
 			if not HV.ShowMSD() then self:visible(false) end
 		end
 	},
 	LoadFont("Common Normal") .. {
-		InitCommand = function(self)
-			self:halign(1):x(colSongsX):zoom(0.24):diffuse(dimText):settext("SONGS")
-		end
+		Name = "SongsHeader",
+		InitCommand = function(self) self:halign(1):x(colSongsX):zoom(0.24):diffuse(dimText):settext("SONGS") end
 	},
 	LoadFont("Common Normal") .. {
-		InitCommand = function(self)
-			self:halign(1):x(colSizeX):zoom(0.24):diffuse(dimText):settext("SIZE")
-		end
+		Name = "SizeHeader",
+		InitCommand = function(self) self:halign(1):x(colSizeX):zoom(0.24):diffuse(dimText):settext("SIZE") end
 	},
 	LoadFont("Common Normal") .. {
-		InitCommand = function(self)
-			self:halign(0.5):x(colStatusX):zoom(0.24):diffuse(dimText):settext("STATUS")
-		end
+		Name = "StatusHeader",
+		InitCommand = function(self) self:halign(0.5):x(colStatusX):zoom(0.24):diffuse(dimText):settext("STATUS") end
 	},
 	Def.Quad {
-		InitCommand = function(self)
-			self:halign(0):y(10):zoomto(listW, 1):diffuse(borderColor)
-		end
+		InitCommand = function(self) self:halign(0):y(10):zoomto(listW, 1):diffuse(borderColor) end
 	}
 }
-
 -- ============================================================
 -- PACK LIST ROWS
 -- ============================================================
@@ -465,6 +490,7 @@ local packListFrame = Def.ActorFrame {
 			selectedRow = 1
 		end
 		self:playcommand("RefreshRows")
+		MESSAGEMAN:Broadcast("UpdateSortHeaders")
 	end,
 
 	RefreshRowsCommand = function(self)
@@ -1128,6 +1154,27 @@ t[#t + 1] = Def.ActorFrame {
 					if isSearching then
 						isSearching = false
 						self:GetParent():GetChild("SearchBar"):playcommand("UpdateSearch")
+					end
+				end
+
+				-- Click a column header to sort the current page.
+				if my >= listY - 10 and my <= listY + 10 then
+					local columns = {
+						{ "name", colNameX, colAvgX - listW * 0.08 },
+						{ "avg", colAvgX - listW * 0.08, colAvgX },
+						{ "songs", colAvgX, colSongsX },
+						{ "size", colSongsX, colSizeX },
+					}
+					for _, column in ipairs(columns) do
+						if mx >= listX + column[2] and mx <= listX + column[3] then
+							if (column[1] ~= "avg" or HV.ShowMSD()) then
+								chooseSort(column[1])
+								selectedRow = 1
+								self:GetParent():GetChild("LoadingText"):playcommand("ShowLoading")
+								self:GetParent():GetChild("ColumnHeaders"):playcommand("Update")
+							end
+							return
+						end
 					end
 				end
 

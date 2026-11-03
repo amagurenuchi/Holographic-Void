@@ -202,7 +202,7 @@ local t = Def.ActorFrame {
 	-- MSD value
 	LoadFont("MSD 20px") .. {
 		InitCommand = function(self)
-			self:xy(avatarSize + 8, 22):zoom(fontZoom * 1.65):halign(0):maxwidth(100 / fontZoom)
+			self:xy(avatarSize + 8, 22):zoom(fontZoom * 0.825):halign(0):maxwidth(100 / fontZoom)
 		end,
 		BeginCommand = function(self) self:queuecommand("Set") end,
 		SetCommand = function(self)

@@ -1945,10 +1945,9 @@ local function scoreBoard(pn)
 						self:settext("Best!")
 					elseif best then
 						local diff = current - best
-						-- Keep small but real Wife% differences visible instead of
-						-- rounding them away to 0.00%.
+						local decimals = current < 99.7 and 2 or (current > 99.9 and 4 or 3)
 						local judgeLabel = judge ~= playedJudge and string.format(" (J%d)", playedJudge) or ""
-						self:settextf("%s %+.3f%%%s", comparisonArrow(diff), diff, judgeLabel)
+						self:settextf("%s %+." .. decimals .. "f%%%s", comparisonArrow(diff), diff, judgeLabel)
 					else self:settext("▲ New!") end
 					self:sleep(0.35):linear(0.15):diffusealpha(1)
 				end,
