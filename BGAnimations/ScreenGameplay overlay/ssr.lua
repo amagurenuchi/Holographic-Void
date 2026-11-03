@@ -30,12 +30,15 @@ local zoom = (MovableValues and MovableValues.SSRDisplayZoom) or getDefaultGamep
 return Def.ActorFrame {
 	Name = "SSRDisplay",
 	InitCommand = function(self)
-		self:xy(x, y - 20):zoom(zoom):SetUpdateFunction(function()
+		self:xy(x, y):zoom(zoom):SetUpdateFunction(function()
 			local ssr = updateSSR()
 			if ssrTextActor then
 				ssrTextActor:settextf("%0.2f", ssr):diffuse(HVColor.GetMSDRatingColor(ssr))
 			end
 		end)
+	end,
+	OnCommand = function(self)
+		setMovableActor({"DeviceButton_j", "DeviceButton_k"}, self, self:GetChild("Border"))
 	end,
 	LoadFont("MSD 20px") .. {
 		Name = "Text",
