@@ -1,5 +1,5 @@
 --- Holographic Void: Multiplayer Scoreboard (ported from spawncamping-wallhack)
--- Displays lobby player scores during ScreenNetEvaluation (havent tested)
+-- Displays lobby player scores during ScreenNetEvaluation (redesign needed)
 
 local lines = 16
 local pn = GAMESTATE:GetEnabledPlayers()[1]

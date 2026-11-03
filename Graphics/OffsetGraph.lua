@@ -719,7 +719,8 @@ local t = Def.ActorFrame{
 local function checkParams(params)
 	if type(params) ~= "table" or params.width == nil then
 		params = {width = setWidth, height = setHeight, song = setSong,
-			steps = setSteps, nrv = nrv, dvt = dvt, ctt = ctt, ntt = ntt, columns = columns}
+			steps = setSteps, nrv = nrv, dvt = dvt, ctt = ctt, ntt = ntt, columns = columns,
+			cbl = cbl, cbr = cbr, cbm = cbm, showMiddle = showMiddle}
 	end
 	oddColumns = (columns or 4) % 2 ~= 0
 	middleColumn = ((columns or 4) - 1) / 2.0
@@ -743,9 +744,9 @@ t[#t+1] = Def.Quad{
 		ctt = params.ctt or {}
 		ntt = params.ntt or {}
 		columns = params.columns or 4
-		cbl = params.cbl or 0
-		cbr = params.cbr or 0
-		cbm = params.cbm or 0
+		if params.cbl ~= nil then cbl = params.cbl end
+		if params.cbr ~= nil then cbr = params.cbr end
+		if params.cbm ~= nil then cbm = params.cbm end
 		showMiddle = params.showMiddle or false
 		if params.song then
 			finalSecond = params.song:GetLastSecond()
@@ -1429,10 +1430,19 @@ t[#t+1] = Def.ActorMultiVertex{
 			if params.dvt[i] ~= nil then
 				local offsetMs = params.dvt[i]
 				local rawOffset = offsetMs
+				local plotWindows = getJudgeWindows()
+				local maniaWindows = params.maniaWindows
+				if maniaWindows then
+					plotWindows = {W1 = maniaWindows[1], W2 = maniaWindows[2], W3 = maniaWindows[3],
+						W4 = maniaWindows[4], W5 = maniaWindows[5]}
+				end
+				local customMiss = (usingCustomWindows or maniaWindows)
+					and classifyOffset(offsetMs, plotWindows) == "Miss"
 				local c = offsetToJudgeColor(offsetMs, tso)
-				if usingCustomWindows and customOffsetToJudgeColor then
-					local customWindows = getCurrentCustomWindowConfigJudgmentWindowTable()
-					if customWindows then c = customOffsetToJudgeColor(offsetMs, customWindows) end
+				if customOffsetToJudgeColor then
+					local colorWindows = maniaWindows and plotWindows
+						or (usingCustomWindows and getCurrentCustomWindowConfigJudgmentWindowTable())
+					if colorWindows then c = customOffsetToJudgeColor(offsetMs, colorWindows) end
 				end
 				c = {c[1], c[2], c[3], 1}
 
@@ -1450,8 +1460,9 @@ t[#t+1] = Def.ActorMultiVertex{
 					end
 				end
 
-				if math.abs(rawOffset) >= 1000 then
-					-- Misses: vertical line (Etterna recorded misses as 1000ms)
+				if math.abs(rawOffset) >= 1000 or customMiss then
+					-- Misses: vertical highlight. Custom windows can classify an
+					-- ordinary replay offset as a miss even without the 1000ms sentinel.
 					local a = alpha == 1 and 0.3 or 0.1
 					c[4] = a
 					verts[#verts+1] = {{x - dotWidth/4, params.height, 0}, c}

@@ -217,6 +217,13 @@ local main_af = Def.ActorFrame {
 		local whee = HV.SSM and HV.SSM.GetMusicWheel and HV.SSM:GetMusicWheel()
 		if whee and searchString ~= "" then whee:SongSearch(searchString) end
 		if whee and searchString == "" then whee:SongSearch("") end
+		-- SongSearch may move the wheel to its first match. Restore the song
+		-- captured when gameplay started after the wheel has finished updating.
+		local returnSong = HV.ReturnToSongSelectSong
+		HV.ReturnToSongSelectSong = nil
+		if whee and returnSong then
+			HV.ReturnToSongSelectSongPending = returnSong
+		end
 		MESSAGEMAN:Broadcast("SearchQueryUpdated", {query = searchString, applied = true})
 		HV.LeftMousePeekHoldAllowed = false
 		ApplyNativeMusicWheelHoldTransform(0)
@@ -285,6 +292,10 @@ local main_af = Def.ActorFrame {
 		end
 	end,
 	EndCommand = function(self)
+		-- Fallback for exits that do not use the normal Start command.
+		if not HV.ReturnToSongSelectSong and GAMESTATE and GAMESTATE.GetCurrentSong then
+			HV.ReturnToSongSelectSong = GAMESTATE:GetCurrentSong()
+		end
 		SCREENMAN:set_input_redirected(PLAYER_1, false)
 		SCREENMAN:set_input_redirected(PLAYER_2, false)
 		if HV.LeftMousePeekHold then
@@ -293,6 +304,18 @@ local main_af = Def.ActorFrame {
 			MESSAGEMAN:Broadcast("HVLeftMousePeekHoldChanged", {Held = false, Allowed = false})
 		end
 		ApplyNativeMusicWheelHoldTransform(0)
+	end,
+	StartCommand = function(self)
+		-- Capture the wheel's actual selection before gameplay transitions alter
+		-- GameState's current song.
+		local screen = SCREENMAN:GetTopScreen()
+		local wheel = screen and screen.GetMusicWheel and screen:GetMusicWheel()
+		local song
+		if wheel and wheel.GetSelectedSong then
+			local ok, selected = pcall(function() return wheel:GetSelectedSong() end)
+			if ok then song = selected end
+		end
+		HV.ReturnToSongSelectSong = song or (GAMESTATE and GAMESTATE.GetCurrentSong and GAMESTATE:GetCurrentSong())
 	end,
 	LoginMessageCommand = function(self)
 		local user = DLMAN:GetUsername()
@@ -1021,6 +1044,24 @@ main_af[#main_af + 1] = Def.ActorFrame {
 		end -- end of HV.OverlayInputCallback
 		screen:AddInputCallback(HV.OverlayInputCallback)
 	end
+}
+
+
+-- Keep the delayed restore on its own tween queue. The main actor queues other
+-- startup commands, which would replace a delay queued on that same actor.
+main_af[#main_af + 1] = Def.Actor {
+	BeginCommand = function(self)
+		if HV.ReturnToSongSelectSongPending then
+			self:sleep(0.25):queuecommand("RestoreReturnedSong")
+		end
+	end,
+	RestoreReturnedSongCommand = function(self)
+		local song = HV.ReturnToSongSelectSongPending
+		HV.ReturnToSongSelectSongPending = nil
+		local screen = SCREENMAN:GetTopScreen()
+		local wheel = screen and screen.GetMusicWheel and screen:GetMusicWheel()
+		if wheel and song then wheel:SelectSong(song) end
+	end,
 }
 
 

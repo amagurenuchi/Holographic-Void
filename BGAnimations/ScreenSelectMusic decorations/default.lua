@@ -1051,6 +1051,143 @@ local msdY = detailY + 35
 local skillsets = {"Overall", "Stream", "Jumpstream", "Handstream", "Stamina", "JackSpeed", "Chordjack", "Technical"}
 local msdTooltipMaxSSR = false
 
+local osuManiaStarCache = {}
+local osuStarSpectrum = {
+	{0.1, "aaaaaa"}, {0.1, "4290fb"}, {1.25, "4fc0ff"},
+	{2.0, "4fffd5"}, {2.5, "7cff4f"}, {3.3, "f6f05c"},
+	{4.2, "ff8068"}, {4.9, "ff4e6f"}, {5.8, "c645b8"},
+	{6.7, "6563de"}, {7.7, "18158e"}, {9.0, "000000"},
+	{10.0, "000000"},
+}
+
+local function getOsuStarDifficultyColor(stars)
+	stars = math.floor(stars * 100 + 0.5) / 100
+	if stars < osuStarSpectrum[1][1] then stars = osuStarSpectrum[1][1] end
+	for i = 1, #osuStarSpectrum - 1 do
+		local from, to = osuStarSpectrum[i], osuStarSpectrum[i + 1]
+		if stars < to[1] then
+			local amount = (stars - from[1]) / (to[1] - from[1])
+			local fr, fg, fb = tonumber(from[2]:sub(1, 2), 16), tonumber(from[2]:sub(3, 4), 16), tonumber(from[2]:sub(5, 6), 16)
+			local tr, tg, tb = tonumber(to[2]:sub(1, 2), 16), tonumber(to[2]:sub(3, 4), 16), tonumber(to[2]:sub(5, 6), 16)
+			return color(string.format("%.4f,%.4f,%.4f,1", (fr + (tr - fr) * amount) / 255, (fg + (tg - fg) * amount) / 255, (fb + (tb - fb) * amount) / 255))
+		end
+	end
+	local hex = osuStarSpectrum[#osuStarSpectrum][2]
+	return color(string.format("#%s", hex))
+end
+
+local function getOsuStarTextColor(stars)
+	if stars < 6.5 then return color("0,0,0,0.75") end
+	if stars < 9 then return color("#ffd966") end
+	local textSpectrum = {
+		{9.0, "f6f05c"}, {9.9, "ff8068"}, {10.6, "ff4e6f"},
+		{11.5, "c645b8"}, {12.4, "6563de"},
+	}
+	for i = 1, #textSpectrum - 1 do
+		local from, to = textSpectrum[i], textSpectrum[i + 1]
+		if stars < to[1] then
+			local amount = (stars - from[1]) / (to[1] - from[1])
+			local fr, fg, fb = tonumber(from[2]:sub(1, 2), 16), tonumber(from[2]:sub(3, 4), 16), tonumber(from[2]:sub(5, 6), 16)
+			local tr, tg, tb = tonumber(to[2]:sub(1, 2), 16), tonumber(to[2]:sub(3, 4), 16), tonumber(to[2]:sub(5, 6), 16)
+			return color(string.format("%.4f,%.4f,%.4f,1", (fr + (tr - fr) * amount) / 255, (fg + (tg - fg) * amount) / 255, (fb + (tb - fb) * amount) / 255))
+		end
+	end
+	return color("#6563de")
+end
+
+local function getOsuManiaStars(steps, rate)
+	local chartKey = steps and steps:GetChartKey()
+	if not chartKey then return nil end
+	rate = tonumber(rate) or 1
+	if rate <= 0 then rate = 1 end
+	local cacheKey = chartKey .. "@" .. tostring(rate)
+	if osuManiaStarCache[cacheKey] ~= nil then return osuManiaStarCache[cacheKey] or nil end
+
+	local ok, data = pcall(steps.GetNonEmptyNoteData, steps)
+	if not ok or type(data) ~= "table" or type(data[1]) ~= "table" then
+		osuManiaStarCache[cacheKey] = false
+		return nil
+	end
+	local times, columns = data[1], {}
+	for col = 2, #data do columns[col - 1] = data[col] end
+	if #times < 2 or #columns == 0 then
+		osuManiaStarCache[cacheKey] = false
+		return nil
+	end
+
+	local timing = steps.GetTimingData and steps:GetTimingData()
+	if not timing or type(timing.GetElapsedTimeFromNoteRowNoOffset) ~= "function" then
+		osuManiaStarCache[cacheKey] = false
+		return nil
+	end
+
+	local events = {}
+	for i = 1, #times do
+		local row = tonumber(times[i])
+		if row then
+			-- GetNonEmptyNoteData returns note row indices, not timestamps.
+			-- Convert through chart timing and seconds to milliseconds, then
+			-- apply the selected music rate before osu!'s strain decay constants.
+			local timeOk, time = pcall(timing.GetElapsedTimeFromNoteRowNoOffset, timing, row)
+			time = timeOk and tonumber(time) and tonumber(time) * 1000 / rate or nil
+			if time then
+				for col = 1, #columns do
+					-- Count taps and hold heads; hold durations and releases are omitted.
+					local noteType = tonumber(columns[col][i])
+					if noteType == 1 or noteType == 2 then
+						events[#events + 1] = {time = time, column = col}
+					end
+				end
+			end
+		end
+	end
+	if #events < 2 then
+		osuManiaStarCache[cacheKey] = false
+		return nil
+	end
+
+	local decayIndividual, decayOverall = 0.125, 0.30
+	local individual, previousInColumn, peaks = {}, {}, {}
+	for col = 1, #columns do individual[col] = 0 end
+	previousInColumn[events[1].column] = events[1]
+	local overall = 1
+	local sectionEnd = math.ceil(events[2].time / 400) * 400
+	local sectionPeak, highestIndividual = 0, 0
+	local previousTime = events[1].time
+	for i = 2, #events do
+		local event = events[i]
+		while event.time > sectionEnd do
+			peaks[#peaks + 1] = sectionPeak
+			local elapsed = math.max(0, sectionEnd - previousTime)
+			sectionPeak = highestIndividual * math.pow(decayIndividual, elapsed / 1000)
+				+ overall * math.pow(decayOverall, elapsed / 1000)
+			sectionEnd = sectionEnd + 400
+		end
+		local delta = math.max(0, event.time - previousTime)
+		local prevColumn = previousInColumn[event.column]
+		local columnDelta = prevColumn and event.time - prevColumn.time or event.time
+		individual[event.column] = individual[event.column] * math.pow(decayIndividual, math.max(0, columnDelta) / 1000) + 2
+		if delta <= 1 then
+			highestIndividual = math.max(highestIndividual, individual[event.column])
+		else
+			highestIndividual = individual[event.column]
+		end
+		overall = overall * math.pow(decayOverall, delta / 1000) + 1
+		sectionPeak = math.max(sectionPeak, highestIndividual + overall)
+		previousInColumn[event.column] = event
+		previousTime = event.time
+	end
+	peaks[#peaks + 1] = sectionPeak
+	table.sort(peaks, function(a, b) return a > b end)
+	local total, weight = 0, 1
+	for _, peak in ipairs(peaks) do
+		if peak > 0 then total, weight = total + peak * weight, weight * 0.9 end
+	end
+	local stars = total * 0.018
+	osuManiaStarCache[cacheKey] = stars
+	return stars
+end
+
 local function isShiftPressed()
 	return INPUTFILTER and INPUTFILTER.IsShiftPressed and INPUTFILTER:IsShiftPressed()
 end
@@ -1120,6 +1257,44 @@ t[#t + 1] = Def.ActorFrame {
 		end,
 		DelayedChartUpdateMessageCommand = function(self) self:playcommand("Set") end,
 		MSDModeChangedMessageCommand = function(self) self:playcommand("Set") end,
+	},
+
+	Def.Quad {
+		Name = "OsuManiaStarBackground",
+		InitCommand = function(self)
+			self:halign(0):valign(0):xy(0, 17):zoomto(25, 10):visible(false)
+		end,
+		SetCommand = function(self)
+			local data = HV.CurrentSongData
+			local stars = data.song and getOsuManiaStars(data.steps, getCurRateValue() or data.rate or 1)
+			if stars then
+				self:diffuse(getOsuStarDifficultyColor(stars)):visible(true)
+			else
+				self:visible(false)
+			end
+		end,
+		DelayedChartUpdateMessageCommand = function(self) self:playcommand("Set") end,
+		InstantChartUpdateMessageCommand = function(self) self:playcommand("Set") end,
+		CurrentRateChangedMessageCommand = function(self) self:playcommand("Set") end,
+	},
+
+	LoadFont("Common Normal") .. {
+		Name = "OsuManiaStarRating",
+		InitCommand = function(self)
+			self:halign(0):valign(0):xy(3, 20):zoom(0.32):visible(false)
+		end,
+		SetCommand = function(self)
+			local data = HV.CurrentSongData
+			local stars = data.song and getOsuManiaStars(data.steps, getCurRateValue() or data.rate or 1)
+			if stars then
+				self:settext(string.format("%.2f★", stars)):diffuse(getOsuStarTextColor(stars)):visible(true)
+			else
+				self:settext(""):visible(false)
+			end
+		end,
+		DelayedChartUpdateMessageCommand = function(self) self:playcommand("Set") end,
+		InstantChartUpdateMessageCommand = function(self) self:playcommand("Set") end,
+		CurrentRateChangedMessageCommand = function(self) self:playcommand("Set") end,
 	},
 	
 	-- Top 3 Skillsets Displays

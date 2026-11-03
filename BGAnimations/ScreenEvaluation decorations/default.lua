@@ -105,6 +105,7 @@ local judges = HV.EmulateRidiculousEnabled() and {"Ridiculous","TapNoteScore_W1"
 local nrv, dvt, ctt, ntt, totalTaps
 local rescoredPercentage
 local usingCustomWindows = false
+local customWindowUsesOldestNoteFirst
 local lastSnapshot = nil
 local showRATally = false
 local maniaRescore = nil
@@ -418,6 +419,21 @@ local function updateVectors()
 			end
 		end
 	end
+	-- Custom JudgeByOldestNote presets score taps in chart order. Keep each
+	-- replay offset attached to that ordered tap so the offset plot reflects
+	-- the same recalculated judgments (including osu!mania scoring mode).
+	if usingCustomWindows and customWindowUsesOldestNoteFirst and customWindowUsesOldestNoteFirst()
+		and curScore and curScore.GetReplay and HV.GetOrderedReplayTapOffsets then
+		local _, _, orderedTaps = HV.GetOrderedReplayTapOffsets(curScore, true)
+		if orderedTaps and #orderedTaps > 0 then
+			local orderedOffsets, orderedRows, orderedTracks, orderedTypes = {}, {}, {}, {}
+			for i, tap in ipairs(orderedTaps) do
+				orderedOffsets[i], orderedRows[i], orderedTracks[i] = tap.offset, tap.row, tap.track
+				orderedTypes[i] = "TapNoteType_Tap"
+			end
+			dvt, nrv, ctt, ntt = orderedOffsets, orderedRows, orderedTracks, orderedTypes
+		end
+	end
 	songTotalNotes = steps:GetRadarValues(pn):GetValue("RadarCategory_Notes")
 end
 
@@ -438,19 +454,32 @@ HV.SelectEvaluationScore = function(selected)
 	judge = getJudgeForScore(curScore)
 	playedJudge = judge
 	local screen = SCREENMAN:GetTopScreen()
+	if screen and screen.GetStageStats then
+		local stageStats = screen:GetStageStats()
+		if stageStats and stageStats.GetPlayerStageStats then pss = stageStats:GetPlayerStageStats() end
+	end
 	if curScore.GetReplay and curScore:GetReplay() and screen then
 		pcall(function()
 			local tso = tst[judge] or 1
-			if screen.SetPlayerStageStatsFromReplayData then
+			if screen.RescoreReplay then
+				screen:RescoreReplay(pss, tso, curScore,
+					usingCustomWindows and customWindowUsesOldestNoteFirst() or false)
+			elseif screen.SetPlayerStageStatsFromReplayData then
 				screen:SetPlayerStageStatsFromReplayData(pss, tso, curScore)
-			elseif screen.RescoreReplay then
-				screen:RescoreReplay(pss, tso, curScore, false)
 			end
 		end)
 	end
 	updateVectors()
 	clearRatioCache()
 	refreshRescoredPercentage()
+	if screen and screen.RunCommandsOnChildren then
+		pcall(function()
+			screen:RunCommandsOnChildren(function(actor)
+				actor:playcommand("SetJudge")
+				actor:playcommand("On")
+			end)
+		end)
+	end
 	MESSAGEMAN:Broadcast("RefreshJudgeDisplay")
 	MESSAGEMAN:Broadcast("ScoreChanged")
 	return true
@@ -731,12 +760,18 @@ local middleCol = (ncol - 1) / 2
 local showMiddle = middleCol == math.floor(middleCol)
 
 local function recountCBs()
-	local tso = tst[judge] or 1
+	local cbWindow = (tst[judge] or 1) * 90
+	-- CBs include W4, W5, and Miss, so count offsets beyond the W3 boundary.
+	if usingCustomWindows and getCustomWindowConfigJudgmentWindow then
+		cbWindow = getCustomWindowConfigJudgmentWindow("TapNoteScore_W3") or cbWindow
+	elseif maniaRescore and maniaRescore.windows then
+		cbWindow = maniaRescore.windows[3] or cbWindow
+	end
 	cbl, cbr, cbm = 0, 0, 0
 	if not ctt or not dvt then return end
 	for i = 1, #dvt do
 		if ctt[i] then
-			if math.abs(dvt[i]) > tso * 90 then
+			if math.abs(dvt[i]) > cbWindow then
 				if ctt[i] < middleCol then cbl = cbl + 1
 				elseif ctt[i] > middleCol then cbr = cbr + 1
 				else cbm = cbm + 1 end
@@ -788,6 +823,11 @@ end
 local function getEvaluationRescoredJudgeCount(offsetVector, judgeScale, judgeName, judgeIndex)
 	if scoringVoided then return 0 end
 	if maniaRescore then return maniaRescore.counts[judgeIndex] or 0 end
+	if usingCustomWindows and lastSnapshot and lastSnapshot.GetJudgments then
+		local judgments = lastSnapshot:GetJudgments() or {}
+		local key = judgeName == "Ridiculous" and "W1" or tostring(judgeName):gsub("^TapNoteScore_", "")
+		return judgments[key] or 0
+	end
 	local ridiculousScale = ms.JudgeScalers[judgeScale] or judgeScale
 	if judgeName == "Ridiculous" then return HV.GetRidiculousCountFromOffsets(offsetVector, ridiculousScale) end
 	local index = HV.EmulateRidiculousEnabled() and judgeIndex - 1 or judgeIndex
@@ -798,7 +838,7 @@ local function getEvaluationRescoredJudgeCount(offsetVector, judgeScale, judgeNa
 	return count
 end
 
-local function customWindowUsesOldestNoteFirst()
+customWindowUsesOldestNoteFirst = function()
 	if not customWindowsConfig then return false end
 	if type(currentCustomWindowConfigUsesOldestNoteFirst) == "function" then
 		local ok, value = pcall(currentCustomWindowConfigUsesOldestNoteFirst)
@@ -936,7 +976,9 @@ local t = Def.ActorFrame {
 		end
 		self:sleep(0):queuecommand("RefreshJudgeDisplay")
 	end,
-	OffCommand = function(self) HV.ResetManiaMode() end,
+	OffCommand = function(self)
+		HV.ResetManiaMode()
+	end,
 	LoadFont("Common Normal") .. {
 		Name = "OnlineReplayWatermark",
 		InitCommand = function(self)
@@ -984,7 +1026,7 @@ local t = Def.ActorFrame {
 			HV.GameplaySessionValid = false
 		end
 	},
-	ScoreChangedMessageCommand = function(self)
+	RefreshSelectedScoreCommand = function(self)
 		if scoringVoided then return end
 		pss = STATSMAN:GetCurStageStats():GetPlayerStageStats()
 		
@@ -1004,10 +1046,11 @@ local t = Def.ActorFrame {
 			pcall(function()
 				local screen = SCREENMAN:GetTopScreen()
 				local tso = tst[judge] or 1
-				if screen and screen.SetPlayerStageStatsFromReplayData then
+				if screen and screen.RescoreReplay then
+					screen:RescoreReplay(pss, tso, curScore,
+						usingCustomWindows and customWindowUsesOldestNoteFirst() or false)
+				elseif screen and screen.SetPlayerStageStatsFromReplayData then
 					screen:SetPlayerStageStatsFromReplayData(pss, tso, curScore)
-				elseif screen and screen.RescoreReplay then
-					screen:RescoreReplay(pss, tso, curScore, false)
 				end
 			end)
 		end
@@ -1024,6 +1067,10 @@ local t = Def.ActorFrame {
 		refreshRescoredPercentage()
 		self:RunCommandsOnChildren(function(self) self:playcommand("SetJudge") end)
 		self:RunCommandsOnChildren(function(self) self:playcommand("On") end)
+		MESSAGEMAN:Broadcast("RefreshJudgeDisplay")
+	end,
+	ScoreChangedMessageCommand = function(self)
+		self:playcommand("RefreshSelectedScore")
 	end
 }
 
@@ -1135,6 +1182,7 @@ local function scoreBoard(pn)
 			if not usingCustomWindows then return end
 			moveCustomWindowConfigIndex(params.direction)
 			loadCurrentCustomWindowConfig()
+			lastSnapshot = nil
 			pcall(function()
 				local tso = tst[judge]
 				local screen = SCREENMAN:GetTopScreen()
@@ -1147,9 +1195,15 @@ local function scoreBoard(pn)
 			if lastSnapshot then
 				MESSAGEMAN:Broadcast("LoadedCustomWindow")
 			end
+			recountCBs()
+			MESSAGEMAN:Broadcast("CustomWindowStateChanged")
+			self:RunCommandsOnChildren(function(child) child:playcommand("SetJudge") end)
 		end,
 		ResetJudgeMessageCommand = function(self) recountCBs() end,
 		SetJudgeMessageCommand = function(self) recountCBs() end,
+		ManiaModeChangedMessageCommand = function(self) recountCBs() end,
+		CustomWindowStateChangedMessageCommand = function(self) recountCBs() end,
+		LoadedCustomWindowMessageCommand = function(self) recountCBs() end,
 
 		-- Main BG
 		Def.Quad {
@@ -2985,6 +3039,7 @@ t[#t + 1] = Def.ActorFrame {
 						dvt = dvt,
 						ctt = ctt,
 						ntt = ntt,
+						maniaWindows = maniaRescore and maniaRescore.windows or nil,
 						chordCohesion = curScore and curScore.GetChordCohesion and curScore:GetChordCohesion() or false,
 						columns = steps and steps:GetNumColumns() or 4,
 						cbl = cbl,
@@ -3005,6 +3060,7 @@ t[#t + 1] = Def.ActorFrame {
 						dvt = dvt,
 						ctt = ctt,
 						ntt = ntt,
+						maniaWindows = maniaRescore and maniaRescore.windows or nil,
 						chordCohesion = curScore and curScore.GetChordCohesion and curScore:GetChordCohesion() or false,
 						columns = steps and steps:GetNumColumns() or 4,
 						cbl = cbl,

@@ -154,12 +154,13 @@ end
 local function selectLocalScore(index)
 	local selected = scoreList and scoreList[index]
 	if not isLocal or not selected then return end
-	-- Keep the selected score in theme state; this Etterna build exposes no
-	-- SCOREMAN setter for replacing the stage's most-recent score.
+	-- Keep the selected score in shared theme state and pass it to the evaluation updater.
 	HV.SelectedEvaluationScore = selected
 	HV.ViewingHistoricalEvaluationScore = true
-	if HV.SelectEvaluationScore then HV.SelectEvaluationScore(selected) end
-	MESSAGEMAN:Broadcast("ScoreChanged")
+	if HV.SelectEvaluationScore then
+		pcall(HV.SelectEvaluationScore, selected)
+	end
+	MESSAGEMAN:Broadcast("UpdateOnlineList")
 end
 
 local function selectLocalScoreAtMouse(self)
