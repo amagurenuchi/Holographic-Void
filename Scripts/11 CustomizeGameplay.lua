@@ -56,6 +56,9 @@ local function loadValuesTable()
 	MovableValues.NPSDisplayX = coord("NPSDisplayX")
 	MovableValues.NPSDisplayY = coord("NPSDisplayY")
 	MovableValues.NPSDisplayZoom = size("NPSDisplayZoom")
+	MovableValues.SSRDisplayX = coord("SSRDisplayX")
+	MovableValues.SSRDisplayY = coord("SSRDisplayY")
+	MovableValues.SSRDisplayZoom = size("SSRDisplayZoom")
 	MovableValues.LeaderboardX = coord("LeaderboardX")
 	MovableValues.LeaderboardY = coord("LeaderboardY")
 	MovableValues.LeaderboardWidth = size("LeaderboardWidth")
@@ -538,6 +541,26 @@ Movable = {
 			property = "Zoom",
 			inc = -0.01
 		}
+	},
+	DeviceButton_j = {
+		name = "SSRDisplay",
+		textHeader = "SSR Display Position:",
+		element = {},
+		properties = {"X", "Y"},
+		elementTree = "GameplayXYCoordinates",
+		DeviceButton_up = {property = "AddY", inc = -5},
+		DeviceButton_down = {property = "AddY", inc = 5},
+		DeviceButton_left = {property = "AddX", inc = -5},
+		DeviceButton_right = {property = "AddX", inc = 5}
+	},
+	DeviceButton_k = {
+		name = "SSRDisplay",
+		textHeader = "SSR Display Size:",
+		element = {},
+		properties = {"Zoom"},
+		elementTree = "GameplaySizes",
+		DeviceButton_up = {property = "Zoom", inc = 0.01},
+		DeviceButton_down = {property = "Zoom", inc = -0.01}
 	},
 	DeviceButton_i = {
 		name = "NPSGraph",
@@ -1206,6 +1229,7 @@ local function elementtobutton(name)
 		TallyAndMetrics = "JudgeCounter",
 		NotefieldMean = "DisplayMean",
 		NPSCalcContainer = "NPSDisplay",
+		SSRDisplay = "SSRDisplay",
 		NPSGraph = "NPSGraph",
 		InGameLeaderboard = "Leaderboard",
 		ReplayControls = "ReplayButtons",

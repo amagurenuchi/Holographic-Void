@@ -23,9 +23,9 @@ local function updateSSR()
 	return currentSSR
 end
 
-local x = (MovableValues and MovableValues.NPSDisplayX) or getDefaultGameplayCoordinate("NPSDisplayX") or 10
-local y = (MovableValues and MovableValues.NPSDisplayY) or getDefaultGameplayCoordinate("NPSDisplayY") or (SCREEN_CENTER_Y + 95)
-local zoom = (MovableValues and MovableValues.NPSDisplayZoom) or getDefaultGameplaySize("NPSDisplayZoom") or 0.65
+local x = (MovableValues and MovableValues.SSRDisplayX) or getDefaultGameplayCoordinate("SSRDisplayX") or 10
+local y = (MovableValues and MovableValues.SSRDisplayY) or getDefaultGameplayCoordinate("SSRDisplayY") or (SCREEN_CENTER_Y + 75)
+local zoom = (MovableValues and MovableValues.SSRDisplayZoom) or getDefaultGameplaySize("SSRDisplayZoom") or 0.65
 
 return Def.ActorFrame {
 	Name = "SSRDisplay",

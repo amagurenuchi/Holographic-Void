@@ -1,3 +1,5 @@
+-- TODO: change this into a more user-friendly menu
+
 local settext = BitmapText.settext
 local isPractice = GAMESTATE:IsPracticeMode()
 local allowedCustomization = playerConfig:get_data(pn_to_profile_slot(PLAYER_1)).CustomizeGameplay
@@ -84,6 +86,8 @@ return Def.ActorFrame {
 				"f: "..transStr("ReplayButtonPosition"),
 				"g: "..transStr("AutoFailPosition"),
 				"h: "..transStr("AutoFailSize"),
+				"j: "..transStr("SSRDisplayPosition"),
+				"k: "..transStr("SSRDisplaySize"),
 				"x: "..transStr("BPMPosition"),
 				"c: "..transStr("BPMSize"),
 				"v: "..transStr("RatePosition"),
