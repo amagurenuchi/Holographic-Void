@@ -150,7 +150,7 @@ t[#t+1] = LoadFont("Common Normal") .. {
 }
 
 -- Difficulty + MSD
-t[#t+1] = LoadFont("Common Normal") .. {
+t[#t+1] = LoadFont("MSD 20px") .. {
 	InitCommand = function(self)
 		self:x(metaX):y(10):halign(0):zoom(0.35)
 		self:maxwidth(metaW / 0.35)

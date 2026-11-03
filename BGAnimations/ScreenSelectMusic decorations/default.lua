@@ -1096,7 +1096,7 @@ t[#t + 1] = Def.ActorFrame {
 		self:visible(show == "true" or show == true)
 	end,
 
-	LoadFont("Common Large") .. {
+	LoadFont("MSD 20px") .. {
 		Name = "MSD_Overall",
 		InitCommand = function(self)
 			self:halign(0):valign(0):zoom(0.45):diffuse(mainText)
@@ -1458,7 +1458,7 @@ for i = 1, maxVisibleCharts do
 			DelayedChartUpdateMessageCommand = function(self) self:playcommand("Set") end,
 		},
 
-		LoadFont("Common Normal") .. {
+		LoadFont("MSD 20px") .. {
 			Name = "MSDVal",
 			InitCommand = function(self)
 				self:halign(1):valign(0.5)
@@ -2310,7 +2310,7 @@ t[#t + 1] = Def.ActorFrame {
 	},
 
 	-- MSD/Rating (Bottom Left)
-	LoadFont("Common Large") .. {
+	LoadFont("MSD 20px") .. {
 		Name = "Rating",
 		InitCommand = function(self)
 			self:halign(0):valign(1):x(56):y(53):zoom(0.35)

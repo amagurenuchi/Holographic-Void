@@ -48,7 +48,7 @@ t[#t + 1] = LoadFont("Common Normal") .. {
 		self:settext(HV.GetGradeName(grade)):diffuse(HVColor.GetGradeColor(grade))
 	end,
 }
-t[#t + 1] = LoadFont("Common Normal") .. {
+t[#t + 1] = LoadFont("MSD 20px") .. {
 	InitCommand = function(self) self:halign(1):xy(SCREEN_WIDTH - 28, SCREEN_HEIGHT - 142):zoom(0.38) end,
 	OnCommand = function(self)
 		local score = getScoreForPlot()

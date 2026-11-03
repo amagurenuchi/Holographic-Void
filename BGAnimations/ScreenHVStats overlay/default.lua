@@ -2736,7 +2736,7 @@ function sessionRow(i)
 				self:xy(sessionCardWidth - 300, 4):halign(1):valign(0):zoom(0.34)
 			end
 		},
-		LoadFont("Common Large") .. {
+		LoadFont("MSD 20px") .. {
 			Name = "SSR",
 			InitCommand = function(self)
 				self:xy(sessionCardWidth - 300, 26):halign(1):valign(0):zoom(0.34)
@@ -2952,7 +2952,7 @@ function overallSkillsetRow(i)
 				self:xy(8, 8):halign(0):valign(0.5):zoom(0.24):maxwidth(400)
 			end
 		},
-		LoadFont("Common Normal") .. {
+		LoadFont("MSD 20px") .. {
 			Name = "Rating",
 			InitCommand = function(self)
 				self:xy(264, 8):halign(1):valign(0.5):zoom(0.24)
@@ -3105,7 +3105,7 @@ function overallOverviewRow(i)
 				self:xy(550, 13):halign(1):valign(0.5):zoom(0.26):diffuse(color("#DDDDDD"))
 			end
 		},
-		LoadFont("Common Normal") .. {
+		LoadFont("MSD 20px") .. {
 			Name = "Best",
 			InitCommand = function(self)
 				self:xy(sessionCardWidth - 12, 13):halign(1):valign(0.5):zoom(0.26)

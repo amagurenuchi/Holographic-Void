@@ -735,7 +735,7 @@ for i = 1, math.max(chartsPerPage, playlistsPerPage) do
 		},
 
 		-- MSD display
-		LoadFont("Common Normal") .. {
+		LoadFont("MSD 20px") .. {
 			Name = "RateText",
 			InitCommand = function(self)
 				self:halign(1):valign(0.5):x(overlayW - 165):y(rowH / 2):zoom(0.32):diffuse(dimText)

@@ -1600,7 +1600,7 @@ local function scoreBoard(pn)
 				end
 			},
 			-- MSD (Common Large, 2 decimal points)
-			LoadFont("Common Large") .. {
+			LoadFont("MSD 20px") .. {
 				InitCommand = function(self)
 					self:halign(1):valign(0):xy(0, -2):zoom(0.6)
 				end,
@@ -1744,9 +1744,9 @@ local function scoreBoard(pn)
 			ManiaModeChangedMessageCommand = function(self) self:playcommand("SetJudge") end
 		},
 		-- SSR
-		LoadFont("Common Normal") .. {
+		LoadFont("MSD 20px") .. {
 			Name = "EvaluationSSR",
-			InitCommand = function(self) self:halign(0):valign(0):xy(10, 45):zoom(1.05):diffuse(subText):diffusealpha(0) end,
+			InitCommand = function(self) self:halign(0):valign(0):xy(10, 45):zoom(0.525):diffuse(subText):diffusealpha(0) end,
 			OnCommand = function(self)
 				if HV.ShowMSD() then
 					local ssr = scoringVoided and 0 or curScore:GetSkillsetSSR("Overall")

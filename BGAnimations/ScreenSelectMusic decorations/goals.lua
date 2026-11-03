@@ -246,7 +246,7 @@ local function makeGoalRow(i)
 					end
 				end,
 			},
-			LoadFont("Common Normal") .. {
+			LoadFont("MSD 20px") .. {
 				Name = "Diff",
 				InitCommand = function(self) self:halign(0):y(12):zoom(0.28) end,
 				GoalTableRefreshCommand = function(self)

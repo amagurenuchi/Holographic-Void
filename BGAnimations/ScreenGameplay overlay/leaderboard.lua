@@ -278,7 +278,7 @@ for i = 1, maxEntries do
 			SetDataCommand = function(self, data) self:settextf("%.2fx", data.rate) end
 		},
 		-- SSR
-		LoadFont("Common Normal") .. {
+		LoadFont("MSD 20px") .. {
 			InitCommand = function(self) self:halign(1):valign(0):xy(cardW - 6, 11):zoom(0.24) end,
 			SetDataCommand = function(self, data)
 				if data.ssr > 0 then

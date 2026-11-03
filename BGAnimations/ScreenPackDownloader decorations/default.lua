@@ -578,7 +578,7 @@ for i = 1, packsPerPage do
 		},
 
 		-- Average difficulty
-		LoadFont("Common Normal") .. {
+		LoadFont("MSD 20px") .. {
 			Name = "AvgMSD",
 			InitCommand = function(self)
 				self:halign(1):valign(0):xy(colAvgX, 3)

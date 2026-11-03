@@ -592,7 +592,7 @@ for i = 1, pageSize do
 		LoadFont("Common Normal") .. { Name = "Wife", InitCommand = function(self) self:halign(0):valign(0.5):x(190):y(rowH/2 - 5):zoom(0.40):diffuse(brightText) end, PerfectScoreGlowCommand = function(self) self:linear(0.45):glow(accentColor):linear(0.45):glow(color("0,0,0,0")):queuecommand("PerfectScoreGlow") end },
 		LoadFont("Common Normal") .. { Name = "Judge", InitCommand = function(self) self:halign(1):valign(0.5):x(185):y(rowH/2 - 5):zoom(0.30):diffuse(subText) end },
 		LoadFont("Common Normal") .. { Name = "Judgments", InitCommand = function(self) self:halign(0):valign(0.5):x(190):y(rowH/2 + 8):zoom(0.28):diffuse(subText) end },
-		LoadFont("Common Normal") .. { Name = "SSR", InitCommand = function(self) self:halign(0):valign(0.5):x(280):y(rowH/2):zoom(0.50):diffuse(brightText):visible(HV.ShowMSD()) end },
+		LoadFont("MSD 20px") .. { Name = "SSR", InitCommand = function(self) self:halign(0):valign(0.5):x(280):y(rowH/2):zoom(0.25):diffuse(brightText):visible(HV.ShowMSD()) end },
 		LoadFont("Common Normal") .. { Name = "Grade", InitCommand = function(self) self:halign(0):valign(0.5):x(345):y(rowH/2):zoom(0.38) end },
 		LoadFont("Common Normal") .. { Name = "Rate", InitCommand = function(self) self:halign(0):valign(0.5):x(415):y(rowH/2):zoom(0.38):diffuse(mainText) end },
 		LoadFont("Common Normal") .. { Name = "Clear", InitCommand = function(self) self:halign(0):valign(0.5):x(485):y(rowH/2):zoom(0.35) end },

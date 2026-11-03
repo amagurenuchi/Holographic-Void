@@ -391,8 +391,8 @@ local function scoreItem(i)
 		},
 
 		-- SSR
-		LoadFont("Common Normal") .. {
-			InitCommand = function(self) self:xy(SCREEN_CENTER_X - 50, 8):zoom(0.55):halign(1) end,
+		LoadFont("MSD 20px") .. {
+			InitCommand = function(self) self:xy(SCREEN_CENTER_X - 50, 8):zoom(0.275):halign(1) end,
 			SetScoreCommand = function(self, params)
 				if not HV.ShowMSD() then
 					self:settext("")
