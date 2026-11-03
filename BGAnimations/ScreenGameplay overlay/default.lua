@@ -2280,6 +2280,9 @@ if not isSync then
 		MovableBorder(64, 64, 1, 32, 0)
 	}
 	t[#t + 1] = LoadActor("npscalc")
+	if HV.ShowSSR() then
+		t[#t + 1] = LoadActor("ssr")
+	end
 	t[#t + 1] = LoadActor("multiplayer")
 	t[#t + 1] = LoadActor("leaderboard")
 	t[#t + 1] = LoadActor("avatar")

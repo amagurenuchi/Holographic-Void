@@ -355,6 +355,11 @@ local HVPrefs = {
 		Choices = {"Off", "On"},
 		Values = {false, true}
 	},
+	HV_ShowSSR = {
+		Default = true,
+		Choices = {"Off", "On"},
+		Values = {false, true}
+	},
 
 	-- Gameplay: NPS Window Size (seconds)
 	HV_NPSWindowSize = {
@@ -888,6 +893,10 @@ end
 --- Check if real-time NPS should be shown.
 function HV.ShowNPS()
 	return isTrue(ThemePrefs.Get("HV_ShowNPS"))
+end
+
+function HV.ShowSSR()
+	return isTrue(ThemePrefs.Get("HV_ShowSSR"))
 end
 
 --- Check if NPS graph should be shown.

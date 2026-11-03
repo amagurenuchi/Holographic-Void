@@ -512,7 +512,7 @@ function HVThemeOptionsLines()
 		"HV_ShowPlayerInfo", "HV_ProgressBarPosition", "HV_ShowInGameLeaderboard",
 		
 		-- Gameplay Tools
-		"HV_ShowNPS", "HV_NPSWindowSize", "HV_ShowNPSGraph", "HV_ErrorBarMode",
+		"HV_ShowNPS", "HV_ShowSSR", "HV_NPSWindowSize", "HV_ShowNPSGraph", "HV_ErrorBarMode",
 		"HV_ErrorBarColoringMode", "HV_ShowMean", "HV_ShowMeasureLines",
 		"HV_ComboBreakHighlight", "HV_AssistMode", "HV_ScoreDisplayMode",
 		
@@ -614,6 +614,10 @@ end
 
 function OptionRowShowNPS()
 	return HVThemePrefRow("HV_ShowNPS", "Show NPS")
+end
+
+function OptionRowShowSSR()
+	return HVThemePrefRow("HV_ShowSSR", "Show SSR")
 end
 
 function OptionRowShowMean()

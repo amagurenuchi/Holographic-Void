@@ -174,9 +174,11 @@ local t = Def.ActorFrame {
 -- Text Container
 t[#t + 1] = Def.ActorFrame {
 	Name = "NPSTextContainer",
-	InitCommand = function(self)
-		self:xy((MovableValues and MovableValues.NPSDisplayX) or getDefaultGameplayCoordinate("NPSDisplayX") or graphX, (MovableValues and MovableValues.NPSDisplayY) or getDefaultGameplayCoordinate("NPSDisplayY") or (graphY - 5)):zoom((MovableValues and MovableValues.NPSDisplayZoom) or getDefaultGameplaySize("NPSDisplayZoom") or fontZoom)
-	end,
+		InitCommand = function(self)
+	local x = (MovableValues and MovableValues.NPSDisplayX) or getDefaultGameplayCoordinate("NPSDisplayX") or graphX
+	local y = (MovableValues and MovableValues.NPSDisplayY) or getDefaultGameplayCoordinate("NPSDisplayY") or (graphY - 5)
+	self:xy(x, y):zoom((MovableValues and MovableValues.NPSDisplayZoom) or getDefaultGameplaySize("NPSDisplayZoom") or fontZoom)
+		end,
 	LoadFont("Common Normal") .. {
 		Name = "Text",
 		InitCommand = function(self)

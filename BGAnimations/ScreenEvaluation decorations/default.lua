@@ -1503,10 +1503,10 @@ local function scoreBoard(pn)
 				},
 
 				-- Rating (Player SSR - cycles between online and offline with fade)
-				LoadFont("Common Large") .. {
+				LoadFont("MSD 20px") .. {
 					Name = "PlayerRating",
 					InitCommand = function(self)
-						self:xy(65, 53):zoom(0.45):halign(0)
+						self:xy(65, 53):zoom(0.35):halign(0)
 						self.showOnline = true
 						self.transitionDuration = 0.25
 						self.onlineRating = DLMAN:IsLoggedIn() and DLMAN:GetSkillsetRating("Overall") or nil
