@@ -1911,7 +1911,7 @@ local function scoreBoard(pn)
 				-- Incremental counting
 				local val = math.max(0, wife)
 				-- it is buggy idk why.
-				local duration = 0.4
+				local duration = 0.2
 				local curTime = 0
 				local targetWife = wife
 				self:SetUpdateFunction(function(self, delta)
@@ -2113,7 +2113,7 @@ local function scoreBoard(pn)
 					
 					local progress = (totalNotes > 0) and (encounteredNotes / totalNotes) or 0
 					local targetProgress = progress * 100
-					local duration = 0.8
+					local duration = 0.2
 					local curTime = 0
 
 					self:visible(true):stoptweening():diffusealpha(0):sleep(0.4):linear(0.2):diffusealpha(1)
@@ -2160,7 +2160,7 @@ local function scoreBoard(pn)
 				local dp = isManiaModeEnabled() and getOsuManiaLongScore() or customDP or ((displayPct / 100) * songMaxPoints)
 				local targetDP = dp
 
-				local duration = 0.4
+				local duration = 0.2
 				local curTime = 0
 
 				self:stoptweening():sleep(0.4):linear(0.15):diffusealpha(1)
