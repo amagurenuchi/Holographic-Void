@@ -11,6 +11,7 @@ local HV_RidiculousCount = 0
 local HV_AutoFailStopped = false
 local failSfxPath = THEME:GetPathS("", "ScreenGameplay failed")
 local failSfxPlayed = false
+local sideImagePath = THEME:GetPathG("", "side")
 
 local function PlayFailSfxOnce()
 	if failSfxPlayed then return end
@@ -623,6 +624,38 @@ if miniProgressBarEnabled and not isSync then
 	}
 end
 
+-- Optional gameplay decoration. Keep this actor out of the tree entirely if
+-- the theme asset has been removed or is unavailable.
+if sideImagePath and sideImagePath ~= "" and FILEMAN:DoesFileExist(sideImagePath) then
+	t[#t + 1] = Def.Sprite {
+		Name = "GameplaySideImage",
+		InitCommand = function(self)
+			local columns = 4
+			local style = GAMESTATE:GetCurrentStyle()
+			if style and style.ColumnsPerPlayer then
+				local ok, value = pcall(function() return style:ColumnsPerPlayer() end)
+				if ok and tonumber(value) then columns = math.max(1, tonumber(value)) end
+			end
+
+			local widthScale = gameplaySize("NotefieldWidth")
+			local spacing = gameplaySize("NotefieldSpacing")
+			local miniScale = HV.Clamp((tonumber(ThemePrefs.Get("HV_Mini")) or 100) / 100, 0.01, 2.5)
+			local fieldWidth = ((columns * 64 * widthScale) + ((columns - 1) * spacing)) * miniScale
+			local fieldRight = SCREEN_CENTER_X + gameplayCoord("NotefieldX") + fieldWidth / 2
+
+			self:Load(sideImagePath)
+			local imageWidth = self:GetWidth()
+			local imageHeight = self:GetHeight()
+			if imageWidth <= 0 or imageHeight <= 0 then
+				self:visible(false)
+				return
+			end
+			local scale = (SCREEN_HEIGHT * 0.75) / imageHeight
+			self:xy(fieldRight + (imageWidth * scale) / 2, SCREEN_BOTTOM - (imageHeight * scale) / 2)
+				:zoom(scale)
+		end
+	}
+end
 -- ============================================================
 -- SCORE % (REAL-TIME)
 -- ============================================================
@@ -1590,8 +1623,10 @@ local showStandard = (ebMode == "Standard" or ebMode == "Both")
 -- ============================================================
 local colSpacing = 70
 local showJudgeCounter = HV.ShowJudgeCounter()
-local tallyX = SCREEN_CENTER_X + 160
-local tallyY = SCREEN_HEIGHT - 176
+local isSimpleTally = HV.GetJudgmentTallyMode() == "Simple"
+local tallyRows = #judgmentLabels + 2
+local tallyHeight = (tallyRows - 1) * 16 + 12
+local tallyWidth = isSimpleTally and 72 or (colSpacing + 78)
 
 if showJudgeCounter and not isSync then
 t[#t + 1] = Def.ActorFrame {
@@ -1606,6 +1641,14 @@ t[#t + 1] = Def.ActorFrame {
 	OnCommand = function(self)
 		setMovableActor({"DeviceButton_p"}, self, self:GetChild("Border"))
 	end,
+
+	Def.Quad {
+		Name = "Background",
+		InitCommand = function(self)
+			self:halign(0):valign(0):xy(-5, -6):zoomto(tallyWidth, tallyHeight)
+				:diffuse(color("0,0,0,1")):diffusealpha(0.4)
+		end
+	},
 
 	-- COLUMN 1: Judgments + OK/NG
 	Def.ActorFrame {
@@ -1973,7 +2016,7 @@ t[#t + 1] = Def.ActorFrame {
 		}
 	}
 	,
-	MovableBorder(140, 100, 1, 70, 50)
+	MovableBorder(tallyWidth + 10, tallyHeight + 12, 1, 70, 50)
 }
 end
 
@@ -2649,5 +2692,7 @@ t[#t + 1] = Def.Actor {
         updateNowPlaying()
     end
 }
+
+
 
 return t
