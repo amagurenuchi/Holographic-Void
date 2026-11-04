@@ -7,6 +7,14 @@ local lastWifeScore
 local currentSSR = 0
 local ssrPollInterval = 0.2
 
+local function canShowSSR()
+	if not HV.ShowMSD() or HV.MinimalisticMode() then return false end
+	local steps = GAMESTATE:GetCurrentSteps(pn)
+	if not steps or type(steps.GetMSD) ~= "function" then return false end
+	local ok, msd = pcall(steps.GetMSD, steps, getCurRateValue(), 1)
+	return ok and (tonumber(msd) or 0) > 0
+end
+
 local function updateSSR()
 	local steps = GAMESTATE:GetCurrentSteps(pn)
 	local stageStats = STATSMAN:GetCurStageStats()
@@ -36,11 +44,15 @@ return Def.ActorFrame {
 			elapsed = elapsed + (delta or 0)
 			if elapsed < ssrPollInterval then return end
 			elapsed = 0
+			self:visible(canShowSSR())
 			local ssr = updateSSR()
 			if ssrTextActor then
 				ssrTextActor:settextf("%0.2f", ssr):diffuse(HVColor.GetMSDRatingColor(ssr))
 			end
 		end)
+	end,
+	HV_MinimalisticModeChangedMessageCommand = function(self)
+		self:visible(canShowSSR())
 	end,
 	OnCommand = function(self)
 		setMovableActor({"DeviceButton_j", "DeviceButton_k"}, self, self:GetChild("Border"))

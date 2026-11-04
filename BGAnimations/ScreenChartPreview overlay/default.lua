@@ -555,8 +555,24 @@ local function skillsetPanel()
 		InitCommand = function(self)
 			self:visible(HV.ShowMSD())
 		end,
+		ReloadCommand = function(self)
+			local overallMSD = 0
+			if steps and type(steps.GetMSD) == "function" then
+				local ok, value = pcall(steps.GetMSD, steps, getCurRateValue(), 1)
+				if ok then overallMSD = tonumber(value) or 0 end
+			end
+			local hasValue = overallMSD > 0
+			self:GetChild("Grid"):visible(hasValue)
+			self:GetChild("NoValue"):visible(not hasValue)
+		end,
 		Def.Quad { InitCommand = function(self) self:zoomto(sidePanelWidth, 240):diffuse(bgCard):diffusealpha(0.8) end },
 		LoadFont("Common Normal") .. { InitCommand = function(self) self:y(-135):settext("SKILLSETS"):zoom(0.4):diffuse(accentColor) end },
+		LoadFont("Common Normal") .. {
+			Name = "NoValue",
+			InitCommand = function(self)
+				self:settext("No Value"):zoom(0.45):diffuse(textDim):visible(false)
+			end
+		},
 		Def.ActorFrame {
 			Name = "Grid",
 			InitCommand = function(self) self:y(-110) end,
@@ -962,6 +978,7 @@ end
 local tooltipW = 280
 local tooltipH = 56
 local msdTooltipActor = nil
+local tooltipOverallMSDAvailable = true
 
 local msdTooltip = Def.ActorFrame {
 	Name = "MSDTooltip",
@@ -969,6 +986,21 @@ local msdTooltip = Def.ActorFrame {
 		msdTooltipActor = self
 		self:visible(false)
 		self:z(1000)
+	end,
+	SetHoverCommand = function(self, params)
+		local steps = params and params.steps
+		local overallMSD = 0
+		if steps and type(steps.GetMSD) == "function" then
+			local ok, value = pcall(steps.GetMSD, steps, getCurRateValue and getCurRateValue() or 1, 1)
+			if ok then overallMSD = tonumber(value) or 0 end
+		end
+		tooltipOverallMSDAvailable = overallMSD > 0
+		self:visible(true)
+		local message = self:GetChild("UnavailableMessage")
+		if message then
+			message:settext(tooltipOverallMSDAvailable and "" or "This chart contains intervals that violates limits of the calculator.")
+			message:visible(not tooltipOverallMSDAvailable)
+		end
 	end,
 	-- Background
 	Def.Quad {
@@ -989,6 +1021,14 @@ local skillsetsList = {
 	{name="JackSpeed", idx=6}, {name="Chordjack", idx=7}, {name="Technical", idx=8}
 }
 
+msdTooltip[#msdTooltip + 1] = LoadFont("Common Normal") .. {
+	Name = "UnavailableMessage",
+	InitCommand = function(self)
+		self:xy(tooltipW / 2, -tooltipH / 2):zoom(0.34):diffuse(textMain)
+		self:maxwidth(tooltipW / 0.34):visible(false)
+	end
+}
+
 for i, ss in ipairs(skillsetsList) do
 	local col, row, colW, offsetX
 	if i <= 4 then
@@ -1006,6 +1046,7 @@ for i, ss in ipairs(skillsetsList) do
 	local offsetY = -tooltipH + 12 + row * 24
 
 	msdTooltip[#msdTooltip + 1] = Def.ActorFrame {
+		Name = "Skillset" .. i,
 		InitCommand = function(self)
 			self:xy(offsetX, offsetY)
 		end,
@@ -1016,7 +1057,15 @@ for i, ss in ipairs(skillsetsList) do
 			Name = "Val",
 			InitCommand = function(self) self:y(5):zoom(0.35):diffuse(textMain) end,
 			SetHoverCommand = function(self, params)
-				if params.steps then
+				local parent = msdTooltipActor
+				local message = parent and parent:GetChild("UnavailableMessage")
+				if not tooltipOverallMSDAvailable then
+					if message then
+						message:settext("This chart contains intervals that violates limits of the calculator."):visible(true)
+					end
+					self:settext("")
+				elseif params.steps then
+					if message then message:settext(""):visible(false) end
 					local rate = getCurRateValue and getCurRateValue() or 1
 					local msd = params.steps:GetMSD(rate, ss.idx)
 					if msd and msd > 0 then

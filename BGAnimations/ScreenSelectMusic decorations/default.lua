@@ -1374,6 +1374,7 @@ local msdTooltipW = 280
 local msdTooltipH = 56
 
 local msdTooltipActor = nil
+local tooltipOverallMSDAvailable = true
 
 local msdTooltip = Def.ActorFrame {
 	Name = "MSDTooltip",
@@ -1383,6 +1384,33 @@ local msdTooltip = Def.ActorFrame {
 	end,
 	MSDModeChangedMessageCommand = function(self)
 		self:playcommand("Set")
+	end,
+	CurrentSongChangedMessageCommand = function(self)
+		if self:GetVisible() then self:playcommand("Set") end
+	end,
+	CurrentStepsChangedMessageCommand = function(self)
+		if self:GetVisible() then self:playcommand("Set") end
+	end,
+	DelayedChartUpdateMessageCommand = function(self)
+		if self:GetVisible() then self:playcommand("Set") end
+	end,
+	SetCommand = function(self)
+		local steps = GAMESTATE:GetCurrentSteps()
+		local overallMSD = 0
+		if steps and type(steps.GetMSD) == "function" then
+			local ok, value = pcall(steps.GetMSD, steps, getCurRateValue(), 1)
+			if ok then overallMSD = tonumber(value) or 0 end
+		end
+		tooltipOverallMSDAvailable = overallMSD > 0
+		local message = self:GetChild("UnavailableMessage")
+		if message then
+			message:settext(tooltipOverallMSDAvailable and "" or "This chart contains intervals that violates limits of the calculator.")
+			message:visible(not tooltipOverallMSDAvailable)
+		end
+		for i = 1, 7 do
+			local group = self:GetChild("Skillset" .. i)
+			if group then group:visible(tooltipOverallMSDAvailable) end
+		end
 	end,
 	-- Background
 	Def.Quad {
@@ -1404,6 +1432,14 @@ local tooltipSkillsets = {
 	{name="JackSpeed", idx=6}, {name="Chordjack", idx=7}, {name="Technical", idx=8}
 }
 
+msdTooltip[#msdTooltip + 1] = LoadFont("Common Normal") .. {
+	Name = "UnavailableMessage",
+	InitCommand = function(self)
+		self:xy(msdTooltipW / 2, -msdTooltipH / 2):zoom(0.34):diffuse(mainText)
+		self:maxwidth(msdTooltipW / 0.34):visible(false)
+	end
+}
+
 for i, ss in ipairs(tooltipSkillsets) do
 	local col, row, colW, offsetX
 	if i <= 4 then
@@ -1421,6 +1457,7 @@ for i, ss in ipairs(tooltipSkillsets) do
 	local offsetY = -msdTooltipH + 12 + row * 24
 
 	msdTooltip[#msdTooltip + 1] = Def.ActorFrame {
+		Name = "Skillset" .. i,
 		InitCommand = function(self)
 			self:xy(offsetX, offsetY)
 		end,
@@ -1431,6 +1468,10 @@ for i, ss in ipairs(tooltipSkillsets) do
 			Name = "Val",
 			InitCommand = function(self) self:y(5):zoom(0.35):diffuse(mainText) end,
 			SetCommand = function(self)
+				if not tooltipOverallMSDAvailable then
+					self:settext("")
+					return
+				end
 				local song = GAMESTATE:GetCurrentSong()
 				if song then
 					local curSteps = GAMESTATE:GetCurrentSteps()

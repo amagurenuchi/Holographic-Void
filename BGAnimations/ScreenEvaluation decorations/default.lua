@@ -1802,7 +1802,13 @@ local function scoreBoard(pn)
 			Name = "EvaluationSSR",
 			InitCommand = function(self) self:halign(0):valign(0):xy(10, 45):zoom(0.525):diffuse(subText):diffusealpha(0) end,
 			OnCommand = function(self)
-				if HV.ShowMSD() then
+				local steps = GAMESTATE:GetCurrentSteps(pn)
+				local overallMSD = 0
+				if steps and type(steps.GetMSD) == "function" then
+					local ok, value = pcall(steps.GetMSD, steps, getCurRateValue(), 1)
+					if ok then overallMSD = tonumber(value) or 0 end
+				end
+				if HV.ShowMSD() and overallMSD > 0 then
 					local ssr = scoringVoided and 0 or curScore:GetSkillsetSSR("Overall")
 					self:settextf("%.2f", ssr)
 					self:diffuse(HVColor.GetMSDRatingColor(ssr))
@@ -1911,7 +1917,7 @@ local function scoreBoard(pn)
 				-- Incremental counting
 				local val = math.max(0, wife)
 				-- it is buggy idk why.
-				local duration = 0.2
+				local duration = 0.3
 				local curTime = 0
 				local targetWife = wife
 				self:SetUpdateFunction(function(self, delta)
@@ -2113,7 +2119,7 @@ local function scoreBoard(pn)
 					
 					local progress = (totalNotes > 0) and (encounteredNotes / totalNotes) or 0
 					local targetProgress = progress * 100
-					local duration = 0.2
+					local duration = 0.3
 					local curTime = 0
 
 					self:visible(true):stoptweening():diffusealpha(0):sleep(0.4):linear(0.2):diffusealpha(1)
@@ -2160,7 +2166,7 @@ local function scoreBoard(pn)
 				local dp = isManiaModeEnabled() and getOsuManiaLongScore() or customDP or ((displayPct / 100) * songMaxPoints)
 				local targetDP = dp
 
-				local duration = 0.2
+				local duration = 0.3
 				local curTime = 0
 
 				self:stoptweening():sleep(0.4):linear(0.15):diffusealpha(1)
