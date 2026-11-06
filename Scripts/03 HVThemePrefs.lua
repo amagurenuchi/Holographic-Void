@@ -348,6 +348,11 @@ local HVPrefs = {
 		Choices = {"Off", "On"},
 		Values = {false, true},
 	},
+	HV_OsuManiaStarRating = {
+		Default = "Classic",
+		Choices = {"Off", "Classic", "Enissay rework"},
+		Values = {"Off", "Classic", "Enissay rework"},
+	},
 
 	-- Gameplay: Toggle real-time NPS display
 	HV_ShowNPS = {
