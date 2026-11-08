@@ -1364,10 +1364,6 @@ local function getOsuManiaStars(steps, rate)
 	return stars
 end
 
-local function isShiftPressed()
-	return INPUTFILTER and INPUTFILTER.IsShiftPressed and INPUTFILTER:IsShiftPressed()
-end
-
 t[#t + 1] = Def.ActorFrame {
 	Name = "MSDFrame",
 	InitCommand = function(self)
@@ -1677,18 +1673,13 @@ t[#t + 1] = Def.ActorFrame {
 		self:queuecommand("Tick")
 	end,
 	TickCommand = function(self)
-		-- Folders have an average MSD but no chart SSR data to display.
-		local maxSSR = isShiftPressed() and GAMESTATE:GetCurrentSong() ~= nil
-		if maxSSR ~= msdTooltipMaxSSR then
-			msdTooltipMaxSSR = maxSSR
-			MESSAGEMAN:Broadcast("MSDModeChanged")
-		end
-
 		if msdTooltipActor then
+			local selectedData = HV.CurrentSongData or {}
+			local isFolderSelected = selectedData.group and selectedData.group ~= "" and not selectedData.song
 			-- The label is at msdY and the number is at msdY + 18 with zoom ~0.45.
 			-- The text height is around 40px, so 18 + 40 = 58.
 			local isHovering = IsMouseOver(panelX + 10, msdY + 14, 120, 48)
-			if isHovering and HV.ShowMSD() then
+			if isHovering and HV.ShowMSD() and not isFolderSelected then
 				local mx, my = INPUTFILTER:GetMouseX(), INPUTFILTER:GetMouseY()
 				local wasHidden = not msdTooltipActor:GetVisible()
 				msdTooltipActor:visible(true):xy(mx + 5, my - 15)
@@ -1905,6 +1896,15 @@ t[#t + 1] = Def.ActorFrame {
 
 			local mx, my = INPUTFILTER:GetMouseX(), INPUTFILTER:GetMouseY()
 			local btn = event.DeviceInput.button
+
+			-- Toggle Max SSR by clicking the MSD value or label.
+			if btn == "DeviceButton_left mouse button"
+				and IsMouseOver(panelX + 10, msdY, 120, 62)
+				and HV.ShowMSD() and data.song and data.steps then
+				msdTooltipMaxSSR = not msdTooltipMaxSSR
+				MESSAGEMAN:Broadcast("MSDModeChanged")
+				return true
+			end
 			
 			-- Chart Slot Click
 			if btn == "DeviceButton_left mouse button" then

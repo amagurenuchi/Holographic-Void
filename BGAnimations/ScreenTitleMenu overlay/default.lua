@@ -32,7 +32,7 @@ t[#t+1] = Def.ActorFrame {
 -- Menu Click Handler
 t[#t+1] = UIElements.QuadButton(1) .. {
 	InitCommand = function(self)
-		self:xy(SCREEN_CENTER_X, SCREEN_CENTER_Y):zoomto(300, 240):diffusealpha(0)
+		self:xy(SCREEN_LEFT + 216, SCREEN_CENTER_Y):zoomto(360, 220):diffusealpha(0)
 	end,
 	MouseDownCommand = function(self, params)
 		if params.event == "DeviceButton_left mouse button" then
@@ -40,9 +40,9 @@ t[#t+1] = UIElements.QuadButton(1) .. {
 			local virtualY = INPUTFILTER:GetMouseY()
 			local hovered = nil
 			for i = 1, #choiceNames do
-				local static_iy = SCREEN_CENTER_Y + 40 * (i - ((#choiceNames + 1) / 2))
-				if virtualX >= SCREEN_CENTER_X-150 and virtualX <= SCREEN_CENTER_X+150 
-				   and virtualY >= static_iy-20 and virtualY <= static_iy+20 then
+				local static_iy = SCREEN_CENTER_Y + 32 * (i - ((#choiceNames + 1) / 2))
+				if virtualX >= SCREEN_LEFT + 36 and virtualX <= SCREEN_LEFT + 396
+				   and virtualY >= static_iy-16 and virtualY <= static_iy+16 then
 					hovered = i break
 				end
 			end

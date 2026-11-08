@@ -164,21 +164,21 @@ local t = Def.ActorFrame {
 			local hovered = nil
 			local choiceNames = {"Start", "Multi", "ColorTheme", "PackDownloader", "Options", "Quit"}
 			for i = 1, #choiceNames do
-				local static_iy = SCREEN_CENTER_Y + 40 * (i - ((#choiceNames + 1) / 2))
-				if virtualX >= SCREEN_CENTER_X-150 and virtualX <= SCREEN_CENTER_X+150 
-				   and virtualY >= static_iy-20 and virtualY <= static_iy+20 then
+				local static_iy = SCREEN_CENTER_Y + 32 * (i - ((#choiceNames + 1) / 2))
+				if virtualX >= SCREEN_LEFT + 36 and virtualX <= SCREEN_LEFT + 396
+				   and virtualY >= static_iy-16 and virtualY <= static_iy+16 then
 					hovered = i break
 				end
 			end
 
-			-- Selection Glow
-			local selGlow = af:GetChild("SelectionGlow")
-			if selGlow then
+			-- Center-out underline follows the hovered menu row.
+			local hoverLine = af:GetChild("HoverLine")
+			if hoverLine and hovered ~= HV.TitleState.mouse.lastHovered then
 				if hovered then
-					local selY = SCREEN_CENTER_Y + 40 * (hovered - ((#choiceNames + 1) / 2))
-					selGlow:stoptweening():linear(0.05):y(selY):diffusealpha(isGlowEnabled and 0.4 or 0)
+					local selY = SCREEN_CENTER_Y + 32 * (hovered - ((#choiceNames + 1) / 2)) + 12
+					hoverLine:stoptweening():y(selY):diffusealpha(0.75):linear(0.18):zoomx(1)
 				else
-					selGlow:stoptweening():linear(0.1):diffusealpha(0)
+					hoverLine:stoptweening():linear(0.12):zoomx(0):diffusealpha(0)
 				end
 			end
 
@@ -423,9 +423,9 @@ local bgEffectsFrame = Def.ActorFrame {
 		if bgEffect == "None" then alpha = 0 end
 		self:finishtweening():diffusealpha(alpha)
 		
-		local selGlow = self:GetChild("SelectionGlow")
-		if selGlow then
-			selGlow:glow(accentColor):diffuse(accentColor)
+		local hoverLine = self:GetChild("HoverLine")
+		if hoverLine then
+			hoverLine:diffuse(accentColor)
 		end
 
 		self:playcommand("UpdateAlpha")
@@ -436,21 +436,19 @@ local bgEffectsFrame = Def.ActorFrame {
 	end,
 }
 
-t[#t + 1] = Def.Quad {
-	Name = "SelectionGlow",
-	InitCommand = function(self) self:xy(SCREEN_CENTER_X, SCREEN_CENTER_Y):zoomto(300, 40):diffusealpha(0):fadetop(0.2):fadebottom(0.2) end
-}
-
 --- Title Menu Text Labels (Custom rendering to bypass engine scroller text issues)
 local choiceLabels = {"START", "MULTI", "COLOR THEME", "PACK DOWNLOADER", "OPTIONS", "EXIT"}
-local choiceKeys = {"Start", "Multi", "ColorTheme", "PackDownloader", "Options", "Quit"}
+t[#t + 1] = Def.Quad {
+	Name = "HoverLine",
+	InitCommand = function(self) self:xy(SCREEN_LEFT + 216, SCREEN_CENTER_Y):zoomto(360, 2):zoomx(0):diffuse(accentColor):diffusealpha(0) end
+}
 for i, label in ipairs(choiceLabels) do
-	local iy = SCREEN_CENTER_Y + 40 * (i - ((#choiceLabels + 1) / 2))
+	local iy = SCREEN_CENTER_Y + 32 * (i - ((#choiceLabels + 1) / 2))
 	t[#t + 1] = LoadFont("Common Normal") .. {
 		Name = "ChoiceLabel" .. i,
 		Text = label,
 		InitCommand = function(self)
-			self:xy(SCREEN_CENTER_X, iy):zoom(0.6):diffuse(color("0.5,0.5,0.5,1")):uppercase(true)
+			self:xy(SCREEN_LEFT + 52, iy):halign(0):zoom(0.6):diffuse(color("0.5,0.5,0.5,1")):uppercase(true)
 		end
 	}
 end
@@ -1020,6 +1018,11 @@ t[#t + 1] = Def.ActorFrame {
 		local lastStateKey = nil
 		self:SetUpdateFunction(function(af)
 			local p = HV.TitleState.player
+			-- Advance the jukebox when the current track reaches its known length.
+			if p.song and not p.paused and p.duration > 0 then
+				local elapsed = p.offset + (GetTimeSinceStart() - p.lastStart)
+				if elapsed >= p.duration then jukeboxNext() end
+			end
 			-- Update song text
 			local songTxt = af:GetChild("SongText")
 			if songTxt then
@@ -1038,10 +1041,10 @@ t[#t + 1] = Def.ActorFrame {
 			if timeTxt then
 				if p.song and not p.paused then
 					local elapsed = p.offset + (GetTimeSinceStart() - p.lastStart)
-					timeTxt:settext(SecondsToMSS(elapsed))
+					timeTxt:settext(SecondsToMSS(elapsed) .. " / " .. SecondsToMSS(p.duration))
 					timeTxt:diffuse(subText)
 				elseif p.song and p.offset then
-					timeTxt:settext(SecondsToMSS(p.offset))
+					timeTxt:settext(SecondsToMSS(p.offset) .. " / " .. SecondsToMSS(p.duration))
 					timeTxt:diffuse(dimText)
 				else
 					timeTxt:settext("-:--")

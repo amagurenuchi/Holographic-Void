@@ -259,17 +259,17 @@ t[#t+1] = Def.ActorFrame{
 		-- Target Goal
 		local showGoal = ThemePrefs.Get("HV_ShowGoalTracker")
 		if showGoal then
-			local pacemakerMode = ThemePrefs.Get("HV_PacemakerTargetType") or "Target"
+			local pacemakerMode = ThemePrefs.Get("HV_GoalTargetType") or "Target"
 			if pacemakerMode == "PB" or pacemakerMode == "PBReplay" then
 				local best = GetDisplayScore()
 				if best then
 					targetActor:settext("Target: PB " .. formatIntroPercent(getJ4NormalizedPercentage(best)))
 				else
-					local goal = ThemePrefs.Get("HV_PacemakerTargetGoal") or 93
+					local goal = ThemePrefs.Get("HV_GoalTarget") or 93
 					targetActor:settext("Target: " .. formatIntroPercent(goal))
 				end
 			else
-				local goal = ThemePrefs.Get("HV_PacemakerTargetGoal") or 93
+				local goal = ThemePrefs.Get("HV_GoalTarget") or 93
 				targetActor:settext("Target: " .. formatIntroPercent(goal))
 			end
 			targetActor:visible(true)
@@ -284,7 +284,7 @@ t[#t+1] = Def.ActorFrame{
 			local condition = ThemePrefs.Get("HV_AutoFailCondition")
 			local threshold = ""
 			if condition == "Wife Percent" or condition == "Sync to Goal" then
-				local goal = condition == "Sync to Goal" and (tonumber(ThemePrefs.Get("HV_PacemakerTargetGoal")) or 93) or (ThemePrefs.Get("HV_AutoFailThreshold_Wife") or 93)
+				local goal = condition == "Sync to Goal" and (tonumber(ThemePrefs.Get("HV_GoalTarget")) or 93) or (ThemePrefs.Get("HV_AutoFailThreshold_Wife") or 93)
 				threshold = (condition == "Sync to Goal" and "Goal < " or "< ") .. formatIntroPercent(goal)
 			elseif condition == "Judgement Count" then
 				local judge = ThemePrefs.Get("HV_AutoFailJudgement") or "Miss"

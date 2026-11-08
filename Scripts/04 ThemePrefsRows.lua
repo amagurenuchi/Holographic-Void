@@ -147,22 +147,22 @@ local HVPrefRows = {
 		Values = {false, true},
 	},
 
-	-- Show Mini Text Goal Tracker (formerly Pacemaker)
+	-- Show Text Goal Tracker
 	HV_ShowGoalTracker = {
 		Default = true,
 		Choices = {"Off", "On"},
 		Values = {false, true},
 	},
 
-	-- Pacemaker Target Type
-	HV_PacemakerTargetType = {
+	-- Goal Target Type
+	HV_GoalTargetType = {
 		Default = "Target",
 		Choices = {"Target", "PB", "PB Replay"},
 		Values  = {"Target", "PB", "PBReplay"},
 	},
 
-	-- Pacemaker Target Goal
-	HV_PacemakerTargetGoal = {
+	-- Goal Target
+	HV_GoalTarget = {
 		Default = 93,
 		Choices = {
 			"0%", "1%", "2%", "3%", "4%", "5%", "6%", "7%", "8%", "9%", "10%",
@@ -288,17 +288,6 @@ local HVPrefRows = {
 		Choices = {"Off", "On"},
 		Values = {false, true},
 	},
-	HV_AssistMode = {
-		Default = "Off",
-		Choices = {"Off", "Clap", "Metronome", "Both"},
-		Values = {"Off", "Clap", "Metronome", "Both"},
-	},
-	HV_GoalTrackerText = {
-		Default = true,
-		Choices = {"Off", "On"},
-		Values = {false, true},
-	},
-
 	-- Minimalistic Mode
 	HV_MinimalisticMode = {
 		Default = false,
@@ -519,10 +508,7 @@ function HVThemeOptionsLines()
 		-- Gameplay Tools
 		"HV_ShowNPS", "HV_NPSWindowSize", "HV_ShowNPSGraph", "HV_ErrorBarMode",
 		"HV_ErrorBarColoringMode", "HV_ShowMean", "HV_ShowMeasureLines",
-		"HV_ComboBreakHighlight", "HV_AssistMode", "HV_ScoreDisplayMode",
-		
-		-- Goal Tracker
-		"HV_ShowGoalTracker",
+		"HV_ComboBreakHighlight", "HV_ScoreDisplayMode",
 		
 		-- Grades
 		"HV_UseCustomGrades"
@@ -654,12 +640,12 @@ function OptionRowShowMean()
 	return row
 end
 
-function OptionRowPacemakerType()
-	return HVThemePrefRow("HV_PacemakerTargetType", "Pacemaker Target Type")
+function OptionRowGoalTargetType()
+	return HVThemePrefRow("HV_GoalTargetType", "Goal Target Type")
 end
 
-function OptionRowPacemakerGoal()
-	return HVThemePrefRow("HV_PacemakerTargetGoal", "Pacemaker Target Goal")
+function OptionRowGoalTarget()
+	return HVThemePrefRow("HV_GoalTarget", "Goal Target")
 end
 
 function OptionRowShowGoalTracker()
@@ -862,14 +848,6 @@ function OptionRowComboBreakHighlight()
 		end
 	end
 	return row
-end
-
-function OptionRowAssistMode()
-	return HVThemePrefRow("HV_AssistMode", "Assist Clap")
-end
-
-function OptionRowGoalTrackerText()
-	return HVThemePrefRow("HV_GoalTrackerText", "Goal Tracker Text")
 end
 
 function OptionRowMinimalisticMode()
