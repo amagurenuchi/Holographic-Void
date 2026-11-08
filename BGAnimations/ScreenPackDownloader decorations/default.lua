@@ -501,6 +501,8 @@ local packListFrame = Def.ActorFrame {
 	end
 }
 
+local bannerWidth = (colAvgX - colNameX) / 3
+
 for i = 1, packsPerPage do
 	local rowY = (i - 1) * rowH
 
@@ -538,6 +540,47 @@ for i = 1, packsPerPage do
 			end,
 			["UpdateRow" .. i .. "Command"] = function(self)
 				self:visible(i == selectedRow and currentPacks[i] ~= nil)
+			end
+		},
+		-- Pack banner, behind the pack name.
+		Def.Sprite {
+			Name = "PackBanner",
+			InitCommand = function(self)
+				self:halign(0):valign(0):xy(colNameX, 0)
+					:scaletoclipped(bannerWidth, rowH - 1)
+					:diffusealpha(0)
+			end,
+			["UpdateRow" .. i .. "Command"] = function(self)
+				local pack = currentPacks[i]
+				if not pack then
+					self:diffusealpha(0)
+					self:GetParent():GetChild("PackBannerShade"):visible(false)
+					return
+				end
+				local packName = pack:GetName()
+				if self.hvBannerPackName == packName then return end
+				self.hvBannerPackName = packName
+				self:diffusealpha(0)
+				self:GetParent():GetChild("PackBannerShade"):visible(false)
+				pack:DownloadBanner(function(success, texture)
+					-- The callback supplies a success flag and a texture object,
+					-- rather than a filename suitable for Sprite:Load().
+					if not success or not texture then return end
+					local currentPack = currentPacks[i]
+					if not currentPack or currentPack:GetName() ~= packName then return end
+					self:SetTexture(texture)
+					self:scaletoclipped(bannerWidth, rowH - 1)
+					self:diffusealpha(1)
+					self:GetParent():GetChild("PackBannerShade"):visible(true)
+				end)
+			end
+		},
+		Def.Quad {
+			Name = "PackBannerShade",
+			InitCommand = function(self)
+				self:halign(0):valign(0):xy(colNameX, 0)
+					:zoomto(bannerWidth, rowH - 1)
+					:diffuse(color("0,0,0,0.48")):visible(false)
 			end
 		},
 

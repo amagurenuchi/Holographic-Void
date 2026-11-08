@@ -5,6 +5,10 @@
 local pBtnW = 260
 local pBtnH = 70
 local compactRowH = 40
+-- Keep a fixed-size window around the selected profile so the list stays on
+-- screen even when a machine has many local profiles.
+local visibleProfileCount = 9
+local profileRowPitch = 48
 local accentColor = HVColor.Accent
 local brightText = color("1,1,1,1")
 local dimText = color("0.45,0.45,0.45,1")
@@ -56,30 +60,30 @@ local function ensureCurrentStyle()
 end
 
 local function updateRows(self)
+	local firstVisible = math.max(0, math.min(selectedIdx - math.floor(visibleProfileCount / 2), numProfiles - visibleProfileCount))
+	firstVisible = math.max(0, firstVisible)
 	for i = 1, #profiles do
 		local row = self:GetChild("Row_" .. i)
 		if row then
 			local isSelected = (i - 1) == selectedIdx
+			local isVisible = numProfiles <= visibleProfileCount or (i - 1 >= firstVisible and i - 1 < firstVisible + visibleProfileCount)
+			row:visible(isVisible)
 			row:playcommand(isSelected and "Expanded" or "Minimized")
-			
-			-- Calculate Y position in the vertical list (Centered)
-			local listHeight = 0
-			for j = 1, #profiles do
-				listHeight = listHeight + ((j - 1 == selectedIdx) and (pBtnH + 12) or (compactRowH + 6))
+			local windowCenter = firstVisible + math.floor((visibleProfileCount - 1) / 2)
+			local rowY = SCREEN_CENTER_Y + ((i - 1) - windowCenter) * profileRowPitch
+			-- The selected card is taller than compact rows. Shift rows after it
+			-- down by half that extra height so both neighboring gaps stay even.
+			if i - 1 > selectedIdx then
+				rowY = rowY + (pBtnH - compactRowH) / 2
+			elseif i - 1 < selectedIdx then
+				rowY = rowY - (pBtnH - compactRowH) / 2
 			end
-			local startY = SCREEN_CENTER_Y - listHeight/2
-			
-			local yOffset = 0
-			for j = 1, i - 1 do
-				yOffset = yOffset + ((j - 1 == selectedIdx) and (pBtnH + 12) or (compactRowH + 6))
-			end
-			if i - 1 == selectedIdx then
-				yOffset = yOffset + 18
-			end
-			
-			row:stoptweening():decelerate(0.3):y(startY + yOffset):x(SCREEN_CENTER_X)
+			row:stoptweening():decelerate(0.3):y(rowY):x(SCREEN_CENTER_X)
 		end
 	end
+	local parent = self:GetParent()
+	local counter = parent and parent:GetChild("ProfileCount")
+	if counter then counter:settextf("%d / %d", numProfiles > 0 and selectedIdx + 1 or 0, numProfiles) end
 end
 
 local list = Def.ActorFrame {
@@ -145,6 +149,11 @@ local t = Def.ActorFrame {
 		Text = "UP / DOWN: SELECT     START: CONFIRM     BACK: CANCEL",
 		InitCommand = function(self) self:xy(SCREEN_CENTER_X, SCREEN_BOTTOM - 40):zoom(0.35):diffuse(subText):diffusealpha(0) end,
 		OnCommand = function(self) self:sleep(0.4):linear(0.2):diffusealpha(1) end
+	},
+	LoadFont("Common Normal") .. {
+		Name = "ProfileCount",
+		Text = "",
+		InitCommand = function(self) self:xy(SCREEN_RIGHT - 40, SCREEN_BOTTOM - 40):halign(1):zoom(0.35):diffuse(subText) end
 	},
 	
 	-- Native Input Handling via Screen fallback
@@ -233,9 +242,9 @@ for i, p in ipairs(profiles) do
 				Text = p.name,
 				InitCommand = function(self) self:xy(-140, -10):halign(0):zoom(0.6):diffuse(brightText) end
 			},
-			LoadFont("Common Large") .. {
+			LoadFont("MSD 20px") .. {
 				Text = string.format("%.2f", p.rating),
-				InitCommand = function(self) self:xy(-140, 18):halign(0):zoom(0.4):diffuse(HVColor.GetMSDRatingColor(p.rating)) end
+				InitCommand = function(self) self:xy(-140, 18):halign(0):zoom(0.8):diffuse(HVColor.GetMSDRatingColor(p.rating)) end
 			},
 			LoadFont("Common Normal") .. {
 				Text = string.format("%d Songs", p.songs),

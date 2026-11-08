@@ -16,9 +16,19 @@ t[#t+1] = Def.ActorFrame {
 		local screen = SCREENMAN:GetTopScreen()
 		if not screen then return end
 		screen:AddInputCallback(function(event)
+			if event.DeviceInput then
+				local btn = event.DeviceInput.button
+				if btn == "DeviceButton_mousewheel up" or btn == "DeviceButton_mousewheel down" then
+					local step = btn == "DeviceButton_mousewheel down" and 1 or -1
+					if HV.ScrollTitleProfilesAtMouse and
+						HV.ScrollTitleProfilesAtMouse(INPUTFILTER:GetMouseX(), INPUTFILTER:GetMouseY(), step) then
+						return true
+					end
+				end
+			end
 			-- Background shortcuts (Jukebox Pause)
 			if event.type == "InputEventType_FirstPress" then
-				local btn = event.DeviceInput.button
+				local btn = event.DeviceInput and event.DeviceInput.button
 				if btn == "DeviceButton_backslash" then
 					MESSAGEMAN:Broadcast("TriggerJukeboxPause")
 					return true
