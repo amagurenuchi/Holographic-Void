@@ -15,7 +15,7 @@ for i = 1, 8 do
 	t[#t + 1] = Def.Quad {
 		InitCommand = function(self)
 			self:xy(SCREEN_CENTER_X, (SCREEN_HEIGHT / 9) * i)
-				:zoomto(SCREEN_WIDTH, 1):diffuse(color("1,1,1,0.02"))
+				:zoomto(SCREEN_WIDTH, 1):diffuse(HVColor.Accent):diffusealpha(0.08)
 		end
 	}
 end

@@ -450,6 +450,21 @@ local HVPrefRows = {
 -- Register the rows with the _Fallback ThemePrefsRows system
 ThemePrefsRows.Init(HVPrefRows)
 
+-- Non-editable visual dividers used by the standalone Theme Options screen.
+function HVThemeOptionsCategory(name)
+	return {
+		Name = name,
+		Title = THEME:GetString("OptionTitles", name),
+		LayoutType = "ShowAllInRow",
+		SelectType = "SelectNone",
+		OneChoiceForAllPlayers = true,
+		Choices = {" "},
+		Values = {false},
+		LoadSelections = function() end,
+		SaveSelections = function() end,
+	}
+end
+
 -- Helper for 1% - 250% choices
 local RSChoices = {}
 for i = 1, 250 do
