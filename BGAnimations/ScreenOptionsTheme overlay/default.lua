@@ -18,7 +18,7 @@ local function safeString(section, key, fallback)
 end
 
 local categoryOptions = {
-	{"HV_BGAnimIntensity", "HV_Parallax", "HV_BackgroundEffect", "HV_Particles", "HV_EnableGlow", "HV_QuotesMode"},
+	{"GlobalTheme", "HV_BGAnimIntensity", "HV_Parallax", "HV_BackgroundEffect", "HV_Particles", "HV_EnableGlow", "HV_QuotesMode"},
 	{"HV_SongPreview", "HV_SongSelectBGM", "HV_InstantSearch", "HV_ShowMSD", "HV_OsuManiaStarRating", "HV_ShowProfileStats"},
 	{
 		"HV_MinimalisticMode", "HV_ShowJudgment", "HV_JudgmentAnimation", "HV_RecentJudgmentDisplay",
@@ -60,6 +60,7 @@ local categoryDescriptions = {
 	"Gameplay HUD, timing feedback, score displays, and grades.",
 }
 local categoryIndex = 1
+local pendingTheme = THEME:GetCurThemeName()
 local selected = 0 -- 0 is the category selector at the top of the screen.
 local lastOptionSelected = 1
 local scrollerSelection = 1
@@ -67,7 +68,22 @@ local scrollerFocused = false
 local entries = {}
 
 local function makeOptionEntry(name)
-	if name == "ServiceOptions" then
+	if name == "GlobalTheme" then
+		local themes = THEME:GetSelectableThemeNames()
+		local current = pendingTheme
+		local choice = 1
+		for i, themeName in ipairs(themes) do
+			if themeName == current then choice = i; break end
+		end
+		return {
+			name = name,
+			title = safeString("OptionTitles", name, "Theme"),
+			description = safeString("OptionExplanations", name, "Select the global Etterna theme."),
+			choices = themes,
+			choice = choice,
+			globalTheme = true,
+		}
+	elseif name == "ServiceOptions" then
 		return {
 			name = name,
 			title = safeString("OptionTitles", "Options Screen", "OPTIONS SCREEN"),
@@ -104,15 +120,20 @@ local function rebuildEntries()
 	entries[#entries + 1] = makeOptionEntry("Exit")
 end
 rebuildEntries()
-local maxValueChoices = 1
-for _, optionNames in ipairs(categoryOptions) do
-	for _, name in ipairs(optionNames) do
-		local row = buildOptionRow(name)
-		maxValueChoices = math.max(maxValueChoices, row and #(row.Choices or {}) or 1)
-	end
-end
 local scrollStart = 1
 local displayChoices, displayChoice = {}, 0
+local choiceWindowStart = 1
+local maxVisibleChoices = math.max(1, math.floor(panelW / 92))
+
+local function ensureChoiceVisible(index)
+	if index < choiceWindowStart then
+		choiceWindowStart = index
+	elseif index >= choiceWindowStart + maxVisibleChoices then
+		choiceWindowStart = index - maxVisibleChoices + 1
+	end
+	local maxStart = math.max(1, #displayChoices - maxVisibleChoices + 1)
+	choiceWindowStart = math.max(1, math.min(choiceWindowStart, maxStart))
+end
 
 local function ensureOptionVisible(index)
 	if index < scrollStart then
@@ -134,14 +155,25 @@ end
 
 local function activate(entry, screen)
 	if entry.exit then
-		screen:Cancel()
+		if pendingTheme ~= THEME:GetCurThemeName() then
+			local gameName = GAMESTATE:GetCurrentGame():GetName()
+			GAMEMAN:SetGame(gameName, pendingTheme)
+		else
+			screen:Cancel()
+		end
 	elseif entry.action then
 		SCREENMAN:SetNewScreen(entry.action)
 	end
 end
 
 local function setChoice(entry, index)
-	if not entry or not entry.row or index < 1 or index > #entry.choices then return end
+	if not entry or not entry.choices or index < 1 or index > #entry.choices then return end
+	if entry.globalTheme then
+		pendingTheme = entry.choices[index]
+		entry.choice = index
+		return
+	end
+	if not entry.row then return end
 	local row = entry.row
 	entry.choice = index
 	local selection = {}
@@ -225,8 +257,8 @@ local root = Def.ActorFrame {
 				end
 				if mx >= panelX - panelW / 2 and mx <= panelX + panelW / 2
 					and my >= choiceRowY - 22 and my <= choiceRowY + 22 then
-					local choiceWidth = panelW / math.max(1, #displayChoices)
-					local choiceIndex = math.floor((mx - (panelX - panelW / 2)) / choiceWidth) + 1
+					local choiceWidth = panelW / maxVisibleChoices
+					local choiceIndex = choiceWindowStart + math.floor((mx - (panelX - panelW / 2)) / choiceWidth)
 					if selected > 0 then setChoice(entries[selected], choiceIndex) end
 					self:playcommand("Refresh")
 					return true
@@ -259,6 +291,7 @@ local root = Def.ActorFrame {
 		self:GetChild("DetailText"):settext(entry and entry.description or categoryDescriptions[categoryIndex])
 		displayChoices = entry and entry.choices or {}
 		displayChoice = entry and entry.choice or 0
+		ensureChoiceVisible(displayChoice > 0 and displayChoice or 1)
 		self:GetChild("ValueList"):playcommand("Refresh")
 	end,
 }
@@ -380,12 +413,13 @@ root[#root + 1] = LoadFont("Common Normal") .. {
 root[#root + 1] = Def.ActorFrame {
 	Name = "ValueList",
 	RefreshCommand = function(self)
-		for i = 1, maxValueChoices do
+		for i = 1, maxVisibleChoices do
 			local item = self:GetChild("Choice" .. i)
-			local value = displayChoices[i]
+			local choiceIndex = choiceWindowStart + i - 1
+			local value = displayChoices[choiceIndex]
 			item:visible(value ~= nil)
 			if value ~= nil then
-				local chosen = i == displayChoice
+				local chosen = choiceIndex == displayChoice
 				item:GetChild("Backing"):diffuse(accent):diffusealpha(chosen and 0.25 or 0.06)
 				item:GetChild("Label"):settext(tostring(value))
 				item:GetChild("Label"):diffuse(accent):diffusealpha(chosen and 1 or 0.62)
@@ -394,8 +428,8 @@ root[#root + 1] = Def.ActorFrame {
 	end,
 	unpack((function()
 		local children = {}
-		local choiceWidth = panelW / maxValueChoices
-		for i = 1, maxValueChoices do
+		local choiceWidth = panelW / maxVisibleChoices
+		for i = 1, maxVisibleChoices do
 			children[#children + 1] = Def.ActorFrame {
 				Name = "Choice" .. i,
 				InitCommand = function(self)
