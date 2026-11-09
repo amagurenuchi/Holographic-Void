@@ -2595,7 +2595,7 @@ local profileOverlay = Def.ActorFrame {
 				else
 					prevBtn:visible(false)
 					nextBtn:visible(false)
-					pageLbl:settext("ALL MILESTONES SHOWN"):diffuse(dimText)
+					pageLbl:settext(""):diffuse(dimText)
 				end
 			end,
 			-- Prev Button Frame
@@ -2611,7 +2611,7 @@ local profileOverlay = Def.ActorFrame {
 					InitCommand = function(self) self:zoomto(56, 1):valign(1):y(10):diffuse(accentColor):diffusealpha(0.4) end
 				},
 				LoadFont("Common Normal") .. {
-					InitCommand = function(self) self:zoom(0.26):diffuse(brightText):settext("◄ PREV") end
+					InitCommand = function(self) self:zoom(0.26):diffuse(brightText):settext("PREV") end
 				},
 				SetUpdateFunction = function(af)
 					local p = profileOverlayActor
@@ -2641,7 +2641,7 @@ local profileOverlay = Def.ActorFrame {
 					InitCommand = function(self) self:zoomto(56, 1):valign(1):y(10):diffuse(accentColor):diffusealpha(0.4) end
 				},
 				LoadFont("Common Normal") .. {
-					InitCommand = function(self) self:zoom(0.26):diffuse(brightText):settext("NEXT ►") end
+					InitCommand = function(self) self:zoom(0.26):diffuse(brightText):settext("NEXT") end
 				},
 				SetUpdateFunction = function(af)
 					local p = profileOverlayActor
