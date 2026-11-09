@@ -64,18 +64,18 @@ local achievementProgress = {
 }
 
 local singleAchievements = {
-	{"Absolute Perfection", nil, nil, "Earn a valid 100% score on any valid chart", "The sacred centurial perfection.", "PERFECT"},
-	{"Visiting the past", "X65ef8bdbfe971763595e983642aef1d18bdf6ce1", 1.5, "Earn AA at 1.5x rate on Cyber Inductance", "jhlee pls come back :(", "AA"},
-	{"Light And Darkness", "X9a609c6dd132d807b2abc5882338cb9ebbec320d", 1.2, "Earn AA at 1.2x rate on IMAGE -MATERIAL- (Version 0)", "Have you found your way yet?", "AA"},
-	{"Dreaded Stamina Killer", "X79aec43682eb2695747ac3271b2cf93adec1a3ac", 1.2, "Earn AA at 1.2x rate on We Luv Lama", "Go play Gamma dan", "AA"},
-	{"Fastest Tech Ripper", "Xb79c62d13bbc970a915fabc5a84c2be1080b9f7b", 1.0, "Earn AA at 1.0x rate on Fastest Crash", "Fastest fingers crash.", "AA"},
-	{"Speed of Time", "X52887c464ea6909f4c5077d70e8cb3ef318b6453", 1.2, "Earn AA at 1.2x rate on Kronos", "Time bends to your precision.", "AA"},
-	{"We Want To Run", "X5381a50c0a99df23d7a053530339f2faf94e9adc", 1.0, "Earn AA at 1.0x rate on We Want To Run", "and we aint stopping nuh uh", "AA"},
-	{"Long Forgotten", "X3fbba9efa7283f227f5bdefa02e3f842af2edcc1", 1.4, "Earn AA at 1.4x rate on Forgotten", "Do people still remember Epsilon clears?", "AA"},
-	{"ETTERNA PLAYERS DONT NEED GIRLFRIENDS", "X155d512826d45940509e21ca43937277b9b57c07", 1.0, "Earn AA at 1.0x rate on Killing My Love", "not having a girlfriend is part of the skillboost", "AA"},
-	{"Savage Terminal? More like Ice Terminal", "X52887c464ea6909f4c5077d70e8cb3ef318b6453", 0, "Earn AAAAA at any rate on Savage Terminal", "congrats you recreated Justice 8 years ago", "AAAAA"},
-	{"Eta Dan clear", "X7ed0e5b112e7b04014e2d8e7b1b84fbda9188f76", 1.0, "Earn AA at 1.0x rate on Eta Dan", "The ceiling of human limit.", "AA"},
-	{"Chord Cohesion ranter", "Xe5a400c13550f0551de9e12918deadcbd5de8cad", 1.1, "Earn AA at 1.1x on 3.14 (TT mix)","and the game's gonna get harder", "AA" },
+	{"Absolute Perfection", nil, nil, "Get a valid 100% score", "The sacred centurial perfection.", "PERFECT"},
+	{"Visiting the past", "X65ef8bdbfe971763595e983642aef1d18bdf6ce1", 1.5, "AA Cyber Inductance at 1.5x rate", "jhlee pls come back :(", "AA"},
+	{"Light And Darkness", "X9a609c6dd132d807b2abc5882338cb9ebbec320d", 1.2, "AA IMAGE -MATERIAL- (Version 0) at 1.2x rate", "Have you found your way yet?", "AA"},
+	{"Dreaded Stamina Killer", "X79aec43682eb2695747ac3271b2cf93adec1a3ac", 1.2, "AA We Luv Lama at 1.2x rate", "Go play Gamma dan", "AA"},
+	{"Fastest Tech Ripper", "Xb79c62d13bbc970a915fabc5a84c2be1080b9f7b", 1.0, "AA Fastest Crash at base rate", "Fastest fingers crash.", "AA"},
+	{"Speed of Time", "X52887c464ea6909f4c5077d70e8cb3ef318b6453", 1.2, "AA Kronos at 1.2x rate", "Time bends to your precision.", "AA"},
+	{"We Want To Run", "X5381a50c0a99df23d7a053530339f2faf94e9adc", 1.0, "AA We Want To Run on base rate", "and we aint stopping nuh uh", "AA"},
+	{"Long Forgotten", "X3fbba9efa7283f227f5bdefa02e3f842af2edcc1", 1.4, "AA Forgotten at 1.4x rate", "Do people still remember Epsilon clears?", "AA"},
+	{"ETTERNA PLAYERS DONT NEED GIRLFRIENDS", "X155d512826d45940509e21ca43937277b9b57c07", 1.0, "AA Killing My Love at 1.0x rate", "not having a girlfriend is part of the skillboost", "AA"},
+	{"Savage Terminal? More like Ice Terminal", "X52887c464ea6909f4c5077d70e8cb3ef318b6453", 0, "AAAAA Savage Terminal", "congrats you recreated Justice 8 years ago", "AAAAA"},
+	{"Eta Dan clear", "X7ed0e5b112e7b04014e2d8e7b1b84fbda9188f76", 1.0, "Clear Eta Dan (reach AA)", "The ceiling of human limit.", "AA"},
+	{"Chord Cohesion ranter", "Xe5a400c13550f0551de9e12918deadcbd5de8cad", 1.1, "AA 3.14 (TT mix) at 1.1x rate","and the game's gonna get harder", "AA" },
 }
 
 local skillsetAchievements = {
