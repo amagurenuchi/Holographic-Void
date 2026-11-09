@@ -16,6 +16,56 @@ local bgCard = color("0.06,0.06,0.06,0.9")
 local headerH = 40
 local footerH = 40
 
+-- Dan charts use osu!mania scoring for the PB score shown in song select.
+local danChartOD = {}
+local danChartGroups = {
+	{7.5, {"X5e0e976dbdaab2f5069442aea7fda6c36a04d762", "X8ab233319206a935ead8b2c7a0e1152f9b9f5b87", "X80a4f4287fa3d8fcf3b641ad8acb8c4488ca201c"}},
+	{8, {"Xc53ee08d09d27f898c7ef3d98333e518c669d6db", "Xedd50d654858a1ccc7cfbbb3ef36c7ab25d8a2d6", "Xeef4999a0ff9e1f63d01dd7ad73d95c369352e88"}},
+	{8.5, {"X210aeea71e81bafb1c802308418f82423c053e58", "Xeedf0fdef274f0039729a941fe12c0fbb5ccdf37", "X50b734f0149077c01f9f95ad9544c63d630b2153", "X6bff4ed380fe33ab39f6f11315312c0a780474cb"}},
+	{9, {"X4da1deb690aaa50aceabefb94460f2f77f739371", "X6e0fa4c42667d269bbcf29b9abe5a00246c4e4fe", "X54c8d0da555ad4bd1840d12c5c90d4be1afd3f8c", "X2ff45475a0c724c00515684d6afe7fed21ac9df8", "X2e0bef9f4b606f6b3ab84a666ccf623fafa859d5", "X9a08688242bc7eb9f795bd8e59cfee1f68d683de", "X7ed0e5b112e7b04014e2d8e7b1b84fbda9188f76"}}
+}
+for _, group in ipairs(danChartGroups) do
+	for _, key in ipairs(group[2]) do danChartOD[string.lower(key):gsub("^x", "")] = group[1] end
+end
+
+local function getDanChartOD(score)
+	if not score then return nil end
+	local ok, chartKey = pcall(score.GetChartKey, score)
+	if not ok or not chartKey then return nil end
+	return danChartOD[string.lower(tostring(chartKey)):gsub("^x", "")]
+end
+
+local function getDanOsuManiaAccuracy(score)
+	if not score or type(HV.GetOsuManiaRescore) ~= "function" then return nil end
+	local od = getDanChartOD(score)
+	if not od then return nil end
+	local okRescore, result = pcall(HV.GetOsuManiaRescore, score, od, true)
+	return okRescore and result and tonumber(result.accuracy) and result.accuracy * 100 or nil
+end
+
+local function getDanOsuManiaJudgeRows(score)
+	local od = getDanChartOD(score)
+	if not od or type(HV.GetOsuManiaRescore) ~= "function" then return nil end
+	local okRescore, result = pcall(HV.GetOsuManiaRescore, score, od, true)
+	if not okRescore or not result or not result.counts then return nil end
+	local labels = {"MAX", "300", "200", "100", "50", "MISS"}
+	local rows = {}
+	for i, label in ipairs(labels) do rows[#rows + 1] = {name = i == 6 and "Miss" or "W" .. i, label = label, val = result.counts[i] or 0} end
+	return rows
+end
+
+local function getDanOsuManiaGrade(score)
+	local od = getDanChartOD(score)
+	if not od or type(HV.GetOsuManiaRescore) ~= "function" then return nil end
+	local okRescore, result = pcall(HV.GetOsuManiaRescore, score, od, true)
+	if not okRescore or not result then return nil end
+	local accuracy = (tonumber(result.accuracy) or 0) * 100
+	local grade = accuracy >= 100 and "X"
+		or (accuracy >= 95 and "S" or accuracy >= 90 and "A" or accuracy >= 80 and "B" or accuracy >= 70 and "C" or "D")
+	local colors = {X = "#FFD700", S = "#FFA500", A = "#32CD32", B = "#4DA6FF", C = "#B56BFF", D = "#FF4D5A"}
+	return grade, color(colors[grade])
+end
+
 local profileOverlayActor = nil
 local IsMouseInSelectMusicInteractiveArea
 
@@ -2061,7 +2111,8 @@ t[#t + 1] = Def.ActorFrame {
 			local isDifferentRate = score and math.abs(score:GetMusicRate() - getCurRateValue()) > 0.001
 			
 			if self:GetParent().isHovering then
-				self:settext(THEME:GetString("ScreenSelectMusic", "PersonalBest") .. " (J4)")
+				local danOD = getDanChartOD(score)
+				self:settext(THEME:GetString("ScreenSelectMusic", "PersonalBest") .. (danOD and " (OSU!MANIA SCORE)" or " (J4)"))
 				self:diffuse(color("#FF6666"))
 			else
 				self:settext(THEME:GetString("ScreenSelectMusic", "PersonalBest"))
@@ -2157,6 +2208,12 @@ t[#t + 1] = Def.ActorFrame {
 			if score then
 				local wifePct = score:GetWifeScore() * 100
 				if self:GetParent().isHovering then
+					local danAccuracy = getDanOsuManiaAccuracy(score)
+					if danAccuracy then
+						self:settext(string.format(danAccuracy >= 99 and "%.4f%%" or "%.2f%%", danAccuracy))
+						self:diffuse(brightText)
+						return
+					end
 					wifePct = getJ4NormalizedPercentage(score)
 				end
 				if wifePct >= 99 then
@@ -2184,6 +2241,12 @@ t[#t + 1] = Def.ActorFrame {
 				local gradeStr = score:GetWifeGrade()
 				local wifePct = score:GetWifeScore() * 100
 				if self:GetParent().isHovering then
+					local danGrade, danGradeColor = getDanOsuManiaGrade(score)
+					if danGrade then
+						self:settext(danGrade)
+						self:diffuse(danGradeColor)
+						return
+					end
 					wifePct = getJ4NormalizedPercentage(score)
 					gradeStr = GetGradeFromPercent(wifePct / 100)
 				end
@@ -2299,9 +2362,14 @@ t[#t + 1] = Def.ActorFrame {
 			local judges = getPBJudgeRows(score)
 			
 			if self:GetParent().isHovering then
-				local rst = getRescoreElementsFromScore(score)
-				if rst then
-					judges = getPBJudgeRows(score, rst)
+				local maniaJudges = getDanOsuManiaJudgeRows(score)
+				if maniaJudges then
+					judges = maniaJudges
+				else
+					local rst = getRescoreElementsFromScore(score)
+					if rst then
+						judges = getPBJudgeRows(score, rst)
+					end
 				end
 			end
 			

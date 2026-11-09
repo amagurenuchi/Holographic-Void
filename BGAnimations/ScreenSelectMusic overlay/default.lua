@@ -59,6 +59,11 @@ local danRanks = {
 
 local danMedalRanks = {"6th Dan", "8th Dan", "10th Dan", "Alpha Dan", "Beta Dan", "Gamma Dan", "Delta Dan", "Epsilon Dan", "Zeta Dan", "Eta Dan"}
 local danMedalThresholds = {6, 8, 10, 11, 12, 13, 14, 15, 16, 17}
+local danChartOD = {}
+for tier, danRank in ipairs(danRanks) do
+	local od = tier <= 3 and 7.5 or (tier <= 6 and 8 or (tier <= 10 and 8.5 or 9))
+	for _, key in ipairs(danRank[2]) do danChartOD[string.lower(tostring(key)):gsub("^x", "")] = od end
+end
 
 local achievementProgress = {
 	{"AGAIN AND AGAIN", {1, 10, 100, 1000, 5000, 10000, 50000, 100000, 250000}, "plays", "lifetime plays", "Rome wasn't built in a day they said."},
@@ -118,13 +123,13 @@ local tierNames = {
 local tierColors = {
 	[0] = color("0.4,0.4,0.4,1"),
 	[1] = color("#4ADE80"),
-	[2] = color("#60A5FA"),
+	[2] = accentColor,
 	[3] = color("#F87171"),
 	[4] = color("#2DD4BF"),
 	[5] = color("#38BDF8"),
 	[6] = color("#FB7185"),
 	[7] = color("#34D399"),
-	[8] = color("#818CF8"),
+	[8] = accentColor,
 	[9] = color("#F43F5E"),
 	[10] = color("#FBBF24"),
 }
@@ -267,10 +272,18 @@ local function getSingleAchievementFlags()
 		end
 		if not valid then return end
 		wife, rate = tonumber(wife) or 0, tonumber(rate) or 1
-		if wife >= 0.93 then
-			local normalizedKey = chartKey and string.lower(tostring(chartKey))
+		do
+			local normalizedKey = chartKey and string.lower(tostring(chartKey)):gsub("^x", "")
 			local tier = normalizedKey and danKeys[normalizedKey]
-			if tier and tier > highestDanChartRank then highestDanChartRank = tier end
+			if tier and normalizedKey then
+				local od = danChartOD[normalizedKey]
+				local maniaAccuracy
+				if od and type(score) ~= "table" and type(HV.GetOsuManiaRescore) == "function" then
+					local okRescore, result = pcall(HV.GetOsuManiaRescore, score, od, true)
+					if okRescore and result then maniaAccuracy = tonumber(result.accuracy) end
+				end
+				if maniaAccuracy and maniaAccuracy >= 0.96 and tier > highestDanChartRank then highestDanChartRank = tier end
+			end
 		end
 		for i = 1, #singleAchievements do
 			local item = singleAchievements[i]
@@ -2353,7 +2366,7 @@ local profileOverlay = Def.ActorFrame {
 									heroText = "UNLOCKED"
 									heroColor = color("#34D399")
 									subTextVal = ""
-									subColor = color("#818CF8")
+									subColor = accentColor
 									stripColor = color("#34D399")
 								else
 									heroText = ""
@@ -2378,7 +2391,7 @@ local profileOverlay = Def.ActorFrame {
 								else
 									heroColor = accentColor
 									subTextVal = "of 30.00"
-									subColor = color("#818CF8")
+									subColor = accentColor
 									stripColor = accentColor
 								end
 							else
@@ -2412,7 +2425,7 @@ local profileOverlay = Def.ActorFrame {
 								else
 									heroColor = tColor
 									subTextVal = ""
-									subColor = color("#818CF8")
+									subColor = accentColor
 								end
 							end
 
@@ -2547,7 +2560,7 @@ local profileOverlay = Def.ActorFrame {
 					LoadFont("Common Normal") .. {
 						Name = "Quote",
 						InitCommand = function(self)
-							self:halign(0):x(-cardW/2 + 64):y(22):zoom(0.36):diffuse(color("#7DD3FC")):diffusealpha(0.85)
+							self:halign(0):x(-cardW/2 + 64):y(22):zoom(0.36):diffuse(accentColor):diffusealpha(0.85)
 								:maxwidth((cardW - 74) / 0.36)
 						end
 					},
