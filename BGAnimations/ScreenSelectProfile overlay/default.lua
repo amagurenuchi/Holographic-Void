@@ -60,16 +60,16 @@ local function ensureCurrentStyle()
 end
 
 local function updateRows(self)
-	local firstVisible = math.max(0, math.min(selectedIdx - math.floor(visibleProfileCount / 2), numProfiles - visibleProfileCount))
-	firstVisible = math.max(0, firstVisible)
+	local windowSize = math.min(visibleProfileCount, numProfiles)
+	local firstVisible = math.max(0, math.min(selectedIdx - math.floor((windowSize - 1) / 2), numProfiles - windowSize))
 	for i = 1, #profiles do
 		local row = self:GetChild("Row_" .. i)
 		if row then
 			local isSelected = (i - 1) == selectedIdx
-			local isVisible = numProfiles <= visibleProfileCount or (i - 1 >= firstVisible and i - 1 < firstVisible + visibleProfileCount)
+			local isVisible = (i - 1 >= firstVisible and i - 1 < firstVisible + windowSize)
 			row:visible(isVisible)
 			row:playcommand(isSelected and "Expanded" or "Minimized")
-			local windowCenter = firstVisible + math.floor((visibleProfileCount - 1) / 2)
+			local windowCenter = firstVisible + (windowSize - 1) / 2
 			local rowY = SCREEN_CENTER_Y + ((i - 1) - windowCenter) * profileRowPitch
 			-- The selected card is taller than compact rows. Shift rows after it
 			-- down by half that extra height so both neighboring gaps stay even.
