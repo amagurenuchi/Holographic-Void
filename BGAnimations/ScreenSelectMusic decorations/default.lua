@@ -2275,15 +2275,20 @@ t[#t + 1] = Def.ActorFrame {
 				local ct = getDetailedClearType(score)
 				
 				if self:GetParent().isHovering then
-					local rst = getRescoreElementsFromScore(score)
-					if rst then
-						ct = getPBRescoredClearType(rst)
+					local danAccuracy = getDanOsuManiaAccuracy(score)
+					if danAccuracy then
+						ct = danAccuracy >= 97 and "Overclear" or (danAccuracy >= 96 and "Clear" or "Failed")
+				else
+						local rst = getRescoreElementsFromScore(score)
+						if rst then
+							ct = getPBRescoredClearType(rst)
+						end
 					end
 				end
 				
-				local ctStr = THEME:GetString("ClearTypes", ct)
+				local ctStr = ct == "Overclear" and ct or THEME:GetString("ClearTypes", ct)
 				self:settext(ctStr)
-				self:diffuse(HVColor.GetClearTypeColor(ct))
+				self:diffuse(ct == "Overclear" and accentColor or HVColor.GetClearTypeColor(ct))
 			else
 				self:settext("")
 			end
