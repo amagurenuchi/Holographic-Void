@@ -36,41 +36,56 @@ local mainText = color("0.85,0.85,0.85,1")
 local dimText = color("0.45,0.45,0.45,1")
 local bgCard = color("0.06,0.06,0.06,0.9")
 
+local danRanks = {
+	{"6th Dan", {"Xeef4999a0ff9e1f63d01dd7ad73d95c369352e88", "X210aeea71e81bafb1c802308418f82423c053e58"}},
+	{"8th Dan", {"Xeedf0fdef274f0039729a941fe12c0fbb5ccdf37", "X50b734f0149077c01f9f95ad9544c63d630b2153"}},
+	{"10th Dan", {"X6bff4ed380fe33ab39f6f11315312c0a780474cb"}},
+	{"Alpha Dan", {"X4da1deb690aaa50aceabefb94460f2f77f739371"}},
+	{"Beta Dan", {"X6e0fa4c42667d269bbcf29b9abe5a00246c4e4fe"}},
+	{"Gamma Dan", {"X54c8d0da555ad4bd1840d12c5c90d4be1afd3f8c"}},
+	{"Delta Dan", {"X2ff45475a0c724c00515684d6afe7fed21ac9df8"}},
+	{"Epsilon Dan", {"X2e0bef9f4b606f6b3ab84a666ccf623fafa859d5"}},
+	{"Zeta Dan", {"X9a08688242bc7eb9f795bd8e59cfee1f68d683de"}},
+	{"Eta Dan", {"X7ed0e5b112e7b04014e2d8e7b1b84fbda9188f76"}},
+}
+
 local achievementProgress = {
-	{"PLAY COUNT", {1, 10, 100, 1000, 5000, 10000, 50000, 100000, 250000}, "plays", "Lifetime plays", "Reach each play-count milestone"},
-	{"TAP COUNT", {10, 100, 1000, 5000, 10000, 50000, 100000, 500000, 1000000}, "taps", "Lifetime taps", "Reach each tap-count milestone"},
-	{"PLAY TIME (HRS)", {1, 10, 50, 100, 250, 500, 1000, 2500, 5000}, "hours", "Total time spent playing", "Reach each play-time milestone"},
-	{"LEVEL", {1, 10, 25, 50, 100, 250, 500, 750, 999}, "level", "Profile level", "Reach each level milestone"},
-	{"AA COUNT", {1, 5, 10, 25, 50, 100, 250, 500, 1000}, "AA", "Scores graded AA", "Earn the required number of AA grades"},
-	{"AAA COUNT", {1, 5, 10, 25, 50, 100, 250, 500, 1000}, "AAA", "Scores graded AAA", "Earn the required number of AAA grades"},
-	{"AAAA COUNT", {1, 5, 10, 25, 50, 75, 100, 250, 500}, "AAAA", "Scores graded AAAA", "Earn the required number of AAAA grades"},
-	{"AAAAA COUNT", {1, 2, 5, 10, 25}, "AAAAA", "Scores graded AAAAA", "Earn the required number of AAAAA grades"},
-	{"BEST PLAY SSR", {10, 15, 20, 25, 30, 35, 38, 39, 40, 41}, "ssr", "Highest single-chart SSR", "Reach each best-play SSR milestone"},
-	{"PROFILE RATING", {10, 15, 20, 25, 30, 32, 34, 36, 38, 40}, "rating", "Overall profile rating", "Reach each profile-rating milestone"},
+	{"AGAIN AND AGAIN", {1, 10, 100, 1000, 5000, 10000, 50000, 100000, 250000}, "plays", "lifetime plays", "Rome wasn't built in a day they said."},
+	{"ARROW SMASHER", {10, 100, 1000, 5000, 10000, 50000, 100000, 500000, 1000000}, "taps", "lifetime note hits", "Every click echoes in the machine."},
+	{"DEDICATION", {1, 10, 50, 100, 250, 500, 1000, 2500, 5000}, "hours", "total time spent playing", "Time well spent in the digital ether."},
+	{"LEVEL", {1, 10, 25, 50, 100, 250, 500, 750, 999}, "level", "profile experience level", "Climbing the hierarchy of mastery."},
+	{"DOUBLES", {1, 5, 10, 25, 50, 100, 250, 500, 1000}, "AA", "scores graded AA", "Just enough to call it a day"},
+	{"TRIPLES", {1, 5, 10, 25, 50, 100, 250, 500, 1000}, "AAA", "scores graded AAA", "Entering the realm of high accuracy."},
+	{"QUADDER", {1, 5, 10, 25, 50, 75, 100, 250, 500}, "AAAA", "scores graded AAAA", "The boundary between human and machine."},
+	{"QUNITER", {1, 2, 5, 10, 25}, "AAAAA", "scores graded AAAAA", "Are you a human, or a metronome disgused as a human?"},
+	{"EXPLOSIVE SKILL", {10, 15, 20, 25, 30, 35, 38, 39, 40, 41}, "ssr", "highest SSR in a chart", "Pushing past theoretical physical limits."},
+	{"SKILLED", {10, 15, 20, 25, 30, 32, 34, 36, 38, 40}, "rating", "overall player skill rating", "A testament to holistic mastery."},
+	{"DAN CLEARED", {1, 2, 3, 4, 5, 6, 7, 8, 9, 10}, "dan", "highest Dan cleared", "One more step towards mastery."},
 }
 
 local singleAchievements = {
-	{"100% on a valid file", nil, nil, "Perfect score on any valid chart", "Earn a valid 100% score"},
-	{"Cyber Inductance", "X65ef8bdbfe971763595e983642aef1d18bdf6ce1", 1.5, "AA on this chart", "Earn AA at 1.5x rate"},
-	{"IMAGE -MATERIAL- (Version 0)", "X9a609c6dd132d807b2abc5882338cb9ebbec320d", 1.2, "AA on this chart", "Earn AA at 1.2x rate"},
-	{"We Luv Lama", "X79aec43682eb2695747ac3271b2cf93adec1a3ac", 1.2, "AA on this chart", "Earn AA at 1.2x rate"},
-	{"Fastest Crash", "Xb79c62d13bbc970a915fabc5a84c2be1080b9f7b", 1.0, "AA on this chart", "Earn AA at 1.0x rate"},
-	{"Kronos", "X52887c464ea6909f4c5077d70e8cb3ef318b6453", 1.2, "AA on this chart", "Earn AA at 1.2x rate"},
-	{"We Want To Run", "X5381a50c0a99df23d7a053530339f2faf94e9adc", 1.0, "AA on this chart", "Earn AA at 1.0x rate"},
-	{"Forgotten", "X3fbba9efa7283f227f5bdefa02e3f842af2edcc1", 1.4, "AA on this chart", "Earn AA at 1.4x rate"},
-	{"Killing My Love", "X93c8b2dc120e7d7a52f4ab47cf2e13987874383a", 1.0, "AA on this chart", "Earn AA at 1.0x rate"},
-	{"Savage Terminal", "X52887c464ea6909f4c5077d70e8cb3ef318b6453", 0, "AAAAA on this chart", "Earn AAAAA at any rate"},
-	{"Zeta Dan", "X52887c464ea6909f4c5077d70e8cb3ef318b6453", 1.0, "AA clear", "Earn AA at 1.0x rate"},
+	{"Absolute Perfection", nil, nil, "Earn a valid 100% score on any valid chart", "The sacred centurial perfection.", "PERFECT"},
+	{"Visiting the past", "X65ef8bdbfe971763595e983642aef1d18bdf6ce1", 1.5, "Earn AA at 1.5x rate on Cyber Inductance", "jhlee pls come back :(", "AA"},
+	{"Light And Darkness", "X9a609c6dd132d807b2abc5882338cb9ebbec320d", 1.2, "Earn AA at 1.2x rate on IMAGE -MATERIAL- (Version 0)", "Have you found your way yet?", "AA"},
+	{"Dreaded Stamina Killer", "X79aec43682eb2695747ac3271b2cf93adec1a3ac", 1.2, "Earn AA at 1.2x rate on We Luv Lama", "Go play Gamma dan", "AA"},
+	{"Fastest Tech Ripper", "Xb79c62d13bbc970a915fabc5a84c2be1080b9f7b", 1.0, "Earn AA at 1.0x rate on Fastest Crash", "Fastest fingers crash.", "AA"},
+	{"Speed of Time", "X52887c464ea6909f4c5077d70e8cb3ef318b6453", 1.2, "Earn AA at 1.2x rate on Kronos", "Time bends to your precision.", "AA"},
+	{"We Want To Run", "X5381a50c0a99df23d7a053530339f2faf94e9adc", 1.0, "Earn AA at 1.0x rate on We Want To Run", "and we aint stopping nuh uh", "AA"},
+	{"Long Forgotten", "X3fbba9efa7283f227f5bdefa02e3f842af2edcc1", 1.4, "Earn AA at 1.4x rate on Forgotten", "Do people still remember Epsilon clears?", "AA"},
+	{"ETTERNA PLAYERS DONT NEED GIRLFRIENDS", "X155d512826d45940509e21ca43937277b9b57c07", 1.0, "Earn AA at 1.0x rate on Killing My Love", "not having a girlfriend is part of the skillboost", "AA"},
+	{"Savage Terminal? More like Ice Terminal", "X52887c464ea6909f4c5077d70e8cb3ef318b6453", 0, "Earn AAAAA at any rate on Savage Terminal", "congrats you recreated Justice 8 years ago", "AAAAA"},
+	{"Eta Dan clear", "X7ed0e5b112e7b04014e2d8e7b1b84fbda9188f76", 1.0, "Earn AA at 1.0x rate on Eta Dan", "The ceiling of human limit.", "AA"},
+	{"Chord Cohesion ranter", "Xe5a400c13550f0551de9e12918deadcbd5de8cad", 1.1, "Earn AA at 1.1x on 3.14 (TT mix)","and the game's gonna get harder", "AA" },
 }
 
 local skillsetAchievements = {
-	{"Stream Master", "Stream", 0, "No streams too fast for these hands.", "Achieve a Stream rating of 30.00"},
-	{"Jumpstream Master", "Jumpstream", 1, "Thanks IcyWorld for free rating!", "Achieve a Jumpstream rating of 30.00"},
-	{"Handstream Master", "Handstream", 2, "More tiring than it looks", "Achieve a Handstream rating of 30.00"},
-	{"Jackspeed Master", "JackSpeed", 4, "Human sewing machine?", "Achieve a Jackspeed rating of 30.00"},
-	{"Chordjacks Master", "Chordjack", 5, "You are now ready for Super Polska Chordjack", "Achieve a Chordjacks rating of 30.00"},
-	{"Technical Master", "Technical", 6, "Snaps are just numbers, they are still just notes", "Achieve a Technical rating of 30.00"},
-	{"Stamina Master", "Stamina", 3, "Where we are going we dont need stamina", "Achieve a Stamina rating of 30.00"},
+	{"STREAM MASTER", "Stream", 0, "Achieve a Stream rating of 30.00", "No streams too fast for these hands."},
+	{"JUMPSTREAM MASTER", "Jumpstream", 1, "Achieve a Jumpstream rating of 30.00", "Thanks IcyWorld for free rating!"},
+	{"HANDSTREAM MASTER", "Handstream", 2, "Achieve a Handstream rating of 30.00", "More tiring than it looks."},
+	{"JACKSPEED MASTER", "JackSpeed", 4, "Achieve a Jackspeed rating of 30.00", "Human sewing machine?"},
+	{"CHORDJACKS MASTER", "Chordjack", 5, "Achieve a Chordjacks rating of 30.00", "You are now ready for Super Polska Chordjack."},
+	{"TECHNICAL MASTER", "Technical", 6, "Achieve a Technical rating of 30.00", "Snaps are just numbers, they are still just notes."},
+	{"STAMINA MASTER", "Stamina", 3, "Achieve a Stamina rating of 30.00", "Where we are going we dont need stamina."},
 }
 
 local progressMedals = {"green", "blue", "red", "shieldgreen", "shieldblue", "shieldred", "emerald", "sapphire", "ruby", "pride"}
@@ -172,15 +187,16 @@ local function safeProfileValue(profile, method, ...)
 	return ok and tonumber(value) or nil
 end
 
-local function getAchievementValues()
+local function getAchievementValues(highestDanTier)
 	local profile = PROFILEMAN:GetProfile(PLAYER_1)
 	local values = {
 		plays = safeProfileValue(profile, "GetTotalNumSongsPlayed") or SCOREMAN:GetTotalNumberOfScores() or 0,
-		taps = safeProfileValue(profile, "GetTotalNumTaps") or safeProfileValue(profile, "GetTotalTaps") or 0,
+		taps = safeProfileValue(profile, "GetTotalTapsAndHolds") or 0,
 		hours = safeProfileValue(profile, "GetTotalGameplaySeconds") or safeProfileValue(profile, "GetTotalPlaySeconds") or 0,
 		level = profile and HV.GetLevel and HV.GetLevel(profile) or safeProfileValue(profile, "GetPlayerLevel") or 1,
 		rating = profile and safeProfileValue(profile, "GetPlayerRating") or 0,
 		ssr = 0,
+		dan = highestDanTier or 0,
 	}
 	for _, entry in ipairs(achievementProgress) do
 		if entry[3] == "AA" or entry[3] == "AAA" or entry[3] == "AAAA" or entry[3] == "AAAAA" then
@@ -188,19 +204,28 @@ local function getAchievementValues()
 		end
 	end
 	if values.hours then values.hours = values.hours / 3600 end
-	for _, skillset in ipairs(skillsets) do
+	-- SCOREMAN's ranked list must be sorted first; Overall matches the profile's
+	-- best-play ordering used on the stats screen.
+	local sorted = pcall(SCOREMAN.SortSSRsForGame, SCOREMAN, "Overall")
+	if sorted then
 		for rank = 1, 500 do
-			local ok, score = pcall(SCOREMAN.GetTopSSRHighScoreForGame, SCOREMAN, rank, skillset)
+			local ok, score = pcall(SCOREMAN.GetTopSSRHighScoreForGame, SCOREMAN, rank, "Overall")
 			if not ok or not score then break end
-			local okSSR, ssr = pcall(score.GetSkillsetSSR, score, skillset)
-			if okSSR and ssr then values.ssr = math.max(values.ssr, ssr) end
+			local okSSR, ssr = pcall(score.GetSkillsetSSR, score, "Overall")
+			if okSSR and ssr then values.ssr = math.max(values.ssr, tonumber(ssr) or 0) end
 		end
 	end
 	return values
 end
 
 local function getSingleAchievementFlags()
+	local gradeThresholds = {
+		AA = 0.93,
+		AAAAA = 0.999935,
+		PERFECT = 1.0,
+	}
 	local flags = {}
+	local danCleared = {}
 	for i = 1, #singleAchievements do flags[i] = false end
 	local function inspect(score)
 		if not score then return end
@@ -223,27 +248,43 @@ local function getSingleAchievementFlags()
 		end
 		if not valid then return end
 		wife, rate = tonumber(wife) or 0, tonumber(rate) or 1
-		if wife >= 1 then flags[1] = true end
-		for i = 2, #singleAchievements do
+		if wife >= 0.93 then
+			for tier, danRank in ipairs(danRanks) do
+				for _, requiredKey in ipairs(danRank[2]) do
+					if chartKey == requiredKey then danCleared[tier] = true; break end
+				end
+			end
+		end
+		for i = 1, #singleAchievements do
 			local item = singleAchievements[i]
-			if item[2] and chartKey == item[2] then
+			local requiredGrade = item[6] or "AA"
+			local requiredWife = gradeThresholds[requiredGrade]
+			local hasRequiredGrade = requiredWife and wife >= requiredWife
+			local chartMatches = requiredGrade == "PERFECT"
+				or (item[2] and chartKey == item[2])
+			if hasRequiredGrade and chartMatches then
 				local enoughRate = not item[3] or item[3] == 0 or rate + 0.0001 >= item[3]
-				local enoughGrade = i == 10 and wife >= 0.9999 or i ~= 10 and wife >= 0.93
-				if enoughRate and enoughGrade then flags[i] = true end
+				if enoughRate then flags[i] = true end
 			end
 		end
 	end
+	pcall(SCOREMAN.SortRecentScoresForGame, SCOREMAN)
 	for rank = 1, 2000 do
 		local ok, score = pcall(SCOREMAN.GetRecentScoreForGame, SCOREMAN, rank)
 		if not ok or not score then break end
 		inspect(score)
 	end
+	pcall(SCOREMAN.SortSSRsForGame, SCOREMAN, "Overall")
 	for rank = 1, 2000 do
 		local ok, score = pcall(SCOREMAN.GetTopSSRHighScoreForGame, SCOREMAN, rank, "Overall")
 		if not ok or not score then break end
 		inspect(score)
 	end
-	return flags
+	local highestDanTier = 0
+	for tier = 1, #danRanks do
+		if danCleared[tier] then highestDanTier = tier end
+	end
+	return flags, highestDanTier
 end
 
 local function getSkillsetAchievementFlags()
@@ -265,8 +306,8 @@ local function getAchievementCounts(forceRefresh)
 		return cachedAchievementCounts
 	end
 
-	local values = getAchievementValues()
-	local singleFlags = getSingleAchievementFlags()
+	local singleFlags, highestDanTier = getSingleAchievementFlags()
+	local values = getAchievementValues(highestDanTier)
 	local skillsetFlags = getSkillsetAchievementFlags()
 
 	local progUnlocked = 0
@@ -973,7 +1014,7 @@ main_af[#main_af + 1] = Def.ActorFrame {
 					local gradeSidebarTop = SCREEN_CENTER_Y - overlayH/2
 					local profileSidebarX = (SCREEN_CENTER_X - overlayW/2) + gradeSidebarW
 					local scoreAreaX = profileSidebarX + profileSidebarW
-					local headerY = SCREEN_CENTER_Y - overlayH/2 + 35
+					local headerY = SCREEN_CENTER_Y - overlayH/2 + 18
 					local achievementToggleX = SCREEN_CENTER_X - overlayW/2 + gradeSidebarW/2
 					local achievementToggleY = SCREEN_CENTER_Y + overlayH/2 - 20
 					if IsMouseOverCentered(achievementToggleX, achievementToggleY, gradeSidebarW - 12, 28) then
@@ -1025,7 +1066,7 @@ main_af[#main_af + 1] = Def.ActorFrame {
 						local nextBtnCX = scoreAreaX + mainPartW/2 + 75
 						local items = profileOverlayActor.achievementTab == "SINGLES" and singleAchievements
 							or (profileOverlayActor.achievementTab == "SKILLSETS" and skillsetAchievements or achievementProgress)
-						local maxPage = math.max(1, math.ceil(#items / 7))
+						local maxPage = math.max(1, math.ceil(#items / 8))
 
 						if maxPage > 1 and IsMouseOverCentered(prevBtnCX, footerY, 56, 22) then
 							if (profileOverlayActor.achievementPage or 1) > 1 then
@@ -1045,15 +1086,23 @@ main_af[#main_af + 1] = Def.ActorFrame {
 
 						-- Clicking on a Challenge song in SINGLES tab (with pagination)
 						if profileOverlayActor.achievementTab == "SINGLES" then
-							local cardW = mainPartW - 20
-							local cardH = 34
-							local rowPitch = 38
-							local rowsStartY = SCREEN_CENTER_Y - overlayH/2 + 70 + cardH / 2
+							local gapX = 12
+							local gapY = 8
+							local slotW = math.floor((mainPartW - 20 - gapX) / 2)
+							local slotH = 58
+							local colPitch = slotW + gapX
+							local rowPitch = slotH + gapY
+							local rowsStartY = SCREEN_CENTER_Y - overlayH/2 + 66 + slotH / 2
+							local colLeftCX = mainAreaCX - colPitch / 2
+							local colRightCX = mainAreaCX + colPitch / 2
 							local page = profileOverlayActor.achievementPage or 1
-							for i = 1, 7 do
-								local rowCY = rowsStartY + (i - 1) * rowPitch
-								if IsMouseOverCentered(mainAreaCX, rowCY, cardW, cardH) then
-									local itemIndex = (page - 1) * 7 + i
+							for i = 1, 8 do
+								local col = (i - 1) % 2
+								local row = math.floor((i - 1) / 2)
+								local slotCX = col == 0 and colLeftCX or colRightCX
+								local slotCY = rowsStartY + row * rowPitch
+								if IsMouseOverCentered(slotCX, slotCY, slotW, slotH) then
+									local itemIndex = (page - 1) * 8 + i
 									local item = singleAchievements[itemIndex]
 									if item and item[2] then
 										local song = SONGMAN:GetSongByChartKey(item[2])
@@ -1923,20 +1972,6 @@ local profileOverlay = Def.ActorFrame {
 					end
 				end
 			},
-			LoadFont("Common Normal") .. {
-				Name = "Subtitle",
-				InitCommand = function(self)
-					self:halign(0):x(-mainPartW/2 + 165):y(1):zoom(0.24):diffuse(subText):visible(false)
-				end,
-				UpdateOverlayUIMessageCommand = function(self)
-					local p = profileOverlayActor
-					if not p or not p.isAchievementMode then
-						self:visible(false)
-						return
-					end
-					self:visible(true):settext("· REPUTATION & MILESTONES")
-				end
-			},
 			-- Toggle Top/Recent Button
 			Def.ActorFrame {
 				Name = "ModeToggle",
@@ -1953,14 +1988,12 @@ local profileOverlay = Def.ActorFrame {
 					InitCommand = function(self) self:zoom(0.30):diffuse(brightText):settext("TOP / RECENT") end
 				},
 				SetUpdateFunction = function(af)
-					local mouseX = INPUTFILTER:GetMouseX()
-					local mouseY = INPUTFILTER:GetMouseY()
 					local parent = profileOverlayActor
 					if not parent or not parent:GetVisible() then return end
-					local rx = mouseX - (SCREEN_CENTER_X - overlayW/2)
-					local ry = mouseY - (SCREEN_CENTER_Y - overlayH/2)
-					local over = rx >= sidebarW + mainPartW - 300 and rx <= sidebarW + mainPartW - 200
-					         and ry >= 7 and ry <= 29
+					local over = IsMouseOverCentered(
+						SCREEN_CENTER_X + scoreAreaX + mainPartW - 250,
+						SCREEN_CENTER_Y - overlayH/2 + 18,
+						100, 22)
 					local bg = af:GetChild("Bg")
 					if parent.isRecentMode then
 						bg:diffusealpha(0.4)
@@ -1996,14 +2029,12 @@ local profileOverlay = Def.ActorFrame {
 					end
 				},
 				SetUpdateFunction = function(af)
-					local mouseX = INPUTFILTER:GetMouseX()
-					local mouseY = INPUTFILTER:GetMouseY()
 					local parent = profileOverlayActor
 					if not parent or not parent:GetVisible() then return end
-					local rx = mouseX - (SCREEN_CENTER_X - overlayW/2)
-					local ry = mouseY - (SCREEN_CENTER_Y - overlayH/2)
-					local over = rx >= sidebarW + mainPartW - 190 and rx <= sidebarW + mainPartW - 90
-					         and ry >= 7 and ry <= 29
+					local over = IsMouseOverCentered(
+						SCREEN_CENTER_X + scoreAreaX + mainPartW - 140,
+						SCREEN_CENTER_Y - overlayH/2 + 18,
+						100, 22)
 					local bg = af:GetChild("Bg")
 					if parent.isRecentMode then
 						bg:diffuse(dimText):diffusealpha(0.1)
@@ -2027,13 +2058,12 @@ local profileOverlay = Def.ActorFrame {
 					InitCommand = function(self) self:zoom(0.30):diffuse(brightText):settext("UPLOAD ALL") end
 				},
 				SetUpdateFunction = function(af)
-					local mouseX = INPUTFILTER:GetMouseX()
-					local mouseY = INPUTFILTER:GetMouseY()
 					local parent = profileOverlayActor
 					if not parent or not parent:GetVisible() then return end
-					local rx = mouseX - (SCREEN_CENTER_X - overlayW/2)
-					local ry = mouseY - (SCREEN_CENTER_Y - overlayH/2)
-					local over = rx >= sidebarW + mainPartW - 80 and rx <= sidebarW + mainPartW and ry >= 7 and ry <= 29
+					local over = IsMouseOverCentered(
+						SCREEN_CENTER_X + scoreAreaX + mainPartW - 40,
+						SCREEN_CENTER_Y - overlayH/2 + 18,
+						80, 22)
 					local bg = af:GetChild("Bg")
 					if over then
 						bg:diffusealpha(0.8)
@@ -2052,7 +2082,7 @@ local profileOverlay = Def.ActorFrame {
 					end
 				}
 				local tabKeys = {"PROGRESSIVE", "SINGLES", "SKILLSETS"}
-				local tabNames = {PROGRESSIVE = "PROGRESSIVE", SINGLES = "CHALLENGES", SKILLSETS = "SKILLSETS"}
+				local tabNames = {PROGRESSIVE = "CAREER", SINGLES = "VANITY", SKILLSETS = "MASTERY"}
 				local tabW, tabH = 120, 22
 				local tabPositions = {
 					PROGRESSIVE = -mainPartW / 2 + 75,
@@ -2145,15 +2175,6 @@ local profileOverlay = Def.ActorFrame {
 							self:settext(string.format("TOTAL: %d/%d (%d%%)", counts.total.unlocked, counts.total.total, math.floor(pct)))
 						end
 					}
-				}
-
-				-- Sub-bar Hint (Line 2, Right)
-				tabsAf[#tabsAf + 1] = LoadFont("Common Normal") .. {
-					Name = "TabHint",
-					InitCommand = function(self)
-						self:halign(1):xy(mainPartW / 2 - 20, 28):zoom(0.22):diffuse(dimText)
-							:settext("CLICK CHALLENGE TO JUMP TO WHEEL · SCROLL TO BROWSE")
-					end
 				}
 
 				return tabsAf
@@ -2268,13 +2289,15 @@ local profileOverlay = Def.ActorFrame {
 			return rows
 		end)(),
 		(function()
-			local cardW = mainPartW - 20
-			local cardH = 34
-			local rowPitch = 38
-			local medalSize = 28
-			local rowsStartY = 70 + cardH / 2
-			local achievementPageSize = 7
-			local barW = math.max(130, math.min(180, math.floor(cardW * 0.24)))
+			local gapX = 12
+			local gapY = 8
+			local cardW = math.floor((mainPartW - 20 - gapX) / 2)
+			local cardH = 58
+			local colPitch = cardW + gapX
+			local rowPitch = cardH + gapY
+			local medalSize = 44
+			local rowsStartY = 66 + cardH / 2
+			local achievementPageSize = 8
 
 			local view = Def.ActorFrame {
 				Name = "AchievementView",
@@ -2303,103 +2326,115 @@ local profileOverlay = Def.ActorFrame {
 						local item = items[itemIndex]
 						row:visible(item ~= nil)
 						if item then
-							local title = item[1]
+							local title = item[1]:upper()
 							local desc = item[4] or ""
+							local quote = item[5] or ""
 							local medal = "none"
-							local progText = ""
-							local pct = 0
-							local statusText = "LOCKED"
-							local statusColor = color("0.45,0.45,0.45,1")
-							local statusBgColor = color("0.1,0.1,0.1,0.4")
-							local barColor = accentColor
+							local heroText = ""
+							local subTextVal = ""
+							local heroColor = brightText
+							local subColor = dimText
 							local stripColor = accentColor
 
 							if singleMode then
+								-- SINGULAR ACHIEVEMENTS
 								local unlocked = flags and flags[itemIndex] == true
 								medal = unlocked and "award_unlocked" or "award_locked"
-								pct = unlocked and 1.0 or 0.0
+
 								if unlocked then
-									statusText = "UNLOCKED"
-									statusColor = color("#34D399")
-									statusBgColor = color("0.0,0.5,0.3,0.3")
-									barColor = color("#34D399")
+									heroText = "UNLOCKED"
+									heroColor = color("#34D399")
+									subTextVal = ""
+									subColor = color("#818CF8")
 									stripColor = color("#34D399")
-									progText = "COMPLETED"
 								else
-									statusText = "LOCKED"
-									statusColor = dimText
-									statusBgColor = color("0.1,0.1,0.1,0.4")
-									barColor = color("0.25,0.25,0.25,1")
-									stripColor = color("0.25,0.25,0.25,1")
-									progText = item[5] or "Challenge locked"
+									heroText = ""
+									heroColor = color("0.7,0.73,0.8,1")
+									subTextVal = ""
+									subColor = dimText
+									stripColor = color("0.25,0.28,0.35,1")
 								end
 							elseif skillsetMode then
+								-- SKILLSET MASTERY
 								local unlocked = flags and flags[itemIndex] == true
 								local prof = PROFILEMAN:GetProfile(PLAYER_1)
 								local rating = safeProfileValue(prof, "GetPlayerSkillsetRating", item[3]) or 0
-								pct = math.max(0, math.min(1, rating / 30.00))
 								medal = unlocked and "award_unlocked" or "award_locked"
+								heroText = string.format("%.2f", rating)
+
 								if unlocked then
-									statusText = "MASTERED"
-									statusColor = color("#FBBF24")
-									statusBgColor = color("0.5,0.4,0.0,0.3")
-									barColor = color("#FBBF24")
+									heroColor = color("#FBBF24")
+									subTextVal = "of 30.00"
+									subColor = color("#FBBF24")
 									stripColor = color("#FBBF24")
-									progText = string.format("%.2f / 30.00 (100%%)", rating)
 								else
-									statusText = string.format("%.1f%%", pct * 100)
-									statusColor = accentColor
-									statusBgColor = color("0.05,0.2,0.4,0.3")
-									barColor = accentColor
+									heroColor = accentColor
+									subTextVal = "of 30.00"
+									subColor = color("#818CF8")
 									stripColor = accentColor
-									progText = string.format("%.2f / 30.00", rating)
 								end
 							else
-								-- Progressive Mode
+								-- PROGRESSIVE MILESTONES
 								local val = values[item[3]] or 0
-								local tier, maxTiers, curMilestone, nextMilestone, p = getProgressiveMilestoneInfo(val, item[2], item[3])
-								pct = p
+								local tier, maxTiers, curMilestone, nextMilestone = getProgressiveMilestoneInfo(val, item[2], item[3])
 								medal = getAchievementMedal(item, false, false, val)
 								local tColor = tierColors[tier] or accentColor
-								barColor = tColor
 								stripColor = tColor
 
-								if tier == 0 then
-									statusText = "LOCKED"
-									statusColor = dimText
-									statusBgColor = color("0.1,0.1,0.1,0.4")
-									barColor = color("0.3,0.3,0.3,1")
-									stripColor = color("0.3,0.3,0.3,1")
-									progText = string.format("%s / %s", formatVal(val), formatVal(nextMilestone))
-								elseif nextMilestone == nil then
-									statusText = tierNames[tier] or "MAX TIER"
-									statusColor = tColor
-									statusBgColor = color("0.4,0.3,0.0,0.35")
-									progText = string.format("%s (ALL COMPLETE)", formatVal(val))
+								if item[3] == "dan" then
+									local rank = math.floor(val)
+									heroText = danRanks[rank] and danRanks[rank][1] or "NO CLEAR"
+								elseif item[3] == "hours" then
+									heroText = string.format("%.1f hrs", val)
+								elseif item[3] == "ssr" or item[3] == "rating" then
+									heroText = string.format("%.2f", val)
 								else
-									statusText = string.format("TIER %d/%d", tier, maxTiers)
-									statusColor = tColor
-									statusBgColor = color("0.05,0.2,0.35,0.3")
-									progText = string.format("%s / %s (%.0f%%)", formatVal(val), formatVal(nextMilestone), pct * 100)
+									heroText = formatVal(val)
+								end
+
+								if tier == 0 then
+									heroColor = color("0.6,0.65,0.72,1")
+									subTextVal = ""
+									subColor = dimText
+									stripColor = color("0.3,0.3,0.3,1")
+								elseif nextMilestone == nil then
+									heroColor = tColor
+									subTextVal = "COMPLETE"
+									subColor = tColor
+								else
+									heroColor = tColor
+									subTextVal = ""
+									subColor = color("#818CF8")
 								end
 							end
 
 							row:GetChild("Title"):settext(title)
+							local heroActor
+							local heroMsdActor = row:GetChild("HeroValMSD")
+							local heroTxtActor = row:GetChild("HeroValText")
+							if singleMode then
+								heroMsdActor:visible(false)
+								heroTxtActor:visible(true):settext(heroText):diffuse(heroColor)
+								heroActor = heroTxtActor
+							else
+								heroTxtActor:visible(false)
+								heroMsdActor:visible(true):settext(heroText):diffuse(heroColor)
+								heroActor = heroMsdActor
+							end
+							local heroW = heroActor:GetZoomedWidth()
+							local subActor = row:GetChild("SubVal")
+							subActor:x(-cardW/2 + 66 + heroW + 6):settext(subTextVal):diffuse(subColor)
+
 							row:GetChild("Description"):settext(desc)
-							row:GetChild("ProgressText"):settext(progText)
-							row:GetChild("StatusLabel"):settext(statusText):diffuse(statusColor)
-							row:GetChild("StatusBg"):diffuse(statusBgColor)
-							row:GetChild("StatusBorder"):diffuse(statusColor):diffusealpha(0.6)
+							row:GetChild("Quote"):settext(quote ~= "" and ("“" .. quote .. "”") or "")
+
 							row:GetChild("AccentStrip"):diffuse(stripColor)
-							row:GetChild("BarFill"):zoomto(barW * pct, 7):diffuse(barColor)
-							row:GetChild("BarTrough"):zoomto(barW, 7)
-							row:GetChild("BarBorder"):zoomto(barW, 1)
 
 							local medalPath = THEME:GetPathG("", "achievements/" .. medal)
 							local medalSprite = row:GetChild("Medal")
 							medalSprite:Load(medalPath):scaletoclipped(medalSize, medalSize)
 							if medal == "none" or medal == "award_locked" then
-								medalSprite:diffusealpha(0.38)
+								medalSprite:diffusealpha(0.35)
 							else
 								medalSprite:diffusealpha(1.0)
 							end
@@ -2409,21 +2444,26 @@ local profileOverlay = Def.ActorFrame {
 			}
 
 			for i = 1, achievementPageSize do
+				local col = (i - 1) % 2
+				local row = math.floor((i - 1) / 2)
+				local slotX = (col == 0 and -colPitch / 2 or colPitch / 2)
+				local slotY = rowsStartY + row * rowPitch
+
 				view[#view+1] = Def.ActorFrame {
 					Name = "Achievement_" .. i,
-					InitCommand = function(self) self:y(rowsStartY + (i - 1) * rowPitch) end,
+					InitCommand = function(self) self:xy(slotX, slotY) end,
 					-- Card Background
 					Def.Quad {
 						Name = "CardBg",
 						InitCommand = function(self)
-							self:zoomto(cardW, cardH):diffuse(color("0.05,0.05,0.07,0.85"))
+							self:zoomto(cardW, cardH):diffuse(color("0.04,0.05,0.07,0.92"))
 						end
 					},
 					-- Card Bottom Border
 					Def.Quad {
 						Name = "CardBorder",
 						InitCommand = function(self)
-							self:zoomto(cardW, 1):valign(1):y(cardH / 2):diffuse(color("0.18,0.18,0.22,0.4"))
+							self:zoomto(cardW, 1):valign(1):y(cardH / 2):diffuse(color("0.16,0.18,0.22,0.45"))
 						end
 					},
 					-- Left Accent Strip
@@ -2437,88 +2477,70 @@ local profileOverlay = Def.ActorFrame {
 					Def.Quad {
 						Name = "MedalSocket",
 						InitCommand = function(self)
-							self:x(-cardW/2 + 24):zoomto(medalSize + 4, medalSize + 4):diffuse(color("0,0,0,0.5"))
+							self:x(-cardW/2 + 32):zoomto(48, 48):diffuse(color("0.02,0.03,0.04,0.8"))
 						end
 					},
 					-- Medal Socket Border
 					Def.Quad {
 						Name = "MedalSocketBorder",
 						InitCommand = function(self)
-							self:x(-cardW/2 + 24):zoomto(medalSize + 4, 1):valign(1):y((medalSize + 4) / 2):diffuse(color("0.25,0.25,0.3,0.5"))
+							self:x(-cardW/2 + 32):zoomto(48, 1):valign(1):y(24):diffuse(color("0.2,0.25,0.3,0.4"))
 						end
 					},
-					-- Medal Sprite (28x28)
+					-- Medal Sprite (44x44)
 					Def.Sprite {
 						Name = "Medal",
 						InitCommand = function(self)
-							self:x(-cardW/2 + 24)
+							self:x(-cardW/2 + 32)
 							self:Load(THEME:GetPathG("", "achievements/none")):scaletoclipped(medalSize, medalSize)
 						end
 					},
-					-- Achievement Title (zoom 0.34)
+					-- Achievement Title (Line 1, zoom 0.33)
 					LoadFont("Common Normal") .. {
 						Name = "Title",
 						InitCommand = function(self)
-							self:halign(0):x(-cardW/2 + 48):y(-7):zoom(0.34):diffuse(brightText)
-								:maxwidth((cardW * 0.40) / 0.34)
+							self:halign(0):x(-cardW/2 + 64):y(-18):zoom(0.33):diffuse(brightText)
+								:maxwidth((cardW - 74) / 0.33)
 						end
 					},
-					-- Flavor Description (zoom 0.24)
+					-- Hero Value - MSD font for Progressive/Skillsets (zoom 0.50)
+					LoadFont("MSD 20px") .. {
+						Name = "HeroValMSD",
+						InitCommand = function(self)
+							self:halign(0):x(-cardW/2 + 64):y(-2):zoom(0.50):diffuse(brightText)
+								:maxwidth((cardW * 0.45) / 0.50)
+						end
+					},
+					-- Hero Value - Common Normal font for Singles (zoom 0.44)
+					LoadFont("Common Normal") .. {
+						Name = "HeroValText",
+						InitCommand = function(self)
+							self:halign(0):x(-cardW/2 + 64):y(-3):zoom(0.44):diffuse(brightText)
+								:maxwidth((cardW * 0.45) / 0.44)
+						end
+					},
+					-- Secondary Sub-Value (Line 2, inline, zoom 0.26)
+					LoadFont("Common Normal") .. {
+						Name = "SubVal",
+						InitCommand = function(self)
+							self:halign(0):y(-2):zoom(0.26):diffuse(dimText)
+								:maxwidth((cardW * 0.45) / 0.26)
+						end
+					},
+					-- Metric Description (Line 3, zoom 0.39)
 					LoadFont("Common Normal") .. {
 						Name = "Description",
 						InitCommand = function(self)
-							self:halign(0):x(-cardW/2 + 48):y(7):zoom(0.24):diffuse(subText)
-								:maxwidth((cardW * 0.45) / 0.24)
+							self:halign(0):x(-cardW/2 + 64):y(11):zoom(0.39):diffuse(color("0.72,0.75,0.82,1"))
+								:maxwidth((cardW - 74) / 0.39)
 						end
 					},
-					-- Progress Bar Trough
-					Def.Quad {
-						Name = "BarTrough",
-						InitCommand = function(self)
-							self:x(cardW/2 - 96 - barW/2):y(5):zoomto(barW, 7):diffuse(color("0.08,0.08,0.12,0.9"))
-						end
-					},
-					-- Progress Bar Fill
-					Def.Quad {
-						Name = "BarFill",
-						InitCommand = function(self)
-							self:halign(0):x(cardW/2 - 96 - barW):y(5):zoomto(0, 7):diffuse(accentColor)
-						end
-					},
-					-- Progress Bar Subtle Border
-					Def.Quad {
-						Name = "BarBorder",
-						InitCommand = function(self)
-							self:x(cardW/2 - 96 - barW/2):y(9):valign(1):zoomto(barW, 1):diffuse(color("0.2,0.25,0.3,0.4"))
-						end
-					},
-					-- Numerical Progress Text (zoom 0.24)
+					-- Flavor Quote (Line 4, zoom 0.36)
 					LoadFont("Common Normal") .. {
-						Name = "ProgressText",
+						Name = "Quote",
 						InitCommand = function(self)
-							self:halign(1):x(cardW/2 - 96):y(-7):zoom(0.24):diffuse(mainText)
-								:maxwidth(barW / 0.24)
-						end
-					},
-					-- Status Pill Background
-					Def.Quad {
-						Name = "StatusBg",
-						InitCommand = function(self)
-							self:x(cardW/2 - 45):y(0):zoomto(78, 22):diffuse(color("0.1,0.1,0.1,0.4"))
-						end
-					},
-					-- Status Pill Border
-					Def.Quad {
-						Name = "StatusBorder",
-						InitCommand = function(self)
-							self:x(cardW/2 - 45):y(11):valign(1):zoomto(78, 1):diffuse(color("0.2,0.2,0.2,0.5"))
-						end
-					},
-					-- Status Pill Label (zoom 0.25)
-					LoadFont("Common Normal") .. {
-						Name = "StatusLabel",
-						InitCommand = function(self)
-							self:x(cardW/2 - 45):y(0):zoom(0.25):diffuse(brightText)
+							self:halign(0):x(-cardW/2 + 64):y(22):zoom(0.36):diffuse(color("#7DD3FC")):diffusealpha(0.85)
+								:maxwidth((cardW - 74) / 0.36)
 						end
 					},
 					-- Interactive Hover Animation
@@ -2526,16 +2548,16 @@ local profileOverlay = Def.ActorFrame {
 						local parent = profileOverlayActor
 						if not parent or not parent:GetVisible() or not parent.isAchievementMode then return end
 						local scoreAreaX = (SCREEN_CENTER_X - overlayW/2) + gradeSidebarW + profileSidebarW
-						local mainAreaCX = scoreAreaX + mainPartW / 2
-						local rowCY = (SCREEN_CENTER_Y - overlayH/2 + rowsStartY) + (i - 1) * rowPitch
-						local over = IsMouseOverCentered(mainAreaCX, rowCY, cardW, cardH)
+						local absSlotCX = scoreAreaX + mainPartW / 2 + slotX
+						local absSlotCY = SCREEN_CENTER_Y - overlayH/2 + slotY
+						local over = IsMouseOverCentered(absSlotCX, absSlotCY, cardW, cardH)
 						local bg = af:GetChild("CardBg")
 						local strip = af:GetChild("AccentStrip")
 						if over then
-							bg:diffuse(color("0.10,0.14,0.20,0.95"))
+							bg:diffuse(color("0.08,0.11,0.16,0.96"))
 							strip:zoomto(5, cardH)
 						else
-							bg:diffuse(color("0.05,0.05,0.07,0.85"))
+							bg:diffuse(color("0.04,0.05,0.07,0.92"))
 							strip:zoomto(3, cardH)
 						end
 					end
@@ -2568,13 +2590,12 @@ local profileOverlay = Def.ActorFrame {
 				self:visible(true)
 				local items = p.achievementTab == "SINGLES" and singleAchievements
 					or (p.achievementTab == "SKILLSETS" and skillsetAchievements or achievementProgress)
-				local maxPage = math.max(1, math.ceil(#items / 7))
+				local maxPage = math.max(1, math.ceil(#items / 8))
 				local curPage = math.min(maxPage, p.achievementPage or 1)
 
 				local prevBtn = self:GetChild("PrevBtn")
 				local nextBtn = self:GetChild("NextBtn")
 				local pageLbl = self:GetChild("PageLbl")
-				local hintLbl = self:GetChild("HintLbl")
 
 				if maxPage > 1 then
 					prevBtn:visible(true)
@@ -2584,14 +2605,6 @@ local profileOverlay = Def.ActorFrame {
 					prevBtn:visible(false)
 					nextBtn:visible(false)
 					pageLbl:settext("ALL MILESTONES SHOWN"):diffuse(dimText)
-				end
-
-				if p.achievementTab == "SINGLES" then
-					hintLbl:settext("CLICK CHALLENGE TO SELECT SONG IN WHEEL"):diffuse(accentColor)
-				elseif p.achievementTab == "SKILLSETS" then
-					hintLbl:settext("REACH 30.00 IN A SKILLSET FOR MASTERY"):diffuse(dimText)
-				else
-					hintLbl:settext("USE WHEEL OR BUTTONS TO BROWSE"):diffuse(dimText)
 				end
 			end,
 			-- Prev Button Frame
@@ -2647,13 +2660,6 @@ local profileOverlay = Def.ActorFrame {
 					local absCY = SCREEN_CENTER_Y + overlayH/2 - 14
 					local over = IsMouseOverCentered(absCX, absCY, 56, 20)
 					af:GetChild("Bg"):diffusealpha(over and 0.9 or 0.6)
-				end
-			},
-			-- Right Hint Label
-			LoadFont("Common Normal") .. {
-				Name = "HintLbl",
-				InitCommand = function(self)
-					self:halign(1):x(mainPartW / 2 - 20):zoom(0.22):diffuse(dimText)
 				end
 			}
 		}
@@ -2852,7 +2858,7 @@ local profileOverlay = Def.ActorFrame {
 		if self.isAchievementMode then
 			local items = self.achievementTab == "SINGLES" and singleAchievements
 				or (self.achievementTab == "SKILLSETS" and skillsetAchievements or achievementProgress)
-			local maxPage = math.max(1, math.ceil(#items / 7))
+			local maxPage = math.max(1, math.ceil(#items / 8))
 			if (self.achievementPage or 1) < maxPage then
 				self.achievementPage = (self.achievementPage or 1) + 1
 				pcall(function() SOUND:PlayOnce(THEME:GetPathS("Common", "value")) end)
@@ -3287,7 +3293,8 @@ main_af[#main_af + 1] = Def.ActorFrame {
 			local btn = event.DeviceInput.button
 
 			-- Copy the selected chart's chart key with Select while on the song wheel.
-			if btn == "DeviceButton_select" and event.type == "InputEventType_FirstPress"
+			if event.GameButton == "Select"
+			and event.type == "InputEventType_FirstPress"
 			and (HV.ActiveTab or "") == "" and not previewActive then
 				local data = HV.CurrentSongData
 				local steps = data and data.steps or (GAMESTATE and GAMESTATE:GetCurrentSteps())
