@@ -347,7 +347,6 @@ end
 local profileOverlayActor = nil
 local globalTooltipActor = nil
 local previewActive = false
-local inputDebugActor = nil
 local searchString = HV.MusicSearchQuery or ""
 
 -- SCOREMAN's ranked lists are shared by all local profiles.  Keep the
@@ -869,11 +868,6 @@ main_af[#main_af + 1] = Def.ActorFrame {
 				return true
 			end
 			
-			-- Log to the isolated debugger if it's loaded
-			if HV_DEBUG_LOG then
-				HV_DEBUG_LOG(string.format("Input: %s (%s)", tostring(btn), tostring(evType)))
-			end
-
 			-- 2. Mouse Click
 			if btn == "DeviceButton_right mouse button" and evType == "InputEventType_FirstPress" then
 				-- A. Handle Score Validation if over a row
@@ -1434,9 +1428,6 @@ main_af[#main_af + 1] = Def.ActorFrame {
 								end
 							end
 						end
-						return true
-					elseif btn == "DeviceButton_0" then
-						MESSAGEMAN:Broadcast("ToggleInputDebugger")
 						return true
 					end
 				end
@@ -3261,9 +3252,6 @@ main_af[#main_af + 1] = LoadActor("../ScreenChartPreview overlay/default.lua") .
 		self:visible(false)
 	end
 }
-
--- Load Isolated Input Debugger (Always on top with draworder 9999)
-main_af[#main_af + 1] = LoadActor("input_debugger.lua")
 
 -- Sync previewActive state from outside
 
