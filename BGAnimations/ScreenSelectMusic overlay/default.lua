@@ -37,8 +37,15 @@ local dimText = color("0.45,0.45,0.45,1")
 local bgCard = color("0.06,0.06,0.06,0.9")
 
 local danRanks = {
-	{"6th Dan", {"Xeef4999a0ff9e1f63d01dd7ad73d95c369352e88", "X210aeea71e81bafb1c802308418f82423c053e58"}},
-	{"8th Dan", {"Xeedf0fdef274f0039729a941fe12c0fbb5ccdf37", "X50b734f0149077c01f9f95ad9544c63d630b2153"}},
+	{"1st Dan", {"X5e0e976dbdaab2f5069442aea7fda6c36a04d762"}},
+	{"2nd Dan", {"X8ab233319206a935ead8b2c7a0e1152f9b9f5b87"}},
+	{"3rd Dan", {"X80a4f4287fa3d8fcf3b641ad8acb8c4488ca201c"}},
+	{"4th Dan", {"Xc53ee08d09d27f898c7ef3d98333e518c669d6db"}},
+	{"5th Dan", {"Xedd50d654858a1ccc7cfbbb3ef36c7ab25d8a2d6"}},
+	{"6th Dan", {"Xeef4999a0ff9e1f63d01dd7ad73d95c369352e88"}},
+	{"7th Dan", {"X210aeea71e81bafb1c802308418f82423c053e58"}},
+	{"8th Dan", {"Xeedf0fdef274f0039729a941fe12c0fbb5ccdf37"}},
+	{"9th Dan", {"X50b734f0149077c01f9f95ad9544c63d630b2153"}},
 	{"10th Dan", {"X6bff4ed380fe33ab39f6f11315312c0a780474cb"}},
 	{"Alpha Dan", {"X4da1deb690aaa50aceabefb94460f2f77f739371"}},
 	{"Beta Dan", {"X6e0fa4c42667d269bbcf29b9abe5a00246c4e4fe"}},
@@ -225,7 +232,15 @@ local function getSingleAchievementFlags()
 		PERFECT = 1.0,
 	}
 	local flags = {}
-	local danCleared = {}
+	local danKeys = {}
+	for tier, danRank in ipairs(danRanks) do
+		for _, chartKey in ipairs(danRank[2]) do
+			local normalizedKey = string.lower(tostring(chartKey)):gsub("^x", "")
+			danKeys[normalizedKey] = tier
+			danKeys["x" .. normalizedKey] = tier
+		end
+	end
+	local highestDanTier = 0
 	for i = 1, #singleAchievements do flags[i] = false end
 	local function inspect(score)
 		if not score then return end
@@ -249,11 +264,9 @@ local function getSingleAchievementFlags()
 		if not valid then return end
 		wife, rate = tonumber(wife) or 0, tonumber(rate) or 1
 		if wife >= 0.93 then
-			for tier, danRank in ipairs(danRanks) do
-				for _, requiredKey in ipairs(danRank[2]) do
-					if chartKey == requiredKey then danCleared[tier] = true; break end
-				end
-			end
+			local normalizedKey = chartKey and string.lower(tostring(chartKey))
+			local tier = normalizedKey and danKeys[normalizedKey]
+			if tier and tier > highestDanTier then highestDanTier = tier end
 		end
 		for i = 1, #singleAchievements do
 			local item = singleAchievements[i]
@@ -279,10 +292,6 @@ local function getSingleAchievementFlags()
 		local ok, score = pcall(SCOREMAN.GetTopSSRHighScoreForGame, SCOREMAN, rank, "Overall")
 		if not ok or not score then break end
 		inspect(score)
-	end
-	local highestDanTier = 0
-	for tier = 1, #danRanks do
-		if danCleared[tier] then highestDanTier = tier end
 	end
 	return flags, highestDanTier
 end

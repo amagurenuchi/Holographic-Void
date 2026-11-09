@@ -2728,20 +2728,11 @@ t[#t + 1] = Def.ActorFrame {
 			
 			local parent = self:GetParent()
 			local profile = PROFILEMAN:GetProfile(PLAYER_1)
-			local onlineRating = DLMAN:IsLoggedIn() and DLMAN:GetSkillsetRating("Overall") or nil
-			local offlineRating = profile and profile:GetPlayerRating() or nil
-
+			local onlineRating = DLMAN:IsLoggedIn() and DLMAN:GetSkillsetRating("Overall") or 0
+			local localRating = profile and profile:GetPlayerRating() or 0
 			local useLocal = parent and parent.hv_nameCycling and parent.hv_showingLocalName
-			local rating = useLocal and (offlineRating or 0) or (onlineRating or 0)
-			if rating <= 0 then
-				rating = useLocal and (onlineRating or 0) or (offlineRating or 0)
-			end
-
-			if rating > 0 then
-				self:settextf("%.2f", rating):diffuse(HVColor.GetMSDRatingColor(rating))
-			else
-				self:settext("-"):diffuse(dimText)
-			end
+			local rating = useLocal and localRating or onlineRating
+			self:settextf("%.2f", rating):diffuse(HVColor.GetMSDRatingColor(rating))
 		end,
 		LoginMessageCommand = function(self) self:playcommand("Set") end,
 		LogOutMessageCommand = function(self) self:playcommand("Set") end,
