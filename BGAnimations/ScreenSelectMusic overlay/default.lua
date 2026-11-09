@@ -56,6 +56,10 @@ local danRanks = {
 	{"Eta Dan", {"X7ed0e5b112e7b04014e2d8e7b1b84fbda9188f76"}},
 }
 
+
+local danMedalRanks = {"6th Dan", "8th Dan", "10th Dan", "Alpha Dan", "Beta Dan", "Gamma Dan", "Delta Dan", "Epsilon Dan", "Zeta Dan", "Eta Dan"}
+local danMedalThresholds = {6, 8, 10, 11, 12, 13, 14, 15, 16, 17}
+
 local achievementProgress = {
 	{"AGAIN AND AGAIN", {1, 10, 100, 1000, 5000, 10000, 50000, 100000, 250000}, "plays", "lifetime plays", "Rome wasn't built in a day they said."},
 	{"ARROW SMASHER", {10, 100, 1000, 5000, 10000, 50000, 100000, 500000, 1000000}, "taps", "lifetime note hits", "Every click echoes in the machine."},
@@ -240,7 +244,7 @@ local function getSingleAchievementFlags()
 			danKeys["x" .. normalizedKey] = tier
 		end
 	end
-	local highestDanTier = 0
+	local highestDanChartRank = 0
 	for i = 1, #singleAchievements do flags[i] = false end
 	local function inspect(score)
 		if not score then return end
@@ -266,7 +270,7 @@ local function getSingleAchievementFlags()
 		if wife >= 0.93 then
 			local normalizedKey = chartKey and string.lower(tostring(chartKey))
 			local tier = normalizedKey and danKeys[normalizedKey]
-			if tier and tier > highestDanTier then highestDanTier = tier end
+			if tier and tier > highestDanChartRank then highestDanChartRank = tier end
 		end
 		for i = 1, #singleAchievements do
 			local item = singleAchievements[i]
@@ -293,7 +297,11 @@ local function getSingleAchievementFlags()
 		if not ok or not score then break end
 		inspect(score)
 	end
-	return flags, highestDanTier
+	local highestDanMedalTier = 0
+	for medalTier, chartRankThreshold in ipairs(danMedalThresholds) do
+		if highestDanChartRank >= chartRankThreshold then highestDanMedalTier = medalTier end
+	end
+	return flags, highestDanMedalTier
 end
 
 local function getSkillsetAchievementFlags()
@@ -2383,7 +2391,7 @@ local profileOverlay = Def.ActorFrame {
 
 								if item[3] == "dan" then
 									local rank = math.floor(val)
-									heroText = danRanks[rank] and danRanks[rank][1] or "NO CLEAR"
+									heroText = danMedalRanks[rank] or "NO CLEAR"
 								elseif item[3] == "hours" then
 									heroText = string.format("%.1f hrs", val)
 								elseif item[3] == "ssr" or item[3] == "rating" then
