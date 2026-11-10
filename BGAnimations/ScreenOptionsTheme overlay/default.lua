@@ -65,7 +65,7 @@ local categoryOptions = {
 	{"GlobalTheme", "HV_BGAnimIntensity", "HV_Parallax", "HV_BackgroundEffect", "HV_Particles", "HV_EnableGlow", "HV_QuotesMode"},
 	{"HV_SongPreview", "HV_SongSelectBGM", "HV_InstantSearch", "HV_ShowMSD", "HV_OsuManiaStarRating", "HV_ShowProfileStats"},
 	{
-		"HV_MinimalisticMode", "HV_ShowJudgment", "HV_JudgmentAnimation", "HV_RecentJudgmentDisplay",
+		"HV_MinimalisticMode", "HV_EvaluationScreenToggle", "HV_ShowJudgment", "HV_JudgmentAnimation", "HV_RecentJudgmentDisplay",
 		"HV_PrioritizeLowerJudgements", "HV_DisplayLowerJudgementOffset", "HV_OffsetDisplayJudgement", "HV_ShowCombo",
 		"HV_ComboAnimation", "HV_ShowCurrentWife", "HV_ShowJudgeCounter", "HV_JudgeCounterMode", "HV_ShowNGIndicator",
 		"HV_ShowPlayerInfo", "HV_ProgressBarPosition", "HV_MiniProgressBar", "HV_ShowInGameLeaderboard", "HV_ShowNPS",

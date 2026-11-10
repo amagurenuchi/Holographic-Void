@@ -603,6 +603,11 @@ local HVPrefs = {
 		Choices = {"Off", "On"},
 		Values = {false, true}
 	},
+	HV_EvaluationScreenToggle = {
+		Default = "Classic",
+		Choices = {"Simple", "Classic"},
+		Values = {"Simple", "Classic"}
+	},
 
 	-- Gameplay: Judgment Tally Mode
 	HV_JudgeCounterMode = {

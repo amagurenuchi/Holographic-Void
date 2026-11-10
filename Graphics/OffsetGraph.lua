@@ -544,6 +544,7 @@ local function HighlightUpdaterThing(self)
 end
 
 local baralpha = 0.4
+local showTrendLine = true
 
 -- HV color scheme
 local frameBG = color("0.06,0.06,0.06,0.95")
@@ -590,11 +591,11 @@ local t = Def.ActorFrame{
 				local slicePercentBg = self:GetChild("SlicePercentBg")
 				local slicePlusLabel = self:GetChild("SlicePlusLabel")
 				local slicePlusBg = self:GetChild("SlicePlusBg")
-				if (metricLabel and isOver(metricLabel)) or (metricBg and isOver(metricBg)) then
+				if showTrendLine and ((metricLabel and isOver(metricLabel)) or (metricBg and isOver(metricBg))) then
 					cycleTrendMetric(1)
 					return true
 				end
-				if (colorLabel and isOver(colorLabel)) or (colorBg and isOver(colorBg)) then
+				if showTrendLine and ((colorLabel and isOver(colorLabel)) or (colorBg and isOver(colorBg))) then
 					cycleTrendColorMode(1)
 					return true
 				end
@@ -643,14 +644,11 @@ local t = Def.ActorFrame{
 				end
 				return true
 			elseif event.type == "InputEventType_FirstPress" and btn == "DeviceButton_middle mouse button" then
-				cycleTrendMetric(1)
-				return true
+				if showTrendLine then cycleTrendMetric(1); return true end
 			elseif event.type == "InputEventType_FirstPress" and btn == "DeviceButton_x1 mouse button" then
-				cycleTrendColorMode(1)
-				return true
+				if showTrendLine then cycleTrendColorMode(1); return true end
 			elseif event.type == "InputEventType_FirstPress" and btn == "DeviceButton_x2 mouse button" then
-				cycleTrendColorMode(-1)
-				return true
+				if showTrendLine then cycleTrendColorMode(-1); return true end
 			elseif event.type == "InputEventType_FirstPress" and btn == "DeviceButton_left ctrl" then
 				adjustSlicePercent(1)
 				return true
@@ -720,7 +718,7 @@ local function checkParams(params)
 	if type(params) ~= "table" or params.width == nil then
 		params = {width = setWidth, height = setHeight, song = setSong,
 			steps = setSteps, nrv = nrv, dvt = dvt, ctt = ctt, ntt = ntt, columns = columns,
-			cbl = cbl, cbr = cbr, cbm = cbm, showMiddle = showMiddle}
+			cbl = cbl, cbr = cbr, cbm = cbm, showMiddle = showMiddle, showTrendLine = showTrendLine}
 	end
 	oddColumns = (columns or 4) % 2 ~= 0
 	middleColumn = ((columns or 4) - 1) / 2.0
@@ -748,6 +746,7 @@ t[#t+1] = Def.Quad{
 		if params.cbr ~= nil then cbr = params.cbr end
 		if params.cbm ~= nil then cbm = params.cbm end
 		showMiddle = params.showMiddle or false
+		showTrendLine = params.showTrendLine ~= false
 		if params.song then
 			finalSecond = params.song:GetLastSecond()
 		end
@@ -902,6 +901,9 @@ local function buttonBg(name, xFunc, yOffset, width, hAlign)
 		end,
 		UpdateCommand = function(self, params)
 			params = checkParams(params)
+			if name == "TrendMetric" or name == "TrendColor" then
+				self:visible(params.showTrendLine ~= false)
+			end
 			self:xy(xFunc(params), params.height + yOffset)
 			self:zoomto(width or 70, 18)
 		end,
@@ -1032,6 +1034,13 @@ t[#t+1] = Def.ActorMultiVertex{
 	Name = "TrendLine",
 	UpdateCommand = function(self, params)
 		params = checkParams(params)
+		if params.showTrendLine == false then
+			self:SetVertices({})
+			self:SetDrawState{Mode = "DrawMode_Quads", First = 1, Num = 0}
+			self:visible(false)
+			return
+		end
+		self:visible(true)
 		local verts = {}
 
 		if params.song == nil or params.steps == nil or params.nrv == nil or params.dvt == nil
@@ -1238,6 +1247,7 @@ t[#t+1] = LoadFont("Common Normal") .. {
 	end,
 	UpdateCommand = function(self, params)
 		params = checkParams(params)
+		self:visible(params.showTrendLine ~= false)
 		self:xy(8, params.height + 20)
 		self:settextf("Trend: %s", trendMetricModes[trendMetricIndex].label)
 	end,
@@ -1253,6 +1263,7 @@ t[#t+1] = LoadFont("Common Normal") .. {
 	end,
 	UpdateCommand = function(self, params)
 		params = checkParams(params)
+		self:visible(params.showTrendLine ~= false)
 		self:xy(params.width - 8, params.height + 20)
 		self:settextf("Color: %s", trendColorModes[trendColorModeIndex].label)
 	end,

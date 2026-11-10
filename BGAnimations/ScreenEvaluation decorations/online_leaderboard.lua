@@ -152,6 +152,7 @@ local function movePage(n)
 end
 
 local function selectLocalScore(index)
+	if HV.EvaluationCompact then return end
 	local selected = scoreList and scoreList[index]
 	if not isLocal or not selected then return end
 	-- Keep the selected score in shared theme state and pass it to the evaluation updater.

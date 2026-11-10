@@ -869,6 +869,13 @@ function OptionRowMinimalisticMode()
 	return HVThemePrefRow("HV_MinimalisticMode", "Minimalistic Mode")
 end
 
+function OptionRowEvaluationScreenToggle()
+	local row = HVThemePrefRow("HV_EvaluationScreenToggle", "Evaluation Mode")
+	row.Choices = {"Simple", "Classic"}
+	row.Values = {"Simple", "Classic"}
+	return row
+end
+
 function OptionRowJudgeCounterMode()
 	return HVThemePrefRow("HV_JudgeCounterMode", "Judgment Tally Mode")
 end

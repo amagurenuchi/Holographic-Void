@@ -43,6 +43,10 @@ local rootRef = nil
 local cdgInfoTimeRef = nil
 local cdgInfoBPMRef  = nil
 local cdgInfoNPSRef  = nil
+local cdgSkillsetIndex = 1
+-- CalcDebugExt follows the full ms.SkillSets index order; these are the supported interval vectors.
+local cdgSkillsets = {"Stream", "Jumpstream", "Handstream", "JackSpeed", "Chordjack", "Technical"}
+local cdgSkillsetDebugIndex = {Stream=2, Jumpstream=3, Handstream=4, JackSpeed=6, Chordjack=7, Technical=8}
 
 local musicStartTime = 0
 local musicStartOffset = 0
@@ -437,6 +441,14 @@ local function input(event)
 			end
 		end
 
+		-- Cycle the interval difficulty graph through calculator skillsets.
+		local cdgSelector = cdgFrameRef and cdgFrameRef:GetChild("SkillsetSelector")
+		if cdgSelector and isOver(cdgSelector:GetChild("ClickArea")) then
+			cdgSkillsetIndex = cdgSkillsetIndex % #cdgSkillsets + 1
+			if cdgFrameRef then cdgFrameRef:playcommand("Reload") end
+			return true
+		end
+
 		-- Seek on CDG
 		if cdgFrameRef then
 			local clickArea = cdgFrameRef:GetChild("ClickArea")
@@ -755,7 +767,6 @@ local peak70LineActor = nil
 local tooltipActor = nil
 local npsTooltipActor = nil
 local showTooltip = false
-
 local function densityGraphComp()
 	return Def.ActorFrame {
 		Name = "CDGFrame",
@@ -766,38 +777,40 @@ local function densityGraphComp()
 		
 		Def.Quad { Name = "ClickArea", InitCommand = function(self) self:zoomto(SCREEN_WIDTH - 120, 80):diffusealpha(0) end },
 
-		-- Graph (AMV)
+		-- Original chord-density bars remain the graph base.
 		Def.ActorMultiVertex {
 			Name = "GraphAMV",
 			ReloadCommand = function(self)
 				local rate = math.max(MIN_MUSIC_RATE, getCurRateValue())
-				local vectors = steps:GetCDGraphVectors(rate)
-				if not vectors then self:SetVertices({}):SetDrawState({Mode="DrawMode_Quads", First=0, Num=0}) return end
-				
+				local vectors = steps and steps:GetCDGraphVectors(rate)
+				if not vectors or not vectors[1] then
+					self:SetVertices({}):SetDrawState({Mode="DrawMode_Quads", First=0, Num=0})
+					return
+				end
+
 				local npsV = vectors[1]
 				local nRows = #npsV
-				local gW = SCREEN_WIDTH - 120
-				local gH = 40
-				local rW = gW / nRows
-				local mNPS = 0
-				for i=1, #npsV do
-					if npsV[i] > mNPS then mNPS = npsV[i] end
+				local gW, gH = SCREEN_WIDTH - 120, 40
+				local rW = gW / math.max(1, nRows)
+				local maxNPS = 0
+				for i = 1, nRows do
+					if (npsV[i] or 0) > maxNPS then maxNPS = npsV[i] end
 				end
-				
-				local mHeight = gH / math.max(1, mNPS)
+
+				local mHeight = gH / math.max(1, maxNPS)
 				local verts, nCols = {}, steps:GetNumColumns()
-				
-				for d=1, nCols do
-					for r=1, nRows do
-						if vectors[d][r] > 0 then
-							local val = 0.2 + (nCols - (d-1)) * (0.6 / nCols)
-							local c = color(val..","..val..","..val..",1")
-							local x, y = -(gW/2) + (r-1)*rW, gH/2 +20
-							local bh, bw = rW, -(vectors[d][r]*2*mHeight)
-							verts[#verts+1] = {{x, y, 0}, c}
-							verts[#verts+1] = {{x+bh, y, 0}, c}
-							verts[#verts+1] = {{x+bh, y+bw, 0}, c}
-							verts[#verts+1] = {{x, y+bw, 0}, c}
+				for d = 1, nCols do
+					for r = 1, nRows do
+						local density = (vectors[d] and vectors[d][r]) or 0
+						if density > 0 then
+							local val = 0.2 + (nCols - (d - 1)) * (0.6 / nCols)
+							local c = color(val .. "," .. val .. "," .. val .. ",1")
+							local x, y = -(gW / 2) + (r - 1) * rW, gH / 2 + 20
+							local bh, bw = rW, -(density * 2 * mHeight)
+							verts[#verts + 1] = {{x, y, 0}, c}
+							verts[#verts + 1] = {{x + bh, y, 0}, c}
+							verts[#verts + 1] = {{x + bh, y + bw, 0}, c}
+							verts[#verts + 1] = {{x, y + bw, 0}, c}
 						end
 					end
 				end
@@ -805,82 +818,127 @@ local function densityGraphComp()
 			end
 		},
 
-		-- Mean NPS Reference Line (drawn on top of graph)
+		-- Difficulty by CalcDebug interval
+		Def.ActorMultiVertex {
+			Name = "DifficultyLine",
+			InitCommand = function(self) self:z(10) end,
+			ReloadCommand = function(self)
+				local emptyState = {Mode="DrawMode_LineStrip", First=1, Num=0}
+				if not steps then self:SetVertices({}):SetDrawState(emptyState); return end
+
+				local skillsetName = cdgSkillsets[cdgSkillsetIndex]
+				local ok, debugData = pcall(function()
+					if not steps.GetCalcDebugOutput or not steps.GetCalcDebugExt then error("CalcDebug interval data unavailable") end
+					steps:GetCalcDebugOutput()
+					local ext = steps:GetCalcDebugExt()
+					return ext and ext.DebugMSD
+				end)
+				if not ok or not debugData then
+					self:SetVertices({}):SetDrawState(emptyState)
+					return
+				end
+
+				local index = cdgSkillsetDebugIndex[skillsetName]
+				local left = debugData.Left and debugData.Left[index] or {}
+				local right = debugData.Right and debugData.Right[index] or {}
+
+				local count = math.max(#left, #right)
+				if count < 2 then self:SetVertices({}):SetDrawState(emptyState); return end
+				local values, maxValue = {}, 0
+				for i = 1, count do
+					local lv, rv = tonumber(left[i]) or 0, tonumber(right[i]) or 0
+					if lv ~= lv or lv == math.huge or lv == -math.huge then lv = 0 end
+					if rv ~= rv or rv == math.huge or rv == -math.huge then rv = 0 end
+					values[i] = math.max(lv, rv)
+					if values[i] > maxValue then maxValue = values[i] end
+				end
+
+				local gW, gH = SCREEN_WIDTH - 120, 40
+				local rate = math.max(MIN_MUSIC_RATE, getCurRateValue())
+				local firstSecond = (steps:GetFirstSecond() or 0) * 2
+				local finalSecond = (steps:GetLastSecond() or 0) * 2
+				local timelineLength = finalSecond / rate
+				local verts = {}
+				for i = 1, count do
+					-- Match CalcDebug's song-time placement: intervals begin at the chart's first note,
+					-- leaving the lead-in before it blank like the CDGraph bars do.
+					local timeIndex = i + firstSecond / rate - 1
+					local proportion = timelineLength > 0 and timeIndex / timelineLength or (i - 0.5) / count
+					proportion = math.max(0, math.min(1, proportion))
+					local x = -(gW / 2) + proportion * gW
+					local y = gH - (values[i] / math.max(1, maxValue)) * (gH * 2)
+					verts[#verts + 1] = {{x, y, 0}, accentColor}
+				end
+				self:SetVertices(verts):SetDrawState({Mode="DrawMode_LineStrip", First=1, Num=#verts})
+			end
+		},
+
+		-- Mean NPS reference line on the original CDGraph scale.
 		Def.ActorFrame {
 			Name = "MeanNPSContainer",
 			InitCommand = function(self)
-				self:xy(-(SCREEN_WIDTH - 120)/2, 0)
-				self:halign(0)
-				self:z(1000)  -- Ensure it's above all other elements
+				self:xy(-(SCREEN_WIDTH - 120) / 2, 0):halign(0):z(1000)
 			end,
 			ReloadCommand = function(self)
-				if steps then
-					local rate = math.max(MIN_MUSIC_RATE, getCurRateValue())
-					local vectors = steps:GetCDGraphVectors(rate)
-					if vectors and vectors[1] then
-						local npsV = vectors[1]
-						local mNPS = 0
-						for i=1, #npsV do if npsV[i] > mNPS then mNPS = npsV[i] end end
-						if mNPS >= 2 then
-							local chartLength = steps.GetLengthSeconds and (steps:GetLengthSeconds() or 0) / rate or 0
-							local sectionWeight = chartLength > 0 and chartLength / #npsV or 1
-							local npsFloor = mNPS * 0.5
-							local weightedNPS, includedWeight = 0, 0
-							for i=1, #npsV do
-								local nps = npsV[i] or 0
-								if nps >= npsFloor then
-									weightedNPS = weightedNPS + nps * sectionWeight
+				if not steps then self:visible(false); return end
+				local rate = math.max(MIN_MUSIC_RATE, getCurRateValue())
+				local vectors = steps:GetCDGraphVectors(rate)
+				local npsV = vectors and vectors[1]
+				if not npsV then self:visible(false); return end
 
-									includedWeight = includedWeight + sectionWeight
-								end
-							end
-							local meanNPS = includedWeight > 0 and weightedNPS / includedWeight or 0
-							local yPos = 40 - (meanNPS / mNPS) * 80
-							self:y(yPos)
-							self:visible(true)
-							-- Update the text with the actual 70% NPS value
-							local textActor = self:GetChild("MeanNPSText")
-							if textActor then
-								textActor:settextf("%.1f", meanNPS)
-							end
-						else
-							self:visible(false)
-						end
-					else
-						self:visible(false)
+				local maxNPS = 0
+				for i = 1, #npsV do maxNPS = math.max(maxNPS, npsV[i] or 0) end
+				if maxNPS < 2 then self:visible(false); return end
+
+				local chartLength = steps.GetLengthSeconds and (steps:GetLengthSeconds() or 0) / rate or 0
+				local intervalLength = chartLength > 0 and chartLength / #npsV or 1
+				local npsFloor = maxNPS * 0.5
+				local weightedNPS, includedLength = 0, 0
+				for i = 1, #npsV do
+					local value = npsV[i] or 0
+					if value >= npsFloor then
+						weightedNPS = weightedNPS + value * intervalLength
+						includedLength = includedLength + intervalLength
 					end
 				end
+				local meanNPS = includedLength > 0 and weightedNPS / includedLength or 0
+				self:y(40 - (meanNPS / maxNPS) * 80):visible(true)
+				local label = self:GetChild("MeanNPSText")
+				if label then label:settextf("%.1f", meanNPS) end
 			end,
-
-			-- The line (thicker with accent color)
 			Def.Quad {
 				Name = "MeanNPSLine",
 				InitCommand = function(self)
-					self:zoomto(SCREEN_WIDTH - 120, 2)
-					self:diffuse(accentColor)
-					self:diffusealpha(0.6)
-					self:halign(0)
-				end,
+					self:zoomto(SCREEN_WIDTH - 120, 2):halign(0):diffuse(accentColor):diffusealpha(0.6)
+				end
 			},
-
-			-- The text label (with accent color)
 			LoadFont("Common Normal") .. {
 				Name = "MeanNPSText",
 				InitCommand = function(self)
-					self:x(SCREEN_WIDTH - 130)
-					self:y(-4)
-					self:zoom(0.28)
-					self:diffuse(accentColor)
-					self:halign(1)
-					self:settext("--")
+					self:x(SCREEN_WIDTH - 130):y(-4):zoom(0.28):diffuse(accentColor):halign(1):settext("--")
 				end
 			}
 		},
 
-		-- ProgressMarker drawn AFTER the graph so it renders on top
+		-- Click to cycle through the calculator skillsets.
+		Def.ActorFrame {
+			Name = "SkillsetSelector",
+			InitCommand = function(self) self:xy(-(SCREEN_WIDTH - 120) / 2 + 80, -52):z(20) end,
+			ReloadCommand = function(self)
+				local label = self:GetChild("Label")
+				if label then label:settext((cdgSkillsets[cdgSkillsetIndex] or "Stream")) end
+			end,
+			Def.Quad { Name = "ClickArea", InitCommand = function(self) self:zoomto(155, 22):diffuse(bgCard):diffusealpha(0.98) end },
+			Def.Quad { InitCommand = function(self) self:x(-75):zoomto(3, 18):diffuse(accentColor):diffusealpha(0.85) end },
+			LoadFont("Common Normal") .. {
+				Name = "Label",
+				InitCommand = function(self) self:zoom(0.32):diffuse(textMain) end,
+				BeginCommand = function(self) self:settext((cdgSkillsets[cdgSkillsetIndex] or "Stream")) end
+			}
+		},
+
 		Def.Quad { Name = "ProgressMarker", InitCommand = function(self) self:x(-(SCREEN_WIDTH-120)/2):zoomto(2, 80):diffuse(accentColor) end },
 
-		-- Hover Tooltip Area (invisible but captures mouse)
 		Def.Quad {
 			Name = "TooltipArea",
 			InitCommand = function(self)
@@ -892,7 +950,7 @@ local function densityGraphComp()
 			end
 		},
 
-		-- Tooltip Display (positioned in updateSync) -- kept for compatibility but hidden in favor of info bar
+		-- Tooltip Display (positioned in updateSync)
 		Def.ActorFrame {
 			Name = "NPSTooltip",
 			InitCommand = function(self)
@@ -933,13 +991,12 @@ local function densityGraphComp()
 			}
 		},
 
-		-- Info bar below CDG: centered TIME · BPM · NPS; accent color on hover
+		-- Info bar below CDGraph
 		Def.ActorFrame {
 			Name = "CDGInfoBar",
-			-- CDGFrame center is at SCREEN_HEIGHT-60; place bar 48px below that
 			InitCommand = function(self) self:y(48) end,
 
-			-- Time (left of center trio)
+			-- Time
 			LoadFont("Common Normal") .. {
 				Name = "CDGInfoTime",
 				InitCommand = function(self)
@@ -949,7 +1006,7 @@ local function densityGraphComp()
 				end
 			},
 
-			-- BPM (center)
+			-- BPM
 			LoadFont("Common Normal") .. {
 				Name = "CDGInfoBPM",
 				InitCommand = function(self)
@@ -959,7 +1016,7 @@ local function densityGraphComp()
 				end
 			},
 
-			-- NPS (right of center trio)
+			-- NPS
 			LoadFont("Common Normal") .. {
 				Name = "CDGInfoNPS",
 				InitCommand = function(self)

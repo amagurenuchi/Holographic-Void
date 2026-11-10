@@ -188,7 +188,7 @@ t[#t + 1] = Def.ActorFrame {
 		end
 		local receptorSize = tonumber(ThemePrefs.Get("HV_Mini")) or 100
 		if math.abs(receptorSize - 100) > 0.001 then
-			table.insert(active, "RS" .. math.round(receptorSize))
+			table.insert(active, math.round(receptorSize) .. "%")
 		end
 
 		local modsText = table.concat(active, "  ")

@@ -582,7 +582,7 @@ local function IsSelectMusicBackgroundClickArea()
 	-- The background peek should cover the open space immediately beside the
 	-- left panel.  The old 110px buffer left a large, unusable dead strip.
 	if mx <= panelX + panelW + 16 then return false end
-	if mx >= SCREEN_WIDTH - 340 and mx <= SCREEN_WIDTH - 10 and my >= 84 and my <= SCREEN_HEIGHT - 64 then return false end
+	if mx >= SCREEN_WIDTH - 340 and mx <= SCREEN_WIDTH - 10 then return false end
 	return true
 end
 
@@ -3385,6 +3385,12 @@ main_af[#main_af + 1] = LoadActor("../_cursor")
 -- can capture input FIRST before the global sink takes over.
 main_af[#main_af + 1] = Def.ActorFrame {
 	Name = "MasterInputSink",
+	ShowPressStartForOptionsCommand = function(self)
+		HV.SelectMusicOptionsPromptVisible = true
+	end,
+	HidePressStartForOptionsCommand = function(self)
+		HV.SelectMusicOptionsPromptVisible = false
+	end,
 	BeginCommand = function(self)
 		local screen = SCREENMAN:GetTopScreen()
 		if not screen then return end
@@ -3423,6 +3429,9 @@ main_af[#main_af + 1] = Def.ActorFrame {
 			-- 2. CHART PREVIEW TRIGGER (Space key)
 			if btn == "DeviceButton_space" and activeTab == "" then
 				if event.type ~= "InputEventType_FirstPress" then return end
+				local selectedData = HV.CurrentSongData or {}
+				local isFolderSelected = selectedData.group and selectedData.group ~= "" and not selectedData.song
+				if isFolderSelected or HV.SelectMusicOptionsPromptVisible then return true end
 				if previewActive then
 					previewActive = false
 					HV.ChartPreviewActive = false
