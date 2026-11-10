@@ -807,29 +807,6 @@ root[#root + 1] = Def.ActorFrame {
 			self:settext(THEME:GetString("ScreenHVOptions", "Subtitle"))
 		end,
 	},
-	-- Category Badge (Right edge)
-	Def.ActorFrame {
-		InitCommand = function(self)
-			self:xy(SCREEN_WIDTH - marginX - 55, headerTop + 14)
-		end,
-		Def.Quad {
-			InitCommand = function(self)
-				self:zoomto(110, 22):diffuse(color("0.08,0.08,0.1,0.9"))
-			end,
-		},
-		Def.Quad {
-			InitCommand = function(self)
-				self:zoomto(110, 22):diffuse(getAccent()):diffusealpha(0.2)
-			end,
-		},
-		LoadFont("Common Normal") .. {
-			InitCommand = function(self)
-				headerCounterActor = self
-				self:zoom(0.32):diffuse(getAccent())
-				self:settext(string.format("CATEGORY %d / %d", categoryIndex, #categoryNames))
-			end,
-		},
-	},
 	-- Glow line behind header divider
 	Def.Quad {
 		InitCommand = function(self)
@@ -1238,14 +1215,6 @@ root[#root + 1] = Def.ActorFrame {
 	Def.Quad {
 		InitCommand = function(self)
 			self:y(-13):zoomto(SCREEN_WIDTH, 1):diffuse(color("0.16,0.18,0.22,0.8"))
-		end,
-	},
-	-- Keyboard Shortcuts (Left aligned)
-	LoadFont("Common Normal") .. {
-		InitCommand = function(self)
-			self:x(-SCREEN_WIDTH / 2 + marginX):halign(0):zoom(0.3)
-				:diffuse(color("0.7,0.72,0.78,0.85"))
-			self:settext("[↑ / ↓] SELECT OPTION   ·   [← / →] CHANGE / TAB   ·   [ENTER] SELECT / JUMP   ·   [ESC] BACK")
 		end,
 	},
 	-- Mouse Interaction Hint (Right aligned)
