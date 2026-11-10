@@ -64,6 +64,10 @@ for tier, danRank in ipairs(danRanks) do
 	local od = tier <= 3 and 7.5 or (tier <= 6 and 8 or (tier <= 10 and 8.5 or 9))
 	for _, key in ipairs(danRank[2]) do danChartOD[string.lower(tostring(key)):gsub("^x", "")] = od end
 end
+local allDanChartKeys = {}
+for _, danRank in ipairs(danRanks) do
+	for _, chartKey in ipairs(danRank[2]) do allDanChartKeys[#allDanChartKeys + 1] = chartKey end
+end
 
 local achievementProgress = {
 	{"AGAIN AND AGAIN", {1, 10, 100, 1000, 5000, 10000, 50000, 100000, 250000}, "plays", "lifetime plays", "Rome wasn't built in a day they said."},
@@ -80,19 +84,37 @@ local achievementProgress = {
 }
 
 local singleAchievements = {
-	{"Absolute Perfection", nil, nil, "Get a valid 100% score", "The sacred centurial perfection.", "PERFECT"},
-	{"Visiting the past", "X65ef8bdbfe971763595e983642aef1d18bdf6ce1", 1.5, "AA Cyber Inductance at 1.5x rate", "jhlee pls come back :(", "AA"},
-	{"Light And Darkness", "X9a609c6dd132d807b2abc5882338cb9ebbec320d", 1.2, "AA IMAGE -MATERIAL- (Version 0) at 1.2x rate", "Have you found your way yet?", "AA"},
-	{"Dreaded Stamina Killer", "X79aec43682eb2695747ac3271b2cf93adec1a3ac", 1.2, "AA We Luv Lama at 1.2x rate", "Go play Gamma dan", "AA"},
-	{"Fastest Tech Ripper", "Xb79c62d13bbc970a915fabc5a84c2be1080b9f7b", 1.0, "AA Fastest Crash at base rate", "Fastest fingers crash.", "AA"},
-	{"Speed of Time", "X52887c464ea6909f4c5077d70e8cb3ef318b6453", 1.2, "AA Kronos at 1.2x rate", "Time bends to your precision.", "AA"},
-	{"We Want To Run", "X5381a50c0a99df23d7a053530339f2faf94e9adc", 1.0, "AA We Want To Run on base rate", "and we aint stopping nuh uh", "AA"},
-	{"Long Forgotten", "X3fbba9efa7283f227f5bdefa02e3f842af2edcc1", 1.4, "AA Forgotten at 1.4x rate", "Do people still remember Epsilon clears?", "AA"},
-	{"ETTERNA PLAYERS DONT NEED GIRLFRIENDS", "X155d512826d45940509e21ca43937277b9b57c07", 1.0, "AA Killing My Love at 1.0x rate", "not having a girlfriend is part of the skillboost", "AA"},
-	{"Savage Terminal? More like Ice Terminal", "X52887c464ea6909f4c5077d70e8cb3ef318b6453", 0, "AAAAA Savage Terminal", "congrats you recreated Justice 8 years ago", "AAAAA"},
-	{"Eta Dan clear", "X7ed0e5b112e7b04014e2d8e7b1b84fbda9188f76", 1.0, "Clear Eta Dan (reach AA)", "The ceiling of human limit.", "AA"},
-	{"Chord Cohesion ranter", "Xe5a400c13550f0551de9e12918deadcbd5de8cad", 1.1, "AA 3.14 (TT mix) at 1.1x rate","and the game's gonna get harder", "AA" },
+	{"Absolute Perfection", nil, nil, "", "The sacred centurial perfection.", "PERFECT"},
+		{"How to be like jhlee0133 ?", {
+		{chartKey = "X65ef8bdbfe971763595e983642aef1d18bdf6ce1", rate = 1.5, grade = "AA"},
+		{chartKey = "Xddaed3a9217102a7c4bf751675f70394e2c1e52d", rate = 1.5, grade = "AA"},
+		{chartKey = "X49528e3d6f3062f50193a467ed75481b7e7868d0", rate = 1.5, grade = "AA"},
+		{chartKey = "Xe5682915ddb1fe21103abb6d879f2d5ef99c0c5c", rate = 1.0, grade = "AA"},
+		{chartKey = "X31183d051e7ce5fad80e111e877aa4560b0416c9", rate = 1.4, grade = "AA"},
+		{chartKey = "X9a609c6dd132d807b2abc5882338cb9ebbec320d", rate = 1.2, grade = "AA"},
+		{chartKey = "Xb65ccd4d1596c78ecae0a1b96722cc8190b3ecc4", rate = 1.0, grade = "AA"},
+		{chartKey = "X8ca8d0f51f6ea2df0b07fbe2df8149e5c5da21c3", rate = 1.0, grade = "AA"},
+	}, nil, "Recreate what jhlee did on 12/12/2015", "You can't. ^^", nil, "CHART_SET"},
+	{"Light And Darkness", "X9a609c6dd132d807b2abc5882338cb9ebbec320d", 1.0, "", "Have you found your way yet?", "AA"},
+	{"Dreaded Stamina Killer", "X79aec43682eb2695747ac3271b2cf93adec1a3ac", 1.2, "", "Go play Gamma dan", "AA"},
+	{"Fastest Tech Ripper", "Xb79c62d13bbc970a915fabc5a84c2be1080b9f7b", 1.0, "", "Fastest fingers crash first.", "AA"},
+	{"Speed of Time", "X52887c464ea6909f4c5077d70e8cb3ef318b6453", 1.0, "", "Time bends to your precision.", "AA"},
+	{"We Want To Run", "X5381a50c0a99df23d7a053530339f2faf94e9adc", 1.0, "", "and we aint stopping nuh uh", "AA"},
+	{"Long Forgotten", "X3fbba9efa7283f227f5bdefa02e3f842af2edcc1", 1.4, "", "Do people still remember Epsilon clears?", "AA"},
+	{"ETTERNA PLAYERS DONT NEED GIRLFRIENDS", "X155d512826d45940509e21ca43937277b9b57c07", 1.0, "", "not having a girlfriend is part of the skillboost", "AA"},
+	{"Savage Terminal? More like Ice Terminal", "X52887c464ea6909f4c5077d70e8cb3ef318b6453", 0, "", "congrats you recreated Justice 8 years ago", "AAAAA"},
+	{"Eta Dan clear", "X7ed0e5b112e7b04014e2d8e7b1b84fbda9188f76", 1.0, "", "The ceiling of human limit.", "AA"},
+	{"Chord Cohesion ranter", "Xe5a400c13550f0551de9e12918deadcbd5de8cad", 1.1, "","and the game's gonna get harder", "AA" },
+	{"Dan Any%", allDanChartKeys, nil, "", "A speedrunner's worst friend.", nil, "CHART_SET"},
+
 }
+
+local function getChartSetRequirement(entry, defaultRate, defaultGrade)
+	if type(entry) == "table" then
+		return entry.chartKey or entry.chartkey or entry[1], entry.rate or entry.minRate or entry[2] or defaultRate, entry.grade or entry[3] or defaultGrade
+	end
+	return entry, defaultRate, defaultGrade
+end
 
 local skillsetAchievements = {
 	{"STREAM MASTER", "Stream", 0, "Achieve a Stream rating of 30.00", "No streams too fast for these hands."},
@@ -237,10 +259,16 @@ end
 local function getSingleAchievementFlags()
 	local gradeThresholds = {
 		AA = 0.93,
+		AAA = 0.965,
+		AAAA = 0.99,
 		AAAAA = 0.999935,
 		PERFECT = 1.0,
 	}
 	local flags = {}
+	local chartSetProgress = {}
+	for i, item in ipairs(singleAchievements) do
+		if item[7] == "CHART_SET" then chartSetProgress[i] = {} end
+	end
 	local danKeys = {}
 	for tier, danRank in ipairs(danRanks) do
 		for _, chartKey in ipairs(danRank[2]) do
@@ -272,8 +300,25 @@ local function getSingleAchievementFlags()
 		end
 		if not valid then return end
 		wife, rate = tonumber(wife) or 0, tonumber(rate) or 1
+		local scoredKey = chartKey and string.lower(tostring(chartKey)):gsub("^x", "")
+		if scoredKey then
+			for i, item in ipairs(singleAchievements) do
+				if item[7] == "CHART_SET" then
+					for requirementIndex, requirement in ipairs(item[2] or {}) do
+						local requiredKey, requiredRate, requiredGrade = getChartSetRequirement(requirement, item[3], item[6])
+						local normalizedRequiredKey = requiredKey and string.lower(tostring(requiredKey)):gsub("^x", "")
+						local gradeThreshold = requiredGrade and gradeThresholds[requiredGrade]
+						local gradeMet = not requiredGrade or (gradeThreshold and wife >= gradeThreshold)
+						local rateMet = not requiredRate or requiredRate == 0 or rate + 0.0001 >= requiredRate
+						if normalizedRequiredKey == scoredKey and gradeMet and rateMet then
+							chartSetProgress[i][requirementIndex] = true
+						end
+					end
+				end
+			end
+		end
 		do
-			local normalizedKey = chartKey and string.lower(tostring(chartKey)):gsub("^x", "")
+			local normalizedKey = scoredKey
 			local tier = normalizedKey and danKeys[normalizedKey]
 			if tier and normalizedKey then
 				local od = danChartOD[normalizedKey]
@@ -287,14 +332,16 @@ local function getSingleAchievementFlags()
 		end
 		for i = 1, #singleAchievements do
 			local item = singleAchievements[i]
-			local requiredGrade = item[6] or "AA"
-			local requiredWife = gradeThresholds[requiredGrade]
-			local hasRequiredGrade = requiredWife and wife >= requiredWife
-			local chartMatches = requiredGrade == "PERFECT"
-				or (item[2] and chartKey == item[2])
-			if hasRequiredGrade and chartMatches then
-				local enoughRate = not item[3] or item[3] == 0 or rate + 0.0001 >= item[3]
-				if enoughRate then flags[i] = true end
+			if item[7] ~= "CHART_SET" then
+				local requiredGrade = item[6] or "AA"
+				local requiredWife = gradeThresholds[requiredGrade]
+				local hasRequiredGrade = requiredWife and wife >= requiredWife
+				local chartMatches = requiredGrade == "PERFECT"
+					or (item[2] and chartKey == item[2])
+				if hasRequiredGrade and chartMatches then
+					local enoughRate = not item[3] or item[3] == 0 or rate + 0.0001 >= item[3]
+					if enoughRate then flags[i] = true end
+				end
 			end
 		end
 	end
@@ -310,11 +357,44 @@ local function getSingleAchievementFlags()
 		if not ok or not score then break end
 		inspect(score)
 	end
+	-- Ranked lists are capped, so query each required chart directly as well.
+	for _, item in ipairs(singleAchievements) do
+		if item[7] == "CHART_SET" then
+			for _, requirement in ipairs(item[2] or {}) do
+				local chartKey = getChartSetRequirement(requirement, item[3], item[6])
+				local okLists, scoreLists = pcall(SCOREMAN.GetScoresByKey, SCOREMAN, chartKey)
+				if okLists and scoreLists then
+					for _, rateList in pairs(scoreLists) do
+						local okScores, scores = pcall(function() return rateList:GetScores() end)
+						if okScores and scores then
+							for _, score in ipairs(scores) do inspect(score) end
+						end
+					end
+				end
+			end
+		end
+	end
+	local setProgress = {}
+	for i, item in ipairs(singleAchievements) do
+		if item[7] == "CHART_SET" then
+			local hasEveryChart = type(item[2]) == "table" and #item[2] > 0
+			local completed = 0
+			for requirementIndex in ipairs(item[2] or {}) do
+				if chartSetProgress[i][requirementIndex] then
+					completed = completed + 1
+				else
+					hasEveryChart = false
+				end
+			end
+			flags[i] = hasEveryChart
+			setProgress[i] = {completed = completed, total = type(item[2]) == "table" and #item[2] or 0}
+		end
+	end
 	local highestDanMedalTier = 0
 	for medalTier, chartRankThreshold in ipairs(danMedalThresholds) do
 		if highestDanChartRank >= chartRankThreshold then highestDanMedalTier = medalTier end
 	end
-	return flags, highestDanMedalTier
+	return flags, highestDanMedalTier, setProgress
 end
 
 local function getSkillsetAchievementFlags()
@@ -336,7 +416,7 @@ local function getAchievementCounts(forceRefresh)
 		return cachedAchievementCounts
 	end
 
-	local singleFlags, highestDanTier = getSingleAchievementFlags()
+	local singleFlags, highestDanTier, singleSetProgress = getSingleAchievementFlags()
 	local values = getAchievementValues(highestDanTier)
 	local skillsetFlags = getSkillsetAchievementFlags()
 
@@ -368,6 +448,7 @@ local function getAchievementCounts(forceRefresh)
 		total = { unlocked = totalUnlocked, total = totalAchievements },
 		values = values,
 		singleFlags = singleFlags,
+		singleSetProgress = singleSetProgress,
 		skillsetFlags = skillsetFlags,
 	}
 	lastAchievementCacheTime = now
@@ -1129,7 +1210,9 @@ main_af[#main_af + 1] = Def.ActorFrame {
 									local itemIndex = (page - 1) * 8 + i
 									local item = singleAchievements[itemIndex]
 									if item and item[2] then
-										local song = SONGMAN:GetSongByChartKey(item[2])
+										local chartKey = item[2]
+										if item[7] == "CHART_SET" then chartKey = getChartSetRequirement(item[2][1], item[3], item[6]) end
+										local song = SONGMAN:GetSongByChartKey(chartKey)
 										if song then
 											local screen = SCREENMAN:GetTopScreen()
 											if screen and screen.GetMusicWheel then
