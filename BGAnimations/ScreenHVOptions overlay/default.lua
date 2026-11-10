@@ -1,8 +1,4 @@
 --- Holographic Void: ScreenHVOptions Background/Overlay
--- Themed options screen for configuring ThemePrefs.
--- Uses ScreenMiniMenu from _Fallback as the base class.
--- Includes: Current speed display, thematic side decorations.
-
 local t = Def.ActorFrame {
 	Name = "HVOptionsOverlay"
 }

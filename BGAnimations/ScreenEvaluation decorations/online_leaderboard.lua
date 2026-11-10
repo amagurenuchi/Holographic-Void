@@ -28,6 +28,8 @@ local lbActor
 local isLocal = true
 local currentCountry = "Global"
 local scoresPerPage = 4
+local clickAreaWidth = SCREEN_CENTER_X - 20
+local clickAreaHeight = 46
 local maxPages = math.max(1, math.ceil(#hsTable / scoresPerPage))
 local curPage = 1
 local alreadyPulled = false
@@ -152,29 +154,53 @@ local function movePage(n)
 end
 
 local function selectLocalScore(index)
-	if HV.EvaluationCompact then return end
 	local selected = scoreList and scoreList[index]
 	if not isLocal or not selected then return end
 	-- Keep the selected score in shared theme state and pass it to the evaluation updater.
 	HV.SelectedEvaluationScore = selected
 	HV.ViewingHistoricalEvaluationScore = true
+	local updated = false
 	if HV.SelectEvaluationScore then
-		pcall(HV.SelectEvaluationScore, selected)
+		local ok, result = pcall(HV.SelectEvaluationScore, selected)
+		updated = ok and result == true
 	end
+	if not updated then
+		local screen = SCREENMAN:GetTopScreen()
+		if screen then
+			local ok, found = pcall(function()
+				local evaluationActor = screen:GetChild("EvalDecorations")
+				if not evaluationActor then return false end
+				evaluationActor:playcommand("RefreshSelectedScore")
+				return true
+			end)
+			updated = ok and found == true
+		end
+	end
+	-- Fallback for builds where neither direct actor refresh entry point exists.
+	if not updated then MESSAGEMAN:Broadcast("ScoreChanged") end
 	MESSAGEMAN:Broadcast("UpdateOnlineList")
 end
 
+local function selectVisibleLocalScore(row)
+	-- The leaderboard actor can remain mounted but hidden on Simple evaluation.
+	-- Gate input at the UI interaction layer so Classic selection stays intact.
+	if HV.EvaluationCompact or not isLocal then return false end
+	local index = (curPage - 1) * scoresPerPage + row
+	if not scoreList or not scoreList[index] then return false end
+	selectLocalScore(index)
+	return true
+end
+
 local function selectLocalScoreAtMouse(self)
-	if not isLocal then return false end
-	local mx, my = INPUTFILTER:GetMouseX(), INPUTFILTER:GetMouseY()
-	for i = 1, scoresPerPage do
-		local row = self:GetChild("OnlineRow" .. i)
-		if row and row:GetVisible() then
-			local x, y = row:GetTrueX(), row:GetTrueY()
-			local w, h = SCREEN_CENTER_X - 40, 42
-			if mx >= x and mx <= x + w and my >= y and my <= y + h then
-			selectLocalScore((curPage - 1) * scoresPerPage + i)
-			return true
+	if HV.EvaluationCompact or not isLocal then return false end
+	for row = 1, scoresPerPage do
+		local rowActor = self:GetChild("OnlineRow" .. row)
+		local clickArea = rowActor and rowActor:GetChild("ClickArea")
+		if rowActor and clickArea and rowActor:GetVisible() then
+			-- Use the theme's shared actor hit-test so alignment, zoom, and
+			-- parent transforms match the rendered card exactly.
+			if isOver(clickArea) then
+				return selectVisibleLocalScore(row)
 			end
 		end
 	end
@@ -278,7 +304,6 @@ local function refreshScores(self)
 end
 
 local function scoreItem(i)
-	local rowIndex = 0
 	return Def.ActorFrame {
 		Name = "OnlineRow" .. i,
 		InitCommand = function(self) self:y((i - 1) * 46):diffusealpha(0) end,
@@ -287,7 +312,6 @@ local function scoreItem(i)
 		RefreshOnlineScoreboardMessageCommand = function(self) self:playcommand("UpdateRow") end,
 		UpdateRowCommand = function(self)
 			local idx = (curPage - 1) * scoresPerPage + i
-			rowIndex = idx
 			if scoreList and scoreList[idx] then
 				self:visible(true)
 				self:stoptweening():diffusealpha(0):sleep(i * 0.05):linear(0.15):diffusealpha(1)
@@ -302,16 +326,16 @@ local function scoreItem(i)
 		Def.Quad {
 			Name = "ClickArea",
 			InitCommand = function(self)
-				self:halign(0):valign(0):zoomto(SCREEN_CENTER_X - 40, 42):diffusealpha(0)
+				self:halign(0):valign(0):zoomto(clickAreaWidth, clickAreaHeight):diffusealpha(0)
 			end,
 			MouseDownCommand = function(self)
-				if isOver(self) then selectLocalScore(rowIndex) end
+				-- Let the engine hit-test this row as well. Its IsOver() accounts
+				-- for the first row's transformed position more reliably than a
+				-- page-level mouse-coordinate calculation.
+				if not HV.EvaluationCompact and isLocal and self:IsOver() then
+					selectVisibleLocalScore(i)
+				end
 			end,
-			-- ScreenEvaluation's shared mouse callback broadcasts this message
-			-- for every left click; use the theme-wide hit test here.
-			MouseLeftClickMessageCommand = function(self)
-				if isOver(self) then selectLocalScore(rowIndex) end
-			end
 		},
 
 		-- Row BG
@@ -447,7 +471,7 @@ local t = Def.ActorFrame {
 		refreshScores(self)
 		self:playcommand("RefreshUI")
 		SCREENMAN:GetTopScreen():AddInputCallback(function(event)
-			if not self:GetVisible() then return end
+			if HV.EvaluationCompact or not self:GetVisible() then return end
 			if event.type == "InputEventType_FirstPress" then
 				if event.button == "MenuLeft" or event.DeviceInput.button == "DeviceButton_left" or event.button == "Left" then movePage(-1)
 				elseif event.button == "MenuRight" or event.DeviceInput.button == "DeviceButton_right" or event.button == "Right" then movePage(1) end
