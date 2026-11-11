@@ -285,7 +285,26 @@ local function makeGoalRow(i)
 			InitCommand = function(self) self:halign(0.5):valign(0.5):x(560):y(rowH/2 - 2):zoom(0.38) end,
 			GoalTableRefreshCommand = function(self)
 				if sg then
-					local pb = sg:GetPBUpTo()
+					local pb
+					-- Goal PBs should reflect the goal's selected rate, not the
+					-- PB-up-to helper's best score from any rate.
+					if ck then
+						pcall(function()
+							local byRate = SCOREMAN:GetScoresByKey(ck)
+							local targetRate = tonumber(sg:GetRate()) or 1
+							for _, rateScores in pairs(byRate or {}) do
+								local scores = rateScores:GetScores()
+								for _, score in ipairs(scores or {}) do
+									local scoreRate = tonumber(score:GetMusicRate())
+									if scoreRate and math.abs(scoreRate - targetRate) < 0.001
+										and not IsScoreInvalid(score)
+										and (not pb or getJ4NormalizedPercentage(score) > getJ4NormalizedPercentage(pb)) then
+										pb = score
+									end
+								end
+							end
+						end)
+					end
 					if pb then
 						local pbc = pb:GetWifeScore() * 100
 						self:settextf("%.2f%%", pbc):diffuse(sg:IsAchieved() and color("0.4,1,0.4,1") or subText)
