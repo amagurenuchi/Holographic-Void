@@ -499,7 +499,6 @@ local t = Def.ActorFrame {
 					self.showOnline = not self.showOnline
 					self:stoptweening():linear(self.transitionDuration * 0.5):diffusealpha(1):sleep(3):queuecommand("UpdateRating")
 				end
-				}
 			}
 		},
 
