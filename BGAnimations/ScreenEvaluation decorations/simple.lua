@@ -21,6 +21,25 @@ local mainText = brightText
 local bgCard = color("0.06,0.06,0.06,0.7")
 local dividerColor = color("0.2,0.2,0.2,1")
 
+local function isOnlineEvaluation()
+	return HV.OnlineEvaluationActive == true or HV.OnlineReplayActive == true
+end
+
+local function getOnlinePlayerName()
+	local name = HV.OnlineEvaluationName or HV.OnlineReplayName
+	if (not name or name == "") and DLMAN and DLMAN.IsLoggedIn and DLMAN:IsLoggedIn() then
+		name = DLMAN:GetUsername()
+	end
+	return name
+end
+
+local function getLocalPlayerName()
+	local pn = GAMESTATE:GetMasterPlayerNumber()
+	local profile = pn and PROFILEMAN:GetProfile(pn)
+	local name = profile and profile:GetDisplayName()
+	return name and name ~= "" and name or nil
+end
+
 local function refreshOffsetPlot(self)
 	if HV.GetSimpleEvaluationData then data = HV.GetSimpleEvaluationData() end
 	local plot = (self:GetChild("RightPanel") and self:GetChild("RightPanel"):GetChild("OffsetPlot")) or self:GetChild("OffsetPlot")
@@ -173,7 +192,8 @@ local t = Def.ActorFrame {
 				avatar.path = profileData.avatar
 				avatar:Load(profileData.avatar):zoomto(60, 60)
 			end
-			profileFrame:GetChild("PlayerName"):settext(profileData.name or "Player 1")
+			local nameActor = profileFrame:GetChild("PlayerName")
+			if nameActor then nameActor:playcommand("RefreshName") end
 			local badge = profileFrame:GetChild("PlayerLevelBadge")
 			if badge then
 				badge:visible(profileData.showLevel == true)
@@ -188,11 +208,7 @@ local t = Def.ActorFrame {
 			end
 			local rating = profileFrame:GetChild("PlayerRating")
 			if rating then
-				rating:visible(profileData.rating ~= nil and profileData.rating > 0)
-				if profileData.rating then
-					rating:settextf("%.2f", profileData.rating)
-					rating:diffuse(HVColor.GetMSDRatingColor(profileData.rating))
-				end
+				rating:playcommand("RefreshRating")
 			end
 		end
 		local modIcons = leftPanel:GetChild("ModIcons")
@@ -390,6 +406,32 @@ local t = Def.ActorFrame {
 				Name = "PlayerName",
 				InitCommand = function(self)
 					self:xy(65, 8):zoom(0.45):halign(0):maxwidth(((frameW - pad * 3) * 0.5 - 65) / 0.45)
+					self.showOnline = true
+					self.transitionDuration = 0.25
+					self.displayDuration = 3
+					self.onlineName = getOnlinePlayerName()
+					self.offlineName = getLocalPlayerName()
+					if isOnlineEvaluation() then self.offlineName = nil end
+				end,
+				OnCommand = function(self)
+					if isOnlineEvaluation() then self:settext(self.onlineName or "Online Player"); return end
+					if not self.onlineName then self:settext(self.offlineName or "Player 1"); return end
+					if not self.offlineName or self.onlineName == self.offlineName then self:settext(self.onlineName); return end
+					self:playcommand("UpdateName")
+				end,
+				RefreshNameCommand = function(self)
+					if isOnlineEvaluation() then self:settext(getOnlinePlayerName() or "Online Player"); return end
+					self.onlineName = getOnlinePlayerName()
+					self.offlineName = getLocalPlayerName()
+					self:playcommand("On")
+				end,
+				UpdateNameCommand = function(self)
+					self:stoptweening():linear(self.transitionDuration * 0.5):diffusealpha(0):queuecommand("SwapName")
+				end,
+				SwapNameCommand = function(self)
+					self:settext(self.showOnline and self.onlineName or self.offlineName)
+					self.showOnline = not self.showOnline
+					self:stoptweening():linear(self.transitionDuration * 0.5):diffusealpha(1):sleep(self.displayDuration):queuecommand("UpdateName")
 				end
 			},
 			Def.ActorFrame {
@@ -422,7 +464,42 @@ local t = Def.ActorFrame {
 			},
 			LoadFont("MSD 20px") .. {
 				Name = "PlayerRating",
-				InitCommand = function(self) self:xy(65, 53):zoom(0.35):halign(0) end
+				InitCommand = function(self)
+					self:xy(65, 53):zoom(0.35):halign(0):maxwidth(((frameW - pad * 3) * 0.5 - 65) / 0.35)
+					self.showOnline = true
+					self.transitionDuration = 0.25
+					self.onlineRating = DLMAN and DLMAN.IsLoggedIn and DLMAN:IsLoggedIn() and DLMAN.GetSkillsetRating and tonumber(DLMAN:GetSkillsetRating("Overall")) or nil
+					local pn = GAMESTATE:GetMasterPlayerNumber()
+					local profile = pn and PROFILEMAN:GetProfile(pn)
+					self.offlineRating = profile and profile:GetPlayerRating() or nil
+				end,
+				OnCommand = function(self)
+					if isOnlineEvaluation() or not HV.ShowMSD() then self:visible(false); return end
+					if not self.onlineRating or self.onlineRating <= 0 then
+						if self.offlineRating and self.offlineRating > 0 then self:settextf("%.2f", self.offlineRating):diffuse(HVColor.GetMSDRatingColor(self.offlineRating)) else self:visible(false) end
+						return
+					elseif not self.offlineRating or self.offlineRating <= 0 or math.abs(self.onlineRating - self.offlineRating) < 0.01 then
+						self:settextf("%.2f", self.onlineRating):diffuse(HVColor.GetMSDRatingColor(self.onlineRating))
+						return
+					end
+					self:playcommand("UpdateRating")
+				end,
+				RefreshRatingCommand = function(self)
+					local pn = GAMESTATE:GetMasterPlayerNumber()
+					local profile = pn and PROFILEMAN:GetProfile(pn)
+					self.offlineRating = profile and profile:GetPlayerRating() or nil
+					self:playcommand("On")
+				end,
+				UpdateRatingCommand = function(self)
+					self:stoptweening():linear(self.transitionDuration * 0.5):diffusealpha(0):queuecommand("SwapRating")
+				end,
+				SwapRatingCommand = function(self)
+					local value = self.showOnline and self.onlineRating or self.offlineRating
+					self:settextf("%.2f", value):diffuse(HVColor.GetMSDRatingColor(value))
+					self.showOnline = not self.showOnline
+					self:stoptweening():linear(self.transitionDuration * 0.5):diffusealpha(1):sleep(3):queuecommand("UpdateRating")
+				end
+				}
 			}
 		},
 
