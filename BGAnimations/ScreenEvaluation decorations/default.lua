@@ -1697,20 +1697,77 @@ local function scoreBoard(pn)
 			-- MSD (Common Large, 2 decimal points)
 			LoadFont("MSD 20px") .. {
 				InitCommand = function(self)
-					self:halign(1):valign(0):xy(0, -2):zoom(0.6)
+					self:halign(1):valign(0):xy(0, -2):zoom(0.6):maxwidth((frameW - pad * 2) / 2.5)
+					self.transitionDuration = 0.25
 				end,
 				OnCommand = function(self)
+					self:stoptweening()
 					if steps then
-						local msd = steps:GetMSD(getCurRateValue(), 1)
+						local rate = tonumber(getCurRateValue()) or 1
+						local okMSD, value = pcall(steps.GetMSD, steps, rate, 1)
+						local msd = okMSD and (tonumber(value) or 0) or 0
+						local function resolveCachedDan()
+							if not (HV.EnableDanCalculator and HV.EnableDanCalculator()) then return nil end
+							local chartKey = steps.GetChartKey and tostring(steps:GetChartKey())
+							if not chartKey then return nil end
+							local key = chartKey .. "|" .. string.format("%.8f", rate)
+							local estimate = nil
+						if FILEMAN and FILEMAN.DoesFileExist and FILEMAN:DoesFileExist("Save/Holographic Void_settings/ChartRatingCache.lua") then
+								local file = RageFileUtil.CreateRageFile()
+								if file:Open("Save/Holographic Void_settings/ChartRatingCache.lua", 1) then
+									local source = file:Read()
+									local chunk = type(source) == "string" and loadstring(source) or nil
+									if chunk then
+										setfenv(chunk, {})
+										local ok, cache = pcall(chunk)
+										if ok and type(cache) == "table" then
+											estimate = cache["isor-dp-v2|" .. key] or cache["isor-dp-v1|" .. key]
+										end
+									end
+									file:Close()
+								end
+								file:destroy()
+							end
+							if type(estimate) ~= "table" and HV.CurrentSongData then
+								local data = HV.CurrentSongData
+								local currentKey = data.steps and data.steps.GetChartKey and tostring(data.steps:GetChartKey())
+								local currentRate = tonumber(data.rate) or 1
+								if currentKey == chartKey and math.abs(currentRate - rate) < 0.0005
+									and type(data.isorEstimate) == "table" then estimate = data.isorEstimate end
+							end
+							if type(estimate) ~= "table" or type(estimate.dan) ~= "string" then return nil end
+							return estimate
+						end
+						local pages = {}
 						if HV.ShowMSD() and msd > 0 then
-							self:settextf("%.2f", msd)
-							self:diffuse(HVColor.GetMSDRatingColor(msd))
-							self:diffuse(HVColor.GetMSDRatingColor(msd))
+							pages[#pages + 1] = {text = string.format("%.2f", msd), color = HVColor.GetMSDRatingColor(msd)}
+						end
+						local estimate = resolveCachedDan()
+						if estimate then
+							local text = estimate.dan .. (type(estimate.sublevel) == "string" and (" " .. estimate.sublevel) or "")
+							pages[#pages + 1] = {text = text, color = HVColor.GetMSDRatingColor(tonumber(estimate.dp) or msd)}
+						end
+						self.hvRatingPages = pages
+						self.hvRatingPage = 1
+						if #pages > 0 then
+							self:settext(pages[1].text):diffuse(pages[1].color)
+							self:diffusealpha(1)
+							if #pages > 1 then self:sleep(3):queuecommand("FadeRatingOut") end
 						else
-							self:settext(tostring(steps:GetMeter()))
-							self:diffuse(brightText)
+							self:settext(tostring(steps:GetMeter())):diffuse(brightText)
 						end
 					end
+				end,
+				FadeRatingOutCommand = function(self)
+					if not self.hvRatingPages or #self.hvRatingPages < 2 then return end
+					self:stoptweening():linear(self.transitionDuration * 0.5):diffusealpha(0):queuecommand("CycleRating")
+				end,
+				CycleRatingCommand = function(self)
+					if not self.hvRatingPages or #self.hvRatingPages < 2 then return end
+					self.hvRatingPage = self.hvRatingPage % #self.hvRatingPages + 1
+					local page = self.hvRatingPages[self.hvRatingPage]
+					self:settext(page.text):diffuse(page.color)
+					self:stoptweening():linear(self.transitionDuration * 0.5):diffusealpha(1):sleep(3):queuecommand("FadeRatingOut")
 				end
 			}
 		},
@@ -3253,7 +3310,33 @@ HV.GetSimpleEvaluationData = function()
 			if not steps then return "", color("1,1,1,1") end
 			local msd = steps.GetMSD and steps:GetMSD(getCurRateValue(), 1) or 0
 			if HV.ShowMSD() and msd > 0 then
-				return string.format("%.2f", msd), HVColor.GetMSDRatingColor(msd)
+				local rating = string.format("%.2f", msd)
+				local ratingColor = HVColor.GetMSDRatingColor(msd)
+				if HV.EnableDanCalculator and HV.EnableDanCalculator() then
+					local path = "Save/Holographic Void_settings/ChartRatingCache.lua"
+					if FILEMAN and FILEMAN.DoesFileExist and FILEMAN:DoesFileExist(path) then
+						local file = RageFileUtil.CreateRageFile()
+						if file:Open(path, 1) then
+							local source = file:Read()
+							local chunk = type(source) == "string" and loadstring(source) or nil
+							if chunk then
+								setfenv(chunk, {})
+								local ok, cache = pcall(chunk)
+								if ok and type(cache) == "table" then
+									local key = tostring(steps:GetChartKey()) .. "|" .. string.format("%.8f", getCurRateValue())
+									local estimate = cache["isor-dp-v2|" .. key] or cache["isor-dp-v1|" .. key]
+									if type(estimate) == "table" and type(estimate.dan) == "string" then
+										rating = estimate.dan .. (estimate.sublevel and (" " .. estimate.sublevel) or "")
+										ratingColor = HVColor.GetMSDRatingColor(tonumber(estimate.dp) or msd)
+									end
+								end
+							end
+							file:Close()
+						end
+						file:destroy()
+					end
+				end
+				return rating, ratingColor
 			else
 				return tostring(steps:GetMeter()), color("1,1,1,1")
 			end

@@ -21,6 +21,24 @@ local mainText = brightText
 local bgCard = color("0.06,0.06,0.06,0.7")
 local dividerColor = color("0.2,0.2,0.2,1")
 
+local function isOnlineEvaluation()
+	return HV.OnlineEvaluationActive == true or HV.OnlineReplayActive == true
+end
+
+local function getOnlinePlayerName()
+	local name = HV.OnlineEvaluationName or HV.OnlineReplayName
+	if (not name or name == "") and DLMAN and DLMAN.IsLoggedIn and DLMAN:IsLoggedIn() then
+		name = DLMAN:GetUsername()
+	end
+	return name
+end
+
+local function getLocalPlayerName()
+	local profile = GAMESTATE:GetMasterPlayerNumber() and PROFILEMAN:GetProfile(GAMESTATE:GetMasterPlayerNumber())
+	local name = profile and profile:GetDisplayName()
+	return name and name ~= "" and name or nil
+end
+
 local function refreshOffsetPlot(self)
 	if HV.GetSimpleEvaluationData then data = HV.GetSimpleEvaluationData() end
 	local plot = (self:GetChild("RightPanel") and self:GetChild("RightPanel"):GetChild("OffsetPlot")) or self:GetChild("OffsetPlot")
@@ -173,7 +191,8 @@ local t = Def.ActorFrame {
 				avatar.path = profileData.avatar
 				avatar:Load(profileData.avatar):zoomto(60, 60)
 			end
-			profileFrame:GetChild("PlayerName"):settext(profileData.name or "Player 1")
+			local nameActor = profileFrame:GetChild("PlayerName")
+			if nameActor then nameActor:playcommand("RefreshName") end
 			local badge = profileFrame:GetChild("PlayerLevelBadge")
 			if badge then
 				badge:visible(profileData.showLevel == true)
@@ -188,11 +207,7 @@ local t = Def.ActorFrame {
 			end
 			local rating = profileFrame:GetChild("PlayerRating")
 			if rating then
-				rating:visible(profileData.rating ~= nil and profileData.rating > 0)
-				if profileData.rating then
-					rating:settextf("%.2f", profileData.rating)
-					rating:diffuse(HVColor.GetMSDRatingColor(profileData.rating))
-				end
+				rating:playcommand("RefreshRating")
 			end
 		end
 		local modIcons = leftPanel:GetChild("ModIcons")
@@ -223,7 +238,8 @@ local t = Def.ActorFrame {
 			local diffLabel, difficultyColor = data.getDifficulty()
 			local meterText, meterColor = data.getMeterText()
 			diffActor:GetChild("Difficulty"):settext(diffLabel):diffuse(difficultyColor or accentColor)
-			diffActor:GetChild("MSD"):settext(meterText):diffuse(meterColor or subText)
+			local ratingActor = diffActor:GetChild("MSD")
+			if ratingActor then ratingActor:playcommand("SetRatingPages", {meterText = meterText, meterColor = meterColor}) end
 			diffActor:GetChild("Rate"):settext(data.getRateText())
 			diffActor:GetChild("Judge"):settext(data.getJudgeText())
 			local offsetStatus = diffActor:GetChild("OffsetPriorityStatus")
@@ -390,6 +406,32 @@ local t = Def.ActorFrame {
 				Name = "PlayerName",
 				InitCommand = function(self)
 					self:xy(65, 8):zoom(0.45):halign(0):maxwidth(((frameW - pad * 3) * 0.5 - 65) / 0.45)
+					self.showOnline = true
+					self.transitionDuration = 0.25
+					self.displayDuration = 3
+					self.onlineName = getOnlinePlayerName()
+					self.offlineName = getLocalPlayerName()
+					if isOnlineEvaluation() then self.offlineName = nil end
+				end,
+				OnCommand = function(self)
+					if isOnlineEvaluation() then self:settext(self.onlineName or "Online Player"); return end
+					if not self.onlineName then self:settext(self.offlineName or "Player 1"); return end
+					if not self.offlineName or self.onlineName == self.offlineName then self:settext(self.onlineName); return end
+					self:playcommand("UpdateName")
+				end,
+				RefreshNameCommand = function(self)
+					if isOnlineEvaluation() then self:settext(getOnlinePlayerName() or "Online Player"); return end
+					self.onlineName = getOnlinePlayerName()
+					self.offlineName = getLocalPlayerName()
+					self:playcommand("On")
+				end,
+				UpdateNameCommand = function(self)
+					self:stoptweening():linear(self.transitionDuration * 0.5):diffusealpha(0):queuecommand("SwapName")
+				end,
+				SwapNameCommand = function(self)
+					self:settext(self.showOnline and self.onlineName or self.offlineName)
+					self.showOnline = not self.showOnline
+					self:stoptweening():linear(self.transitionDuration * 0.5):diffusealpha(1):sleep(self.displayDuration):queuecommand("UpdateName")
 				end
 			},
 			Def.ActorFrame {
@@ -422,7 +464,41 @@ local t = Def.ActorFrame {
 			},
 			LoadFont("MSD 20px") .. {
 				Name = "PlayerRating",
-				InitCommand = function(self) self:xy(65, 53):zoom(0.35):halign(0) end
+				InitCommand = function(self)
+					self:xy(65, 53):zoom(0.35):halign(0):maxwidth(((frameW - pad * 3) * 0.5 - 65) / 0.35)
+					self.showOnline = true
+					self.transitionDuration = 0.25
+					self.onlineRating = DLMAN and DLMAN.IsLoggedIn and DLMAN:IsLoggedIn() and DLMAN.GetSkillsetRating and tonumber(DLMAN:GetSkillsetRating("Overall")) or nil
+					local pn = GAMESTATE:GetMasterPlayerNumber()
+					local profile = pn and PROFILEMAN:GetProfile(pn)
+					self.offlineRating = profile and profile:GetPlayerRating() or nil
+				end,
+				OnCommand = function(self)
+					if isOnlineEvaluation() or not HV.ShowMSD() then self:visible(false); return end
+					if not self.onlineRating or self.onlineRating <= 0 then
+						if self.offlineRating and self.offlineRating > 0 then self:settextf("%.2f", self.offlineRating):diffuse(HVColor.GetMSDRatingColor(self.offlineRating)) else self:visible(false) end
+						return
+					elseif not self.offlineRating or self.offlineRating <= 0 or math.abs(self.onlineRating - self.offlineRating) < 0.01 then
+						self:settextf("%.2f", self.onlineRating):diffuse(HVColor.GetMSDRatingColor(self.onlineRating))
+						return
+					end
+					self:playcommand("UpdateRating")
+				end,
+				RefreshRatingCommand = function(self)
+					local pn = GAMESTATE:GetMasterPlayerNumber()
+					local profile = pn and PROFILEMAN:GetProfile(pn)
+					self.offlineRating = profile and profile:GetPlayerRating() or nil
+					self:playcommand("On")
+				end,
+				UpdateRatingCommand = function(self)
+					self:stoptweening():linear(self.transitionDuration * 0.5):diffusealpha(0):queuecommand("SwapRating")
+				end,
+				SwapRatingCommand = function(self)
+					local value = self.showOnline and self.onlineRating or self.offlineRating
+					self:settextf("%.2f", value):diffuse(HVColor.GetMSDRatingColor(value))
+					self.showOnline = not self.showOnline
+					self:stoptweening():linear(self.transitionDuration * 0.5):diffusealpha(1):sleep(3):queuecommand("UpdateRating")
+				end
 			}
 		},
 
@@ -500,7 +576,66 @@ local t = Def.ActorFrame {
 			},
 			LoadFont("MSD 20px") .. {
 				Name = "MSD",
-				InitCommand = function(self) self:halign(1):valign(0):xy(0, -2):zoom(0.6):diffuse(subText) end
+				InitCommand = function(self) self:halign(1):valign(0):xy(0, -2):zoom(0.6):maxwidth((frameW - pad * 2) / 0.6):diffuse(subText); self.transitionDuration = 0.25 end,
+				SetRatingPagesCommand = function(self, params)
+					self:stoptweening()
+					self.hvRatingPages = {}
+					self.hvRatingPage = 1
+					if params and params.meterText and params.meterText ~= "" then
+						self.hvRatingPages[1] = {text = params.meterText, color = params.meterColor or subText}
+					end
+					if HV.EnableDanCalculator and HV.EnableDanCalculator() and steps then
+						local rate = tonumber(getCurRateValue()) or 1
+						local chartKey = steps.GetChartKey and tostring(steps:GetChartKey())
+						local estimate
+						if chartKey and FILEMAN and FILEMAN.DoesFileExist then
+							local path = "Save/Holographic Void_settings/ChartRatingCache.lua"
+							if FILEMAN:DoesFileExist(path) then
+								local file = RageFileUtil.CreateRageFile()
+								if file:Open(path, 1) then
+									local source = file:Read()
+									local chunk = type(source) == "string" and loadstring(source) or nil
+									if chunk then
+										setfenv(chunk, {})
+										local ok, cache = pcall(chunk)
+										if ok and type(cache) == "table" then
+											local key = chartKey .. "|" .. string.format("%.8f", rate)
+											estimate = cache["isor-dp-v2|" .. key] or cache["isor-dp-v1|" .. key]
+										end
+									end
+									file:Close()
+								end
+								file:destroy()
+							end
+						end
+						if type(estimate) ~= "table" and data and data.steps then
+							local dataKey = data.steps.GetChartKey and tostring(data.steps:GetChartKey())
+							if dataKey == chartKey and math.abs((tonumber(data.rate) or rate) - rate) < 0.0005 then estimate = data.isorEstimate end
+						end
+						if type(estimate) == "table" and type(estimate.dan) == "string" then
+							local text = estimate.dan .. (type(estimate.sublevel) == "string" and (" " .. estimate.sublevel) or "")
+							self.hvRatingPages[#self.hvRatingPages + 1] = {text = text, color = HVColor.GetMSDRatingColor(tonumber(estimate.dp) or 1)}
+						end
+					end
+					if #self.hvRatingPages > 0 then
+						local page = self.hvRatingPages[1]
+						self:settext(page.text):diffuse(page.color):diffusealpha(1)
+						if #self.hvRatingPages > 1 then self:sleep(3):queuecommand("FadeRatingOut") end
+					else
+						self:settext("")
+					end
+				end,
+				FadeRatingOutCommand = function(self)
+					if not self.hvRatingPages or #self.hvRatingPages < 2 then return end
+					self:stoptweening():linear(self.transitionDuration * 0.5):diffusealpha(0):queuecommand("CycleRating")
+				end,
+				CycleRatingCommand = function(self)
+					if not self.hvRatingPages or #self.hvRatingPages < 2 then return end
+					self.hvRatingPage = self.hvRatingPage % #self.hvRatingPages + 1
+					local page = self.hvRatingPages[self.hvRatingPage]
+					self:settext(page.text):diffuse(page.color)
+					self:stoptweening():linear(self.transitionDuration * 0.5):diffusealpha(1):sleep(3):queuecommand("FadeRatingOut")
+				end
 			},
 			LoadFont("Common Normal") .. {
 				Name = "Rate",

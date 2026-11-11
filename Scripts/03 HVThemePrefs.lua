@@ -802,6 +802,10 @@ function HV.ShowMSD()
 	return isTrue(ThemePrefs.Get("HV_ShowMSD"))
 end
 
+function HV.EnableDanCalculator()
+	return isTrue(ThemePrefs.Get("HV_EnableDanCalculator"))
+end
+
 
 --- Check if player profile stats should be shown.
 function HV.ShowProfileStats()
