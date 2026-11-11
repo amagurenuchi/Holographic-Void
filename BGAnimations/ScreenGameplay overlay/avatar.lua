@@ -18,6 +18,41 @@ local dimText = color("0.5,0.5,0.5,1")
 local fontZoom = 0.55
 local fontZoomSmall = 0.45
 
+-- Gameplay reads the final Dan estimate from Save; it does not run Sunny SR
+-- or ISOR. The existing direct MSD display remains unchanged.
+local chartRatingCache = {}
+local chartRatingCachePath = "Save/Holographic Void_settings/ChartRatingCache.lua"
+do
+	if FILEMAN and FILEMAN.DoesFileExist and FILEMAN:DoesFileExist(chartRatingCachePath) then
+		local file = RageFileUtil.CreateRageFile()
+		if file:Open(chartRatingCachePath, 1) then
+			local source = file:Read()
+			local chunk = type(source) == "string" and loadstring(source) or nil
+			if chunk then
+				setfenv(chunk, {})
+				local ok, cache = pcall(chunk)
+				if ok and type(cache) == "table" then chartRatingCache = cache end
+			end
+			file:Close()
+		end
+		file:destroy()
+	end
+end
+
+local function getCachedChartEstimate(steps, rate)
+	local enabled = ThemePrefs.Get("HV_EnableDanCalculator")
+	if enabled ~= true and enabled ~= "true" then return nil end
+	if not steps or not steps.GetChartKey then return nil end
+	local chartKey = tostring(steps:GetChartKey())
+	local rateKey = string.format("%.8f", tonumber(rate) or 1)
+	local entry = chartRatingCache["isor-dp-v2|" .. chartKey .. "|" .. rateKey]
+	if type(entry) ~= "table" then
+		entry = chartRatingCache["isor-dp-v1|" .. chartKey .. "|" .. rateKey]
+	end
+	if type(entry) ~= "table" or type(entry.dan) ~= "string" or type(entry.dp) ~= "number" then return nil end
+	return entry
+end
+
 local function animateAvatarVisibility(self, visible)
 	self:stoptweening()
 	if visible then
@@ -199,21 +234,44 @@ local t = Def.ActorFrame {
 	},
 
 
-	-- MSD value
+	-- Cycle the existing MSD value with the cached Dan tier/sublevel.
 	LoadFont("MSD 20px") .. {
 		InitCommand = function(self)
-			self:xy(avatarSize + 8, 22):zoom(fontZoom * 0.825):halign(0):maxwidth(100 / fontZoom)
+			self:xy(avatarSize + 8, 22):zoom(fontZoom * 0.825):halign(0):maxwidth((100 / fontZoom) - 15)
 		end,
 		BeginCommand = function(self) self:queuecommand("Set") end,
 		SetCommand = function(self)
-			local steps = GAMESTATE:GetCurrentSteps()
-			local meter = steps:GetMSD(getCurRateValue(), 1)
-			local showMSD = HV.ShowMSD() and meter > 0
-			self:visible(showMSD)
-			if showMSD then
-				self:settextf("%5.2f", meter)
-				self:diffuse(HVColor.GetMSDRatingColor(meter))
+			self:stoptweening()
+			local steps = GAMESTATE:GetCurrentSteps(pn)
+			if not steps then self:visible(false); self:settext(""); return end
+			local meter = tonumber(steps:GetMSD(getCurRateValue(), 1)) or 0
+			local entry = getCachedChartEstimate(steps, getCurRateValue())
+			local pages = {}
+			if meter and meter > 0 then
+				pages[#pages + 1] = {text = string.format("%5.2f", meter), color = HVColor.GetMSDRatingColor(meter)}
 			end
+			if entry then
+				local danName = entry.dan
+				local sublevel = type(entry.sublevel) == "string" and entry.sublevel or ""
+				pages[#pages + 1] = {text = danName .. (sublevel ~= "" and (" " .. sublevel) or ""), color = HVColor.GetMSDRatingColor(tonumber(entry.dp) or 1)}
+			end
+			self.hvRatingPages = pages
+			self.hvRatingPage = 1
+			self.hvRatingElapsed = 0
+			local showRating = HV.ShowMSD() and (meter > 0 or entry ~= nil)
+			self:visible(showRating)
+			if showRating then
+				self:settext(pages[1].text):diffuse(pages[1].color)
+				if #pages > 1 then self:sleep(3):queuecommand("CycleRating") end
+			else
+				self:settext("")
+			end
+		end,
+		CycleRatingCommand = function(self)
+			if not self.hvRatingPages or #self.hvRatingPages < 2 or not self:GetVisible() then return end
+			self.hvRatingPage = self.hvRatingPage % #self.hvRatingPages + 1
+			local page = self.hvRatingPages[self.hvRatingPage]
+			self:settext(page.text):diffuse(page.color):sleep(3):queuecommand("CycleRating")
 		end,
 		CurrentRateChangedMessageCommand = function(self) self:queuecommand("Set") end,
 	},
@@ -221,7 +279,7 @@ local t = Def.ActorFrame {
 	-- Difficulty name
 	LoadFont("Common Normal") .. {
 		InitCommand = function(self)
-			self:xy(avatarSize + 72, 22):zoom(fontZoomSmall):halign(0):maxwidth(150 / fontZoomSmall)
+			self:xy(avatarSize + 85, 22):zoom(fontZoomSmall):halign(0):maxwidth(150 / fontZoomSmall)
 		end,
 		BeginCommand = function(self) self:queuecommand("Set") end,
 		SetCommand = function(self)

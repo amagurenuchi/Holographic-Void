@@ -266,6 +266,11 @@ local HVPrefs = {
 		Choices = {"Off", "On"},
 		Values = {false, true}
 	},
+	HV_EnableDanCalculator = {
+		Default = true,
+		Choices = {"Off", "On"},
+		Values = {false, true}
+	},
 
 
 	-- Gameplay: Show player profile stats on select music
@@ -347,8 +352,8 @@ local HVPrefs = {
 	},
 	HV_OsuManiaStarRating = {
 		Default = "Classic",
-		Choices = {"Off", "Classic", "Enissay rework"},
-		Values = {"Off", "Classic", "Enissay rework"},
+		Choices = {"Off", "Classic", "Sunny Rework"},
+		Values = {"Off", "Classic", "Sunny Rework"},
 	},
 
 	-- Gameplay: Toggle real-time NPS display
