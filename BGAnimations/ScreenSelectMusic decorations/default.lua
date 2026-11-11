@@ -274,7 +274,7 @@ function IsMouseInSelectMusicInteractiveArea()
 	local mx = INPUTFILTER:GetMouseX() or SCREEN_CENTER_X
 	local my = INPUTFILTER:GetMouseY() or SCREEN_CENTER_Y
 	if HV.ActiveTab and HV.ActiveTab ~= "" then return true end
-	if mx <= panelX + panelW + 135 then return true end
+	if mx <= panelX + panelW + 150 then return true end
 	if my >= SCREEN_HEIGHT - footerH then return true end
 	if my <= headerH then return true end
 	return false
@@ -3214,10 +3214,10 @@ t[#t + 1] = Def.ActorFrame {
 			
 			local isHovering = false
 			if isEnabled and not isFolderSelected and selectedData.steps then
-				local danCenterX = diffSelectorX + diffTabW + 28
+				local danCenterX = diffSelectorX + diffTabW + 34
 				local danTopY = diffSelectorTopY + 16
 				-- Cover the icon and its sublevel row with the hover hitbox.
-				isHovering = IsMouseOver(danCenterX - 36, danTopY - 4, 72, 42)
+				isHovering = IsMouseOver(danCenterX - 32, danTopY - 4, 64, 56)
 			end
 
 			if isHovering and selectedData.steps then
@@ -3255,7 +3255,7 @@ t[#t + 1] = Def.ActorFrame {
 t[#t + 1] = Def.ActorFrame {
 	Name = "ISORDanEstimate",
 	InitCommand = function(self)
-		self:xy(diffSelectorX + diffTabW + 28, diffSelectorTopY + 16)
+		self:xy(diffSelectorX + diffTabW + 34, diffSelectorTopY + 16)
 	end,
 	OnCommand = function(self) self:sleep(0.30):queuecommand("Set") end,
 	SetCommand = function(self)
@@ -3348,7 +3348,7 @@ t[#t + 1] = Def.ActorFrame {
 		sublevelActor:settext(sublevelText)
 		applyDanColor(sublevelActor, danColor)
 
-		self:xy(diffSelectorX + diffTabW + 28, diffSelectorTopY + 16)
+		self:xy(diffSelectorX + diffTabW + 34, diffSelectorTopY + 16)
 	end,
 	DelayedChartUpdateMessageCommand = function(self) self:playcommand("Set") end,
 	MSDModeChangedMessageCommand = function(self) self:playcommand("Set") end,
@@ -3361,13 +3361,13 @@ t[#t + 1] = Def.ActorFrame {
 	LoadFont("MSD 20px") .. {
 		Name = "Icon",
 		InitCommand = function(self)
-			self:halign(0.5):valign(0):xy(0, 0):zoom(0.46)
+			self:halign(0.5):valign(0):xy(0, 0):zoom(0.95)
 		end
 	},
 	LoadFont("MSD 20px") .. {
 		Name = "Sublevel",
 		InitCommand = function(self)
-			self:halign(0.5):valign(0):xy(0, 19):zoom(0.24)
+			self:halign(0.5):valign(0):xy(0, 39):zoom(0.26)
 		end
 	}
 }
