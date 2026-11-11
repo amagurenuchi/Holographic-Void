@@ -1697,7 +1697,7 @@ local function scoreBoard(pn)
 			-- MSD (Common Large, 2 decimal points)
 			LoadFont("MSD 20px") .. {
 				InitCommand = function(self)
-					self:halign(1):valign(0):xy(0, -2):zoom(0.6):maxwidth((frameW - pad * 2) / 2.5)
+					self:halign(1):valign(0):xy(0, -2):zoom(0.6):maxwidth((frameW - pad * 2) / 3)
 					self.transitionDuration = 0.25
 				end,
 				OnCommand = function(self)
