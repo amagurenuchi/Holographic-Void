@@ -23,6 +23,25 @@ local function formatIntroPercent(percent)
 	return string.format(percent > 99.9 and "%.4f%%" or "%.2f%%", percent)
 end
 
+local function getCurrentRatePB()
+	local steps = GAMESTATE:GetCurrentSteps()
+	if not steps then return nil end
+	local ok, byRate = pcall(function() return SCOREMAN:GetScoresByKey(steps:GetChartKey()) end)
+	if not ok or not byRate then return nil end
+	local rateKey = getCurRateString()
+	local okList, rateScores = pcall(function() return byRate[rateKey] end)
+	if not okList or not rateScores then return nil end
+	local okScores, scores = pcall(function() return rateScores:GetScores() end)
+	if not okScores or not scores then return nil end
+	local best
+	for _, score in ipairs(scores) do
+		if not IsScoreInvalid(score) and (not best or getJ4NormalizedPercentage(score) > getJ4NormalizedPercentage(best)) then
+			best = score
+		end
+	end
+	return best
+end
+
 -- Invalidating mods (fetched at BeginCommand)
 local invalidMods = {}
 
@@ -261,7 +280,7 @@ t[#t+1] = Def.ActorFrame{
 		if showGoal then
 			local pacemakerMode = ThemePrefs.Get("HV_GoalTargetType") or "Target"
 			if pacemakerMode == "PB" or pacemakerMode == "PBReplay" then
-				local best = GetDisplayScore()
+				local best = getCurrentRatePB()
 				if best then
 					targetActor:settext("Target: PB " .. formatIntroPercent(getJ4NormalizedPercentage(best)))
 				else
@@ -291,7 +310,7 @@ t[#t+1] = Def.ActorFrame{
 				local judgeName = THEME:GetString("TapNoteScore", judge)
 				threshold = string.format("> %d %s", ThemePrefs.Get("HV_AutoFailThreshold_Count") or 10, judgeName)
 			elseif condition == "Personal Best" then
-				local best = GetDisplayScore()
+				local best = getCurrentRatePB()
 				local pbStr = ""
 				if best then
 					pbStr = " (" .. formatIntroPercent(getJ4NormalizedPercentage(best)) .. ")"
