@@ -1,106 +1,13 @@
 --- Holographic Void: ScreenInit Background
--- Modernized, sleek initialization screen with a holographic vibe.
+-- Minimalist & Elegant Logo Reveal with procedural geometric glyph, kinetic typography, and subtle particle drift.
 
 if HVColor and HVColor.RefreshAccent then
 	HVColor.RefreshAccent()
 end
 
-local t = Def.ActorFrame {
-	InitCommand = function(self)
-		if self.SortByDrawOrder then
-			self:SortByDrawOrder()
-		end
-	end
-}
+local accent = (HVColor and HVColor.Accent) or color("#00E5FF")
 
--- 1. Void Gradient Background
-t[#t + 1] = Def.Quad {
-	InitCommand = function(self)
-		self:Center():zoomto(SCREEN_WIDTH, SCREEN_HEIGHT)
-	end,
-	OnCommand = function(self)
-		self:diffusetopedge(color("#050510"))
-		self:diffusebottomedge(color("#000000"))
-		self:diffusealpha(0):linear(0.3):diffusealpha(1)
-	end
-}
-
--- 2. Ambient Grid / Lines (Holographic effect)
-local gridFrame = Def.ActorFrame {
-	InitCommand = function(self) self:Center() end,
-}
-for i = -4, 4 do
-	-- Horizontal lines fade out from center
-	gridFrame[#gridFrame + 1] = Def.Quad {
-		InitCommand = function(self)
-			self:y(i * 35):zoomto(SCREEN_WIDTH, 1)
-		end,
-		OnCommand = function(self)
-			self:diffuse(HVColor.Accent):diffusealpha(0)
-				:sleep(0.1 + math.abs(i) * 0.05)
-				:linear(0.4):diffusealpha(0.08)
-				:sleep(2.4 - math.abs(i) * 0.05)
-				:linear(0.5):diffusealpha(0)
-		end
-	}
-end
-t[#t + 1] = gridFrame
-
--- 3. Center Glow / Light burst
-t[#t + 1] = Def.Quad {
-	InitCommand = function(self)
-		self:Center():zoomto(SCREEN_WIDTH, 100)
-		self:blend("BlendMode_Add")
-		self:fadetop(1):fadebottom(1)
-	end,
-	OnCommand = function(self)
-		self:diffuse(HVColor.Accent):diffusealpha(0)
-			:linear(0.5):diffusealpha(0.20):zoomto(SCREEN_WIDTH, 40)
-			:sleep(2.3)
-			:linear(0.5):diffusealpha(0)
-	end
-}
-
--- 4. Text - Chromatic Aberration
-local textGroup = Def.ActorFrame {
-	InitCommand = function(self) self:Center():y(SCREEN_CENTER_Y - 15) end,
-	-- Cyan layer (moves right to center)
-	LoadFont("Common Large") .. {
-		Text = "HOLOGRAPHIC VOID",
-		InitCommand = function(self) self:zoom(0.6):x(-15):diffuse(color("#00FFFF")):blend("BlendMode_Add") end,
-		OnCommand = function(self)
-			self:diffusealpha(0)
-				:decelerate(0.5):diffusealpha(0.8):x(-2)
-				:sleep(2.3)
-				:accelerate(0.5):diffusealpha(0):x(-10)
-		end
-	},
-	-- Magenta layer (moves left to center)
-	LoadFont("Common Large") .. {
-		Text = "HOLOGRAPHIC VOID",
-		InitCommand = function(self) self:zoom(0.6):x(15):diffuse(color("#FF00FF")):blend("BlendMode_Add") end,
-		OnCommand = function(self)
-			self:diffusealpha(0)
-				:decelerate(0.5):diffusealpha(0.8):x(2)
-				:sleep(2.3)
-				:accelerate(0.5):diffusealpha(0):x(10)
-		end
-	},
-	-- Main White layer
-	LoadFont("Common Large") .. {
-		Text = "HOLOGRAPHIC VOID",
-		InitCommand = function(self) self:zoom(0.6):x(0) end,
-		OnCommand = function(self)
-			self:diffusealpha(0)
-				:decelerate(0.5):diffusealpha(1)
-				:sleep(2.3)
-				:accelerate(0.5):diffusealpha(0)
-		end
-	}
-}
-t[#t + 1] = textGroup
-
--- 5. Version Subtitle
+-- Theme Version Reader
 local themeVersion = "Unknown"
 local themeName = THEME:GetCurThemeName()
 local paths = {
@@ -108,7 +15,6 @@ local paths = {
 	"ThemeInfo.ini"
 }
 
--- Add GetCurrentThemeDirectory only if it exists
 if THEME.GetCurrentThemeDirectory then
 	table.insert(paths, 1, THEME:GetCurrentThemeDirectory() .. "ThemeInfo.ini")
 end
@@ -121,161 +27,280 @@ for _, path in ipairs(paths) do
 	end
 end
 
-t[#t + 1] = LoadFont("Common Normal") .. {
-	Text = "v" .. themeVersion,
-	InitCommand = function(self) self:Center():y(SCREEN_CENTER_Y + 15):zoom(0.5) end,
-	OnCommand = function(self)
-		self:diffuse(color("0.6,0.6,0.6,1")):diffusealpha(0)
-			:sleep(0.3):decelerate(0.4):diffusealpha(0.9):y(SCREEN_CENTER_Y + 7)
-			:sleep(2.1):accelerate(0.5):diffusealpha(0):y(SCREEN_CENTER_Y + 15)
+local t = Def.ActorFrame {
+	InitCommand = function(self)
+		if self.SortByDrawOrder then
+			self:SortByDrawOrder()
+		end
 	end
 }
 
--- 6. Modern Loading Bar / Scanning Line
+-- 1. Deep Void Gradient & Vignette Background
 t[#t + 1] = Def.Quad {
-	InitCommand = function(self) 
-		self:Center():y(SCREEN_CENTER_Y + 30):zoomto(0, 2)
+	InitCommand = function(self)
+		self:Center():zoomto(SCREEN_WIDTH, SCREEN_HEIGHT)
 	end,
 	OnCommand = function(self)
-		self:diffuse(HVColor.Accent):diffusealpha(0)
-			:sleep(0.4):diffusealpha(0.9)
-			:decelerate(0.8):zoomto(200, 2)
-			:sleep(1.6)
-			:accelerate(0.5):zoomto(0, 1):diffusealpha(0)
+		self:diffusetopedge(color("#05060f"))
+		self:diffusebottomedge(color("#010103"))
+		self:diffusealpha(0):linear(0.25):diffusealpha(1)
 	end
 }
 
--- 7. 10th Anniversary Celebratory Subtitle
-local anniversaryFeaturesEnabled = false
-local anniversaryGroup = Def.ActorFrame {
-	InitCommand = function(self) self:Center():y(SCREEN_CENTER_Y + 54):draworder(1500) end,
-	-- Subtle glow layer
-	LoadFont("Common Normal") .. {
-		Text = "Happy 10th Anniversary, Etterna!",
+-- Subtle Radial Ambient Glow at Center
+t[#t + 1] = Def.Quad {
+	InitCommand = function(self)
+		self:Center():zoomto(SCREEN_WIDTH * 0.75, SCREEN_HEIGHT * 0.45)
+		self:blend("BlendMode_Add")
+		self:fadetop(1):fadebottom(1):fadeleft(1):faderight(1)
+	end,
+	OnCommand = function(self)
+		self:diffuse(accent):diffusealpha(0)
+			:sleep(0.15)
+			:linear(0.8):diffusealpha(0.09)
+			:sleep(1.4)
+			:linear(0.6):diffusealpha(0)
+	end
+}
+
+-- 2. Ambient Floating Micro-particles (Void motes)
+local numParticles = 16
+local particleFrame = Def.ActorFrame {}
+
+for i = 1, numParticles do
+	local startX = SCREEN_CENTER_X + (math.random() * SCREEN_WIDTH * 0.6 - SCREEN_WIDTH * 0.3)
+	local startY = SCREEN_CENTER_Y + (math.random() * 140 - 70)
+	local driftY = math.random(30, 70)
+	local size = math.random(1, 2)
+	local pDelay = 0.1 + math.random() * 0.6
+	local pDuration = 2.1 + math.random() * 0.5
+	local pAlpha = 0.2 + math.random() * 0.35
+
+	particleFrame[#particleFrame + 1] = Def.Quad {
 		InitCommand = function(self)
-			self:zoom(0.48):diffuse(HVColor.Accent):diffusealpha(0)
+			self:xy(startX, startY):zoomto(size, size):diffuse(accent):diffusealpha(0)
 		end,
 		OnCommand = function(self)
-			self:sleep(1.0)
-				:zoom(0.7)
-				:decelerate(0.35):zoom(0.48):diffusealpha(0.6):glow(HVColor.Accent)
-				:sleep(1.8)
-				:accelerate(0.45):diffusealpha(0)
-		end
-	},
-	-- Main celebratory text
-	LoadFont("Common Normal") .. {
-		Text = "Happy 10th Anniversary, Etterna!",
-		InitCommand = function(self)
-			self:zoom(0.48):diffuse(HVColor.Accent):diffusealpha(0)
-		end,
-		OnCommand = function(self)
-			self:sleep(1.0)
-				:zoom(0.7)
-				:decelerate(0.35):zoom(0.48):diffusealpha(1)
-				:sleep(1.8)
-				:accelerate(0.45):diffusealpha(0)
+			self:sleep(pDelay)
+				:decelerate(pDuration * 0.3):diffusealpha(pAlpha)
+				:linear(pDuration * 0.7):y(startY - driftY):diffusealpha(0)
 		end
 	}
-}
-if anniversaryFeaturesEnabled then
-	t[#t + 1] = anniversaryGroup
 end
+t[#t + 1] = particleFrame
 
--- 8. Confetti Cannon System (Launches from both sides when text finishes tweening at 1.35s)
-local numConfetti = 140
-local confettiStartTime = 1.35 -- Exact time when the Happy 10th Anniversary text completes its entrance tween
-
--- Confetti palette strictly synced to the selected accent color family
-local baseAccent = HVColor.Accent or color("#5ABAFF")
-local hsv = ColorToHSV(baseAccent)
-local h = (type(hsv) == "table" and hsv.Hue) or 200
-local s = (type(hsv) == "table" and hsv.Sat) or 0.7
-local v = (type(hsv) == "table" and hsv.Value) or 0.9
-
-local confettiPalette = {
-	baseAccent,                                                -- Selected theme accent
-	baseAccent,                                                -- Weighted for accent
-	HSV(h, math.max(0.1, s * 0.35), 1.0),                      -- Light pastel accent tint
-	HSV(h, math.min(1.0, s * 1.15), math.max(0.4, v * 0.75)),  -- Deeper accent shade
-	HSV((h + 15) % 360, s, v),                                 -- Subtle harmonic hue
-	color("#FFFFFF"),                                          -- Crisp white sparkle
-}
-
-local confettiFrame = Def.ActorFrame {
-	Name = "ConfettiFrame",
+-- Master Container for Hero Glyph & Typography (Handles coordinated entrance & exit)
+local heroGroup = Def.ActorFrame {
 	InitCommand = function(self)
-		self:draworder(2000)
+		self:Center():zoom(1)
+	end,
+	OnCommand = function(self)
+		-- Breathing / exit tween
+		self:sleep(2.55)
+			:accelerate(0.5):zoom(1.03):diffusealpha(0)
 	end
 }
 
-for i = 1, numConfetti do
-	local isLeft = (i % 2 == 1)
-	local cColor = confettiPalette[((i - 1) % #confettiPalette) + 1]
-	local delay = confettiStartTime + math.random() * 0.25
-	local upTime = 0.65 + math.random() * 0.35
-	local fallTime = 0.95 + math.random() * 0.45
-	local w = math.random(3, 5)   -- Sleek ribbon width
-	local h = math.random(12, 22) -- Ribbon length
-	local startY = SCREEN_CENTER_Y + math.random(10, 100)
-	local peakY = SCREEN_TOP + math.random(20, 130)
-	local fallY = SCREEN_BOTTOM + 30
-
-	if isLeft then
-		local startX = SCREEN_LEFT - 5
-		local peakX = SCREEN_LEFT + math.random(160, math.floor(SCREEN_WIDTH * 0.58))
-		local driftX = math.random(40, 160)
-		local rot1 = math.random(0, 360)
-		local rot2 = rot1 + math.random(240, 600)
-		local rot3 = rot2 + math.random(240, 600)
-
-		confettiFrame[#confettiFrame + 1] = Def.Quad {
-			Name = "Confetti_" .. i,
-			InitCommand = function(self)
-				self:visible(false):draworder(2000)
-			end,
-			OnCommand = function(self)
-				self:sleep(delay)
-					:visible(true)
-					:xy(startX, startY)
-					:zoomto(w, h)
-					:diffuse(cColor)
-					:diffusealpha(1)
-					:rotationz(rot1)
-					:decelerate(upTime):xy(peakX, peakY):rotationz(rot2)
-					:accelerate(fallTime):x(peakX + driftX):y(fallY):rotationz(rot3):diffusealpha(0)
-			end
-		}
-	else
-		local startX = SCREEN_RIGHT + 5
-		local peakX = SCREEN_RIGHT - math.random(160, math.floor(SCREEN_WIDTH * 0.58))
-		local driftX = -math.random(40, 160)
-		local rot1 = math.random(0, 360)
-		local rot2 = rot1 - math.random(240, 600)
-		local rot3 = rot2 - math.random(240, 600)
-
-		confettiFrame[#confettiFrame + 1] = Def.Quad {
-			Name = "Confetti_" .. i,
-			InitCommand = function(self)
-				self:visible(false):draworder(2000)
-			end,
-			OnCommand = function(self)
-				self:sleep(delay)
-					:visible(true)
-					:xy(startX, startY)
-					:zoomto(w, h)
-					:diffuse(cColor)
-					:diffusealpha(1)
-					:rotationz(rot1)
-					:decelerate(upTime):xy(peakX, peakY):rotationz(rot2)
-					:accelerate(fallTime):x(peakX + driftX):y(fallY):rotationz(rot3):diffusealpha(0)
-			end
-		}
+-- 3. Procedural Geometric Glyph (Void Prism / Concentric Diamond Rings)
+local glyphFrame = Def.ActorFrame {
+	InitCommand = function(self)
+		self:y(-42):zoom(0.4):diffusealpha(0)
+	end,
+	OnCommand = function(self)
+		self:sleep(0.2)
+			:decelerate(0.7):zoom(1):diffusealpha(1)
 	end
-end
+}
 
+-- Outer Rotating Diamond Wireframe (Thin borders formed with lines)
+local outerDiamond = Def.ActorFrame {
+	OnCommand = function(self)
+		self:rotationz(45)
+			:decelerate(2.4):rotationz(90)
+	end
+}
+-- 4 sides of outer diamond
+local diamondSize = 48
+local borderThick = 1.2
+
+-- Top, Right, Bottom, Left edges
+outerDiamond[#outerDiamond + 1] = Def.Quad {
+	InitCommand = function(self) self:xy(0, -diamondSize / 2):zoomto(diamondSize, borderThick):diffuse(accent):diffusealpha(0.65) end
+}
+outerDiamond[#outerDiamond + 1] = Def.Quad {
+	InitCommand = function(self) self:xy(0, diamondSize / 2):zoomto(diamondSize, borderThick):diffuse(accent):diffusealpha(0.65) end
+}
+outerDiamond[#outerDiamond + 1] = Def.Quad {
+	InitCommand = function(self) self:xy(-diamondSize / 2, 0):zoomto(borderThick, diamondSize):diffuse(accent):diffusealpha(0.65) end
+}
+outerDiamond[#outerDiamond + 1] = Def.Quad {
+	InitCommand = function(self) self:xy(diamondSize / 2, 0):zoomto(borderThick, diamondSize):diffuse(accent):diffusealpha(0.65) end
+}
+glyphFrame[#glyphFrame + 1] = outerDiamond
+
+-- Inner Concentric Rotating Ring (Rotates in counter direction)
+local innerDiamond = Def.ActorFrame {
+	OnCommand = function(self)
+		self:rotationz(0)
+			:decelerate(2.5):rotationz(-45)
+	end
+}
+local innerSize = 26
+local innerThick = 1.0
+innerDiamond[#innerDiamond + 1] = Def.Quad {
+	InitCommand = function(self) self:xy(0, -innerSize / 2):zoomto(innerSize, innerThick):diffuse(color("#FFFFFF")):diffusealpha(0.8) end
+}
+innerDiamond[#innerDiamond + 1] = Def.Quad {
+	InitCommand = function(self) self:xy(0, innerSize / 2):zoomto(innerSize, innerThick):diffuse(color("#FFFFFF")):diffusealpha(0.8) end
+}
+innerDiamond[#innerDiamond + 1] = Def.Quad {
+	InitCommand = function(self) self:xy(-innerSize / 2, 0):zoomto(innerThick, innerSize):diffuse(color("#FFFFFF")):diffusealpha(0.8) end
+}
+innerDiamond[#innerDiamond + 1] = Def.Quad {
+	InitCommand = function(self) self:xy(innerSize / 2, 0):zoomto(innerThick, innerSize):diffuse(color("#FFFFFF")):diffusealpha(0.8) end
+}
+glyphFrame[#glyphFrame + 1] = innerDiamond
+
+-- Center Prism Core Glow (Additive soft dot)
+glyphFrame[#glyphFrame + 1] = Def.Quad {
+	InitCommand = function(self)
+		self:zoomto(6, 6):rotationz(45):diffuse(color("#FFFFFF"))
+	end,
+	OnCommand = function(self)
+		self:diffusealpha(0)
+			:sleep(0.4)
+			:decelerate(0.4):diffusealpha(1):zoomto(8, 8)
+			:linear(1.4):zoomto(5, 5)
+	end
+}
+
+-- Center Soft Halo behind glyph
+glyphFrame[#glyphFrame + 1] = Def.Quad {
+	InitCommand = function(self)
+		self:zoomto(72, 72):diffuse(accent):blend("BlendMode_Add"):diffusealpha(0)
+		self:fadetop(0.8):fadebottom(0.8):fadeleft(0.8):faderight(0.8)
+	end,
+	OnCommand = function(self)
+		self:sleep(0.3)
+			:decelerate(0.6):diffusealpha(0.35)
+			:linear(1.5):diffusealpha(0.2)
+	end
+}
+
+heroGroup[#heroGroup + 1] = glyphFrame
+
+-- 4. Kinetic Typography ("HOLOGRAPHIC VOID")
+local textGroup = Def.ActorFrame {
+	InitCommand = function(self)
+		self:y(18):diffusealpha(0)
+	end,
+	OnCommand = function(self)
+		self:sleep(0.4)
+			:decelerate(0.55):diffusealpha(1):y(10)
+	end
+}
+
+-- Accent-based Shadow Text (Exact underlay — same position as title, accent color, drawn behind)
+textGroup[#textGroup + 1] = LoadFont("Common Large") .. {
+	Text = "HOLOGRAPHIC VOID",
+	InitCommand = function(self)
+		self:zoom(0.62):diffuse(accent):diffusealpha(0)
+	end,
+	OnCommand = function(self)
+		self:sleep(0.4)
+			:decelerate(0.55):diffusealpha(0.7)
+			:linear(1.4):diffusealpha(0.55)
+	end
+}
+
+-- Ambient Accent Underglow for Text
+textGroup[#textGroup + 1] = LoadFont("Common Large") .. {
+	Text = "HOLOGRAPHIC VOID",
+	InitCommand = function(self)
+		self:zoom(0.62):diffuse(accent):diffusealpha(0):blend("BlendMode_Add")
+	end,
+	OnCommand = function(self)
+		self:sleep(0.42)
+			:decelerate(0.6):diffusealpha(0.45)
+			:linear(1.4):diffusealpha(0.25)
+	end
+}
+
+-- Crisp Primary Text
+textGroup[#textGroup + 1] = LoadFont("Common Large") .. {
+	Text = "HOLOGRAPHIC VOID",
+	InitCommand = function(self)
+		self:zoom(0.62):diffuse(color("#F4F8FA")):diffusealpha(0)
+	end,
+	OnCommand = function(self)
+		self:sleep(0.4)
+			:decelerate(0.55):diffusealpha(1)
+	end
+}
+
+-- Horizontal Light Sweep across text
+textGroup[#textGroup + 1] = Def.Quad {
+	InitCommand = function(self)
+		self:y(0):zoomto(35, 18):diffuse(color("#FFFFFF")):blend("BlendMode_Add"):diffusealpha(0)
+		self:fadeleft(0.8):faderight(0.8)
+	end,
+	OnCommand = function(self)
+		self:x(-200):sleep(0.65)
+			:linear(0.05):diffusealpha(0.35)
+			:decelerate(0.75):x(200)
+			:linear(0.05):diffusealpha(0)
+	end
+}
+
+heroGroup[#heroGroup + 1] = textGroup
+
+-- 5. Version Subtitle & Fine Divider Lines
+local subMetaGroup = Def.ActorFrame {
+	InitCommand = function(self)
+		self:y(38):diffusealpha(0)
+	end,
+	OnCommand = function(self)
+		self:sleep(0.7)
+			:decelerate(0.5):diffusealpha(0.85):y(34)
+	end
+}
+
+-- Left fine line
+subMetaGroup[#subMetaGroup + 1] = Def.Quad {
+	InitCommand = function(self)
+		self:x(-72):zoomto(0, 1):diffuse(accent):diffusealpha(0.5)
+	end,
+	OnCommand = function(self)
+		self:sleep(0.75):decelerate(0.4):zoomto(50, 1)
+	end
+}
+
+-- Right fine line
+subMetaGroup[#subMetaGroup + 1] = Def.Quad {
+	InitCommand = function(self)
+		self:x(72):zoomto(0, 1):diffuse(accent):diffusealpha(0.5)
+	end,
+	OnCommand = function(self)
+		self:sleep(0.75):decelerate(0.4):zoomto(50, 1)
+	end
+}
+
+-- Version text badge
+subMetaGroup[#subMetaGroup + 1] = LoadFont("Common Normal") .. {
+	Text = "v" .. themeVersion,
+	InitCommand = function(self)
+		self:zoom(0.4):diffuse(color("#A0AAB5"))
+	end
+}
+
+heroGroup[#heroGroup + 1] = subMetaGroup
+
+t[#t + 1] = heroGroup
+
+-- 6. Celebration / Confetti (Cleanly archived & disabled)
+local anniversaryFeaturesEnabled = false
 if anniversaryFeaturesEnabled then
-	t[#t + 1] = confettiFrame
+	-- Placeholder for celebratory components if re-enabled in future milestones
 end
 
 return t
