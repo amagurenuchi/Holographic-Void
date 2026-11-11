@@ -232,14 +232,16 @@ function HV.EstimateReformFromMSDs(msds)
 		tech = read(8),
 		stamina = 0.7 * read(5) + 0.3 * read(4)
 	}
-	local estimates, validRoles = {}, 0
+	-- DanOverlay builds all four role estimates, even when an MSD skillset is
+	-- zero or unavailable. Keeping those fallback estimates is important: they
+	-- participate in role selection, composite Dan, and agreement confidence.
+	local estimates = {}
 	for _, role in ipairs(roleOrder) do
-		if roleScores[role] > 0 then
-			estimates[role] = lookupRole(roleScores[role], role)
-			validRoles = validRoles + 1
-		end
+		estimates[role] = lookupRole(roleScores[role], role)
 	end
-	if validRoles == 0 then return nil end
+	if roleScores.jack <= 0 and roleScores.speed <= 0 and roleScores.tech <= 0 and roleScores.stamina <= 0 then
+		return nil
+	end
 
 	local primary = primaryRole(roleScores, estimates)
 	if not primary then return nil end
@@ -257,7 +259,7 @@ function HV.EstimateReformFromMSDs(msds)
 			agreeing = agreeing + 1
 		end
 	end
-	local confidence = round(agreeing / validRoles, 3)
+	local confidence = round(agreeing / #roleOrder, 3)
 	local sublevel = finalPosition < 0.20 and "Low"
 		or finalPosition < 0.40 and "Mid-Low"
 		or finalPosition < 0.60 and "Mid"
