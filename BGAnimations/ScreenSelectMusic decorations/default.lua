@@ -3173,7 +3173,9 @@ local danTooltip = Def.ActorFrame {
 	Name = "DanTooltip",
 	InitCommand = function(self)
 		danTooltipActor = self
-		self:visible(false):z(9000)
+		-- The tooltip is inserted before the Dan label in the decoration list;
+		-- force it to draw above later siblings when it becomes visible.
+		self:draworder(20000):visible(false)
 	end,
 	Def.Quad {
 		Name = "Bg",
@@ -3214,14 +3216,15 @@ t[#t + 1] = Def.ActorFrame {
 			if isEnabled and not isFolderSelected and selectedData.steps then
 				local danCenterX = diffSelectorX + diffTabW + 28
 				local danTopY = diffSelectorTopY + 16
-				isHovering = IsMouseOver(danCenterX - 24, danTopY - 4, 48, 38)
+				-- Cover the icon and its sublevel row with the hover hitbox.
+				isHovering = IsMouseOver(danCenterX - 36, danTopY - 4, 72, 42)
 			end
 
 			if isHovering and selectedData.steps then
 				local rate = tonumber(getCurRateValue()) or tonumber(selectedData.rate) or 1
 				local chartKey = selectedData.steps.GetChartKey and selectedData.steps:GetChartKey()
 				local diskKey = chartKey and chartRatingCacheKey("isor-dp-v2", chartKey, rate)
-				local estimate = diskKey and persistentChartRatingCache[diskKey]
+				local estimate = selectedData.isorEstimate or (diskKey and persistentChartRatingCache[diskKey])
 				if estimate and type(estimate.dan) == "string" then
 					local mx, my = INPUTFILTER:GetMouseX(), INPUTFILTER:GetMouseY()
 					danTooltipActor:visible(true):xy(mx + 12, my + 12)
@@ -3262,6 +3265,7 @@ t[#t + 1] = Def.ActorFrame {
 		local isEnabled = (danEnabled == true or danEnabled == "true") and (showMSD == true or showMSD == "true")
 		if not isEnabled then
 			data.isorInput = nil
+			data.isorEstimate = nil
 			self:visible(false)
 			local icon = self:GetChild("Icon")
 			local sublevel = self:GetChild("Sublevel")
@@ -3270,6 +3274,7 @@ t[#t + 1] = Def.ActorFrame {
 			return
 		end
 		local rate = tonumber(getCurRateValue()) or tonumber(data.rate) or 1
+		data.isorEstimate = nil
 		if rate <= 0 then rate = 1 end
 		local chartKey = data.steps and data.steps.GetChartKey and data.steps:GetChartKey()
 		local diskKey = chartKey and chartRatingCacheKey("isor-dp-v2", chartKey, rate)
@@ -3324,6 +3329,7 @@ t[#t + 1] = Def.ActorFrame {
 			end
 		end
 		estimate = data.song and data.steps and estimate or nil
+		data.isorEstimate = estimate
 		self:visible(estimate ~= nil)
 		local iconActor = self:GetChild("Icon")
 		local sublevelActor = self:GetChild("Sublevel")

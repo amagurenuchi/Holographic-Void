@@ -7,6 +7,7 @@ local screenName = Var("LoadingScreen") or ...
 local topScreen
 local tooltipActor
 local pointerActor
+local customCursorActor
 local clickWaveActor
 -- ScreenTextEntry has its own visual cursor, but it must not touch the shared
 -- BUTTON state.  Modal screens can inherit the caller's LoadingScreen value,
@@ -24,7 +25,12 @@ local function UpdateLoop()
 	-- SetPosition intentionally returns early while the tooltip actor is being
 	-- recreated. The pointer is a separate actor, so update it directly too.
 	if pointerActor then
-		pcall(function() pointerActor:xy(mouseX, mouseY) end)
+		-- TOOLTIP owns the legacy pointer for visibility and modal lifecycle, but
+		-- the theme-wide cursor is rendered by customCursorActor below.
+		pcall(function() pointerActor:visible(false) end)
+	end
+	if customCursorActor then
+		pcall(function() customCursorActor:xy(mouseX, mouseY) end)
 	end
 	pcall(function() TOOLTIP:SetPosition(mouseX, mouseY) end)
 	if not isTextEntry then
@@ -80,10 +86,12 @@ local function cursorCheck()
 	-- In windowed mode, the system cursor is visible so hide ours
 	if not PREFSMAN:GetPreference("Windowed") and not PREFSMAN:GetPreference("FullscreenIsBorderlessWindow") then
 		TOOLTIP:ShowPointer()
-		if pointerActor then pointerActor:visible(true) end
+		if pointerActor then pointerActor:visible(false) end
+		if customCursorActor then customCursorActor:visible(true) end
 	else
 		TOOLTIP:HidePointer()
 		if pointerActor then pointerActor:visible(false) end
+		if customCursorActor then customCursorActor:visible(false) end
 	end
 end
 
@@ -149,5 +157,13 @@ tooltipActor, pointerActor, clickWaveActor = TOOLTIP:New()
 t[#t + 1] = tooltipActor
 t[#t + 1] = pointerActor
 t[#t + 1] = clickWaveActor
+local cursorDefinition = Def.Sprite {
+	Texture = THEME:GetPathG("", "cursor.png"),
+	InitCommand = function(self)
+		customCursorActor = self
+		self:halign(0):valign(0):zoom(0.07):xy(0, 0):visible(false)
+	end,
+}
+t[#t + 1] = cursorDefinition
 
 return t
