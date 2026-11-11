@@ -274,7 +274,7 @@ function IsMouseInSelectMusicInteractiveArea()
 	local mx = INPUTFILTER:GetMouseX() or SCREEN_CENTER_X
 	local my = INPUTFILTER:GetMouseY() or SCREEN_CENTER_Y
 	if HV.ActiveTab and HV.ActiveTab ~= "" then return true end
-	if mx <= panelX + panelW + 95 then return true end
+	if mx <= panelX + panelW + 135 then return true end
 	if my >= SCREEN_HEIGHT - footerH then return true end
 	if my <= headerH then return true end
 	return false
@@ -1718,9 +1718,8 @@ t[#t + 1] = Def.ActorFrame {
 		if msdTooltipActor then
 			local selectedData = HV.CurrentSongData or {}
 			local isFolderSelected = selectedData.group and selectedData.group ~= "" and not selectedData.song
-			-- The label is at msdY and the number is at msdY + 18 with zoom ~0.45.
-			-- The text height is around 40px, so 18 + 40 = 58.
-			local isHovering = IsMouseOver(panelX + 10, msdY + 14, 120, 48)
+			-- The label is at msdY and the number is at msdY + 18 with zoom ~0.45 (height ~18px).
+			local isHovering = IsMouseOver(panelX + 10, msdY + 14, 120, 22)
 			if isHovering and HV.ShowMSD() and not isFolderSelected then
 				local mx, my = INPUTFILTER:GetMouseX(), INPUTFILTER:GetMouseY()
 				local wasHidden = not msdTooltipActor:GetVisible()
@@ -3088,19 +3087,186 @@ root[#root + 1] = Def.ActorFrame {
 t[#t + 1] = LoadActor("netplay.lua")
 
 -- Native Reform estimate from the selected chart's Etterna skillset MSDs.
-root[#root + 1] = Def.ActorFrame {
-		Name = "ISORDanEstimate",
+local danGreekMap = {
+	alpha   = {letter = "α", step = 1},
+	beta    = {letter = "β", step = 2},
+	gamma   = {letter = "γ", step = 3},
+	delta   = {letter = "δ", step = 4},
+	epsilon = {letter = "ε", step = 5},
+	zeta    = {letter = "ζ", step = 6},
+	eta     = {letter = "η", step = 7},
+	theta   = {letter = "θ", darkRed = true},
+	iota    = {letter = "ι", darkRed = true},
+	kappa   = {letter = "κ", white = true},
+}
+
+local danGreekByNumber = {
+	[11] = "alpha", [12] = "beta", [13] = "gamma", [14] = "delta",
+	[15] = "epsilon", [16] = "zeta", [17] = "eta", [18] = "theta",
+	[19] = "iota", [20] = "kappa",
+}
+
+local function getDanDisplayData(estimate, currentAccent)
+	if not estimate or type(estimate.dan) ~= "string" then return nil end
+	local accent = currentAccent or HVColor.Accent or color("#5ABAFF")
+	local redColor = color("#FF3333")
+	local darkRedColor = color("#9E1B1B")
+	local whiteColor = color("1,1,1,1")
+
+	local danStr = tostring(estimate.dan)
+	local num = tonumber(danStr:match("^(%d+)"))
+	local iconText = ""
+	local danColor = accent
+
+	if num then
+		if num >= 1 and num <= 10 then
+			iconText = tostring(num)
+			danColor = accent
+		elseif num >= 11 and danGreekByNumber[num] then
+			local key = danGreekByNumber[num]
+			local g = danGreekMap[key]
+			iconText = g and g.letter or tostring(num)
+			if g and g.white then
+				danColor = whiteColor
+			elseif g and g.darkRed then
+				danColor = darkRedColor
+			elseif g and g.step then
+				danColor = HV.LerpColor(g.step / 7, accent, redColor)
+			end
+		else
+			iconText = tostring(num)
+			danColor = accent
+		end
+	else
+		local key = string.lower(danStr):gsub("%s*dan$", ""):gsub("^%s+", ""):gsub("%s+$", "")
+		local g = danGreekMap[key]
+		if g then
+			iconText = g.letter
+			if g.white then
+				danColor = whiteColor
+			elseif g.darkRed then
+				danColor = darkRedColor
+			elseif g.step then
+				danColor = HV.LerpColor(g.step / 7, accent, redColor)
+			end
+		else
+			iconText = danStr
+			danColor = accent
+		end
+	end
+
+	local sublevelText = tostring(estimate.sublevel or "")
+	return iconText, sublevelText, danColor
+end
+
+local function applyDanColor(actor, c)
+	if not actor or not c then return end
+	if type(c) == "table" then
+		actor:diffuse(c[1] or c.r or 1, c[2] or c.g or 1, c[3] or c.b or 1, c[4] or c.a or 1)
+	else
+		actor:diffuse(c)
+	end
+end
+
+local danTooltipActor = nil
+local danTooltip = Def.ActorFrame {
+	Name = "DanTooltip",
 	InitCommand = function(self)
-		self:xy(panelX + 16, msdY + 43)
+		danTooltipActor = self
+		self:visible(false):z(9000)
+	end,
+	Def.Quad {
+		Name = "Bg",
+		InitCommand = function(self)
+			self:halign(0):valign(0):diffuse(color("0.05,0.05,0.05,0.95"))
+		end
+	},
+	Def.Quad {
+		Name = "Border",
+		InitCommand = function(self)
+			self:halign(0):valign(0):diffuse(accentColor):diffusealpha(0.5)
+		end
+	},
+	LoadFont("Common Normal") .. {
+		Name = "Text",
+		InitCommand = function(self)
+			self:xy(8, 8):halign(0):valign(0):zoom(0.28):diffuse(mainText)
+		end
+	}
+}
+
+t[#t + 1] = danTooltip
+
+t[#t + 1] = Def.ActorFrame {
+	Name = "DanTooltipHandler",
+	OnCommand = function(self)
+		self:queuecommand("Tick")
+	end,
+	TickCommand = function(self)
+		if danTooltipActor then
+			local selectedData = HV.CurrentSongData or {}
+			local isFolderSelected = selectedData.group and selectedData.group ~= "" and not selectedData.song
+			local danEnabled = ThemePrefs.Get("HV_EnableDanCalculator")
+			local showMSD = ThemePrefs.Get("HV_ShowMSD")
+			local isEnabled = (danEnabled == true or danEnabled == "true") and (showMSD == true or showMSD == "true")
+			
+			local isHovering = false
+			if isEnabled and not isFolderSelected and selectedData.steps then
+				local danCenterX = diffSelectorX + diffTabW + 28
+				local danTopY = diffSelectorTopY + 16
+				isHovering = IsMouseOver(danCenterX - 24, danTopY - 4, 48, 38)
+			end
+
+			if isHovering and selectedData.steps then
+				local rate = tonumber(getCurRateValue()) or tonumber(selectedData.rate) or 1
+				local chartKey = selectedData.steps.GetChartKey and selectedData.steps:GetChartKey()
+				local diskKey = chartKey and chartRatingCacheKey("isor-dp-v2", chartKey, rate)
+				local estimate = diskKey and persistentChartRatingCache[diskKey]
+				if estimate and type(estimate.dan) == "string" then
+					local mx, my = INPUTFILTER:GetMouseX(), INPUTFILTER:GetMouseY()
+					danTooltipActor:visible(true):xy(mx + 12, my + 12)
+					
+					local desc = string.format("DP %.2f", estimate.dp or 0)
+					
+					local txt = danTooltipActor:GetChild("Text")
+					local bg = danTooltipActor:GetChild("Bg")
+					local border = danTooltipActor:GetChild("Border")
+					txt:settext(desc)
+					local w = txt:GetZoomedWidth() + 16
+					local h = txt:GetZoomedHeight() + 16
+					bg:zoomto(w, h)
+					border:zoomto(w, 1)
+					local currentAccent = HVColor.Accent or accentColor
+					border:diffuse(currentAccent):diffusealpha(0.6)
+				else
+					danTooltipActor:visible(false)
+				end
+			else
+				danTooltipActor:visible(false)
+			end
+		end
+		self:sleep(0.04):queuecommand("Tick")
+	end
+}
+
+t[#t + 1] = Def.ActorFrame {
+	Name = "ISORDanEstimate",
+	InitCommand = function(self)
+		self:xy(diffSelectorX + diffTabW + 28, diffSelectorTopY + 16)
 	end,
 	OnCommand = function(self) self:sleep(0.30):queuecommand("Set") end,
 	SetCommand = function(self)
 		local data = HV.CurrentSongData or {}
 		local danEnabled = ThemePrefs.Get("HV_EnableDanCalculator")
-		if danEnabled ~= true and danEnabled ~= "true" then
+		local showMSD = ThemePrefs.Get("HV_ShowMSD")
+		local isEnabled = (danEnabled == true or danEnabled == "true") and (showMSD == true or showMSD == "true")
+		if not isEnabled then
 			data.isorInput = nil
 			self:visible(false)
-			self:GetChild("Value"):settext("")
+			local icon = self:GetChild("Icon")
+			local sublevel = self:GetChild("Sublevel")
+			if icon then icon:settext("") end
+			if sublevel then sublevel:settext("") end
 			return
 		end
 		local rate = tonumber(getCurRateValue()) or tonumber(data.rate) or 1
@@ -3159,41 +3325,43 @@ root[#root + 1] = Def.ActorFrame {
 		end
 		estimate = data.song and data.steps and estimate or nil
 		self:visible(estimate ~= nil)
-		local label = self:GetChild("Label")
-		local value = self:GetChild("Value")
+		local iconActor = self:GetChild("Icon")
+		local sublevelActor = self:GetChild("Sublevel")
 		if not estimate then
-			value:settext("")
+			if iconActor then iconActor:settext("") end
+			if sublevelActor then sublevelActor:settext("") end
 			return
 		end
 
-		label:settext("ISOR")
-		local danName = tonumber(estimate.dan:match("^(%d+)"))
-		if danName then
-			danName = estimate.dan .. " Dan"
-		else
-			danName = estimate.dan
-		end
-		value:settext(string.format("%s  %s  |  DP %.2f  |  %s  |  %d%%",
-			danName, estimate.sublevel, estimate.dp, (estimate.family or "hybrid"):upper(),
-			math.floor(estimate.confidence * 100 + 0.5)))
+		local currentAccent = HVColor.Accent or accentColor
+		local iconText, sublevelText, danColor = getDanDisplayData(estimate, currentAccent)
+
+		iconActor:settext(iconText)
+		applyDanColor(iconActor, danColor)
+
+		sublevelActor:settext(sublevelText)
+		applyDanColor(sublevelActor, danColor)
+
+		self:xy(diffSelectorX + diffTabW + 28, diffSelectorTopY + 16)
 	end,
 	DelayedChartUpdateMessageCommand = function(self) self:playcommand("Set") end,
 	MSDModeChangedMessageCommand = function(self) self:playcommand("Set") end,
 	ThemePrefChangedMessageCommand = function(self, params)
-		if not params or params.Name == "HV_ShowMSD" or params.Name == "HV_EnableDanCalculator" then self:playcommand("Set") end
+		if not params or params.Name == "HV_ShowMSD" or params.Name == "HV_EnableDanCalculator" or params.Name == "HV_AccentColor" then
+			self:playcommand("Set")
+		end
 	end,
 
-	LoadFont("Common Normal") .. {
-		Name = "Label",
+	LoadFont("MSD 20px") .. {
+		Name = "Icon",
 		InitCommand = function(self)
-			self:halign(0):valign(0):zoom(0.27):diffuse(accentColor)
+			self:halign(0.5):valign(0):xy(0, 0):zoom(0.46)
 		end
 	},
-	LoadFont("Common Normal") .. {
-		Name = "Value",
+	LoadFont("MSD 20px") .. {
+		Name = "Sublevel",
 		InitCommand = function(self)
-			self:xy(57, 0):halign(0):valign(0):zoom(0.25):diffuse(mainText)
-			:maxwidth((panelW - 75) / 0.25)
+			self:halign(0.5):valign(0):xy(0, 19):zoom(0.24)
 		end
 	}
 }
