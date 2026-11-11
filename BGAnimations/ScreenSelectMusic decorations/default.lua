@@ -3095,4 +3095,61 @@ root[#root + 1] = Def.ActorFrame {
 
 t[#t + 1] = LoadActor("netplay.lua")
 
+-- Native Reform estimate from the selected chart's Etterna skillset MSDs.
+root[#root + 1] = Def.ActorFrame {
+	Name = "ReformDanEstimate",
+	InitCommand = function(self)
+		self:xy(panelX + 16, msdY + 43)
+	end,
+	OnCommand = function(self) self:playcommand("Set") end,
+	SetCommand = function(self)
+		local data = HV.CurrentSongData or {}
+		local showMSD = ThemePrefs.Get("HV_ShowMSD") == "true" or ThemePrefs.Get("HV_ShowMSD") == true
+		local estimate = data.song and data.steps and HV.EstimateReformFromMSDs
+			and HV.EstimateReformFromMSDs(data.skillsetMSDs)
+		self:visible(showMSD and estimate ~= nil)
+		local label = self:GetChild("Label")
+		local value = self:GetChild("Value")
+		if not estimate then
+			value:settext("")
+			return
+		end
+
+		label:settext("REFORM")
+		local danName = tonumber(estimate.dan:match("^(%d+)"))
+		if danName then
+			danName = estimate.dan .. " Dan"
+		else
+			danName = estimate.dan
+		end
+		local roleNames = {jack = "JACK", speed = "SPEED", tech = "TECH", stamina = "STAMINA"}
+		value:settext(string.format("%s  %s  |  DP %.2f  |  %s  |  %d%%",
+			danName, estimate.sublevel, estimate.dp, roleNames[estimate.role] or estimate.role:upper(),
+			math.floor(estimate.confidence * 100 + 0.5)))
+	end,
+	DelayedChartUpdateMessageCommand = function(self) self:playcommand("Set") end,
+	InstantChartUpdateMessageCommand = function(self) self:playcommand("Set") end,
+	CurrentRateChangedMessageCommand = function(self) self:playcommand("Set") end,
+	CurrentSongChangedMessageCommand = function(self) self:playcommand("Set") end,
+	CurrentStepsChangedMessageCommand = function(self) self:playcommand("Set") end,
+	MSDModeChangedMessageCommand = function(self) self:playcommand("Set") end,
+	ThemePrefChangedMessageCommand = function(self, params)
+		if not params or params.Name == "HV_ShowMSD" then self:playcommand("Set") end
+	end,
+
+	LoadFont("Common Normal") .. {
+		Name = "Label",
+		InitCommand = function(self)
+			self:halign(0):valign(0):zoom(0.27):diffuse(accentColor)
+		end
+	},
+	LoadFont("Common Normal") .. {
+		Name = "Value",
+		InitCommand = function(self)
+			self:xy(57, 0):halign(0):valign(0):zoom(0.25):diffuse(mainText)
+			:maxwidth((panelW - 75) / 0.25)
+		end
+	}
+}
+
 return root
