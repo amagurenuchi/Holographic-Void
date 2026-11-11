@@ -9,6 +9,12 @@ local tooltipActor
 local pointerActor
 local customCursorActor
 local clickWaveActor
+local isGameplay = screenName == "ScreenGameplay"
+local function isCustomizationEnabled()
+	return playerConfig
+		and playerConfig.get_data
+		and playerConfig:get_data(pn_to_profile_slot(PLAYER_1)).CustomizeGameplay
+end
 -- ScreenTextEntry has its own visual cursor, but it must not touch the shared
 -- BUTTON state.  Modal screens can inherit the caller's LoadingScreen value,
 -- so resetting here would clear the caller's hover/cursor state.
@@ -82,6 +88,13 @@ local function refreshAfterModalPop(self)
 end
 
 local function cursorCheck()
+	local gameplayCursorAllowed = not isGameplay or GAMESTATE:IsPracticeMode() or isCustomizationEnabled()
+	if customCursorActor then customCursorActor:visible(false) end
+	if pointerActor then pointerActor:visible(false) end
+	if not gameplayCursorAllowed then
+		TOOLTIP:HidePointer()
+		return
+	end
 	-- Show custom cursor in fullscreen (system cursor hidden)
 	-- In windowed mode, the system cursor is visible so hide ours
 	if not PREFSMAN:GetPreference("Windowed") and not PREFSMAN:GetPreference("FullscreenIsBorderlessWindow") then
@@ -150,6 +163,8 @@ local t = Def.ActorFrame {
 	ReloadedScriptsMessageCommand = function(self)
 		cursorCheck()
 	end,
+	PracticeModeReloadMessageCommand = function(self) cursorCheck() end,
+	PracticeModeResetMessageCommand = function(self) cursorCheck() end,
 }
 
 -- Create tooltip + pointer + click wave actors from the _fallback system.
