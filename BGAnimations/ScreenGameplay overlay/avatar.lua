@@ -49,6 +49,12 @@ local function getCachedChartEstimate(steps, rate)
 	if type(entry) ~= "table" then
 		entry = chartRatingCache["isor-dp-v1|" .. chartKey .. "|" .. rateKey]
 	end
+	if type(entry) ~= "table" and HV.CurrentSongData then
+		local data = HV.CurrentSongData
+		local currentKey = data.steps and data.steps.GetChartKey and tostring(data.steps:GetChartKey())
+		if currentKey == chartKey and math.abs((tonumber(data.rate) or tonumber(rate) or 1) - (tonumber(rate) or 1)) < 0.0005
+			and type(data.isorEstimate) == "table" then entry = data.isorEstimate end
+	end
 	if type(entry) ~= "table" or type(entry.dan) ~= "string" or type(entry.dp) ~= "number" then return nil end
 	return entry
 end
@@ -257,7 +263,6 @@ local t = Def.ActorFrame {
 			end
 			self.hvRatingPages = pages
 			self.hvRatingPage = 1
-			self.hvRatingElapsed = 0
 			local showRating = HV.ShowMSD() and (meter > 0 or entry ~= nil)
 			self:visible(showRating)
 			if showRating then
