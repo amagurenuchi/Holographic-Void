@@ -57,12 +57,21 @@ end
 function HV.ISORStructuralFeatures(events, keyCount, drainSeconds, bpm)
 	if type(events) ~= "table" or #events == 0 or tonumber(keyCount) ~= 4 then return nil end
 	local rows, colTimes, noteTimes, colCounts = {}, {}, {}, {}
+	local rowTimes = {}
 	for _, e in ipairs(events) do
 		local t, c = tonumber(e.time), tonumber(e.column)
 		if t and c and c >= 1 and c <= 4 then
-			local row = rows[t] or {time = t, columns = {}}
+			-- Dan-Overlay's parser coalesces note heads within a 2 ms row
+			-- tolerance. Etterna can report slightly different elapsed times
+			-- for heads that belong to the same chart row, so mirror that rule.
+			local rowTime = rowTimes[#rowTimes]
+			if not rowTime or math.abs(t - rowTime) > 2 then
+				rowTime = t
+				rowTimes[#rowTimes + 1] = rowTime
+				rows[rowTime] = {time = rowTime, columns = {}}
+			end
+			local row = rows[rowTime]
 			row.columns[#row.columns + 1] = c
-			rows[t] = row
 			noteTimes[#noteTimes + 1] = t
 			colCounts[c] = (colCounts[c] or 0) + 1
 			colTimes[c] = colTimes[c] or {}
@@ -605,6 +614,87 @@ function HV.ISORClassifyFamily(sunny, features, noteCount)
 	local familyScore = scores[family] or top
 	if family ~= "tech" and family ~= "jack" and timing > 0.4 and jackDensity > 0.08 and chord > 0.15 and chord < 0.55 and purity > 0.40 and purity < 0.85 and scoreTech > familyScore * 0.75 then family, confidence = "tech", math.max(confidence, 0.35) end
 	return {family = family, confidence = math.floor(confidence * 1000 + 0.5) / 1000, scores = scores}
+end
+
+-- Upstream uses its parsed rhythm-profile classifier below 7 SR, then falls
+-- back to the Sunny/feature classifier when parsed confidence is under 0.10.
+-- ISOR is calibrated for 4K rice, so this port focuses on its rice textures
+-- (linear streams, chord flow, anchors, and trills); LN-only profile types are
+-- intentionally not synthesized from Etterna hold-head/endTime records.
+function HV.ISORClassifyParsedFamily(events, bpm, drainSeconds)
+	if type(events) ~= "table" or #events < 5 then return nil end
+	local rows, lastRowTime = {}, nil
+	for _, event in ipairs(events) do
+		local t, c = tonumber(event.time), tonumber(event.column)
+		if t and c and c >= 1 and c <= 4 then
+			if not lastRowTime or t - lastRowTime > 2 then
+				lastRowTime = t
+				rows[#rows + 1] = {time = t, cols = {}}
+			end
+			rows[#rows].cols[c] = true
+		end
+	end
+	if #rows < 6 then return nil end
+	local frames, previousCols = {}, rows[1].cols
+	for i = 2, #rows do
+		local cols, count, jacks = {}, 0, 0
+		for c = 1, 4 do
+			if rows[i].cols[c] then
+				cols[#cols + 1] = c
+				count = count + 1
+				if previousCols and previousCols[c] then jacks = jacks + 1 end
+			end
+		end
+		frames[#frames + 1] = {time = rows[i].time, cols = cols, count = count, jacks = jacks,
+			gap = rows[i].time - rows[i - 1].time}
+		previousCols = rows[i].cols
+	end
+	local scores = {stream = 0, speed = 0, jack = 0, tech = 0, stamina = 0}
+	local hits = 0
+	local function add(family, first, last, weight)
+		local duration = math.max(1, (frames[math.min(last, #frames)].time - frames[first].time) / 1000)
+		local localBpm = tonumber(bpm) or 0
+		if localBpm <= 0 then localBpm = 60000 / math.max(1, frames[first].gap * 4) end
+		scores[family] = scores[family] + duration * localBpm * weight
+		hits = hits + 1
+	end
+	for i = 1, #frames do
+		if i + 4 <= #frames then
+			local a, b, c, d, e = frames[i], frames[i + 1], frames[i + 2], frames[i + 3], frames[i + 4]
+			if a.count == 1 and b.count == 1 and c.count == 1 and d.count == 1 and e.count == 1
+				and a.jacks == 0 and b.jacks == 0 and c.jacks == 0 and d.jacks == 0 and e.jacks == 0
+				and a.cols[1] ~= e.cols[1] then add("stream", i, i + 4, 1 / 3) end
+		end
+		if i + 3 <= #frames then
+			local a, b, c, d = frames[i], frames[i + 1], frames[i + 2], frames[i + 3]
+			if a.count > 1 and a.jacks == 0 and b.jacks == 0 and c.jacks == 0 and d.jacks == 0
+				and (b.count > 1 or c.count > 1 or d.count > 1) then
+				local family = (a.count >= 3 or b.count >= 3 or c.count >= 3 or d.count >= 3) and "stamina" or "speed"
+				add(family, i, i + 3, 0.65)
+			end
+		end
+		if frames[i].jacks > 1 and frames[i].gap * 4 < 2000 then add("jack", i, i, 0.90) end
+		if i + 3 <= #frames then
+			local a, b, c, d = frames[i], frames[i + 1], frames[i + 2], frames[i + 3]
+			if a.count == 1 and b.count == 1 and c.count == 1 and d.count == 1
+				and a.cols[1] == c.cols[1] and b.cols[1] == d.cols[1] and a.cols[1] ~= b.cols[1] then
+				add("tech", i, i + 3, 0.75)
+			end
+		end
+	end
+	if hits == 0 then return nil end
+	local ranked = {}
+	local total = 0
+	for family, score in pairs(scores) do total = total + score; ranked[#ranked + 1] = {family = family, score = score} end
+	table.sort(ranked, function(a, b) return a.score > b.score end)
+	if not ranked[1] or ranked[1].score <= 0 then return nil end
+	local family, top = ranked[1].family, ranked[1].score
+	local confidence = math.min(1, top / math.max(total, 1))
+	if (family == "stream" or family == "speed") and (tonumber(bpm) or 0) > 200 and (tonumber(drainSeconds) or 0) > 100 then
+		family = "stamina"
+	end
+	return {family = family, confidence = math.floor(confidence * 100 + 0.5) / 100,
+		scores = scores}
 end
 
 local ridgeStreamNames = {"speed", "hand", "jack", "chordjack", "tech", "stamina", "course"}

@@ -3223,7 +3223,7 @@ t[#t + 1] = Def.ActorFrame {
 			if isHovering and selectedData.steps then
 				local rate = tonumber(getCurRateValue()) or tonumber(selectedData.rate) or 1
 				local chartKey = selectedData.steps.GetChartKey and selectedData.steps:GetChartKey()
-				local diskKey = chartKey and chartRatingCacheKey("isor-dp-v2", chartKey, rate)
+				local diskKey = chartKey and chartRatingCacheKey("isor-dp-v4", chartKey, rate)
 				local estimate = selectedData.isorEstimate or (diskKey and persistentChartRatingCache[diskKey])
 				if estimate and type(estimate.dan) == "string" then
 					local mx, my = INPUTFILTER:GetMouseX(), INPUTFILTER:GetMouseY()
@@ -3277,55 +3277,86 @@ t[#t + 1] = Def.ActorFrame {
 		data.isorEstimate = nil
 		if rate <= 0 then rate = 1 end
 		local chartKey = data.steps and data.steps.GetChartKey and data.steps:GetChartKey()
-		local diskKey = chartKey and chartRatingCacheKey("isor-dp-v2", chartKey, rate)
-		local estimate = diskKey and persistentChartRatingCache[diskKey]
-		if type(estimate) ~= "table" or type(estimate.dp) ~= "number" or type(estimate.dan) ~= "string" then
-			estimate = nil
-		end
-		local chartEvents = not estimate and data.song and data.steps and getISORChartData(data.steps, rate)
-		if not estimate and chartEvents and HV.ISORChokeMetrics and HV.ISORStructuralFeatures then
-			local bpm = getISORBPM(data.song)
-			local choke = HV.ISORChokeMetrics(chartEvents.baseEvents, chartEvents.baseDuration)
-			local features = HV.ISORStructuralFeatures(chartEvents.baseEvents, chartEvents.keyCount, chartEvents.baseDuration, bpm)
-			local sunny = HV.CalculateSunnySR and HV.CalculateSunnySR(chartEvents.events, chartEvents.keyCount)
-			local ridgeBio = HV.ISORBioFeatures and HV.ISORBioFeatures(chartEvents.baseEvents)
-			if features then features.ridgeBio = ridgeBio end
-			local msdValues = data.skillsetMSDs or {}
-			local cachedMSDMatches = chartKey == data.skillsetMSDChartKey
-				and math.abs((tonumber(data.skillsetMSDRate) or -1) - rate) < 0.0005
-				and math.abs((tonumber(data.rate) or -1) - rate) < 0.0005
-			if not cachedMSDMatches then
-				msdValues = {}
-				for i = 1, 8 do
-					local ok, value = pcall(data.steps.GetMSD, data.steps, rate, i)
-					msdValues[i] = ok and (tonumber(value) or 0) or 0
+		local function calculateEstimateAtRate(targetRate)
+			local diskKey = chartKey and chartRatingCacheKey("isor-dp-v4", chartKey, targetRate)
+			local estimate = diskKey and persistentChartRatingCache[diskKey]
+			if type(estimate) ~= "table" or type(estimate.dp) ~= "number" or type(estimate.dan) ~= "string" then
+				estimate = nil
+			end
+			local chartEvents = not estimate and data.song and data.steps and getISORChartData(data.steps, targetRate)
+			if not estimate and chartEvents and HV.ISORChokeMetrics and HV.ISORStructuralFeatures then
+				local bpm = getISORBPM(data.song)
+				local choke = HV.ISORChokeMetrics(chartEvents.baseEvents, chartEvents.baseDuration)
+				local features = HV.ISORStructuralFeatures(chartEvents.baseEvents, chartEvents.keyCount, chartEvents.baseDuration, bpm)
+				local sunny = HV.CalculateSunnySR and HV.CalculateSunnySR(chartEvents.events, chartEvents.keyCount)
+				local ridgeBio = HV.ISORBioFeatures and HV.ISORBioFeatures(chartEvents.baseEvents)
+				if features then features.ridgeBio = ridgeBio end
+				local msdValues = {}
+				local cachedMSDMatches = chartKey == data.skillsetMSDChartKey
+					and math.abs((tonumber(data.skillsetMSDRate) or -1) - targetRate) < 0.0005
+					and math.abs((tonumber(data.rate) or -1) - targetRate) < 0.0005
+				if cachedMSDMatches then msdValues = data.skillsetMSDs or {} end
+				if not cachedMSDMatches then
+					for i = 1, 8 do
+						local ok, value = pcall(data.steps.GetMSD, data.steps, targetRate, i)
+						msdValues[i] = ok and (tonumber(value) or 0) or 0
+					end
+				end
+				local msds = {
+					overall = tonumber(msdValues[1]) or 0, stream = tonumber(msdValues[2]) or 0,
+					jumpstream = tonumber(msdValues[3]) or 0, handstream = tonumber(msdValues[4]) or 0,
+					stamina = tonumber(msdValues[5]) or 0, jackspeed = tonumber(msdValues[6]) or 0,
+					chordjack = tonumber(msdValues[7]) or 0, technical = tonumber(msdValues[8]) or 0,
+				}
+				local classification
+				if sunny and features then
+					if sunny.sr < 7 and HV.ISORClassifyParsedFamily then
+						classification = HV.ISORClassifyParsedFamily(chartEvents.baseEvents, bpm, chartEvents.baseDuration)
+					end
+					if not classification or (tonumber(classification.confidence) or 0) < 0.10 then
+						classification = HV.ISORClassifyFamily(sunny, features, #chartEvents.events)
+					end
+				end
+				local triang = sunny and features and choke and classification
+					and HV.ISORTriangulate(sunny.sr, sunny, choke, msds, classification.family, features)
+				local holdCount = 0
+				for _, event in ipairs(chartEvents.baseEvents) do if event.endTime and event.endTime > event.time then holdCount = holdCount + 1 end end
+				local subrank = triang and {
+					sk_key = triang.sk_key, dp_sr = triang.dp_sr, dp_choke = triang.dp_choke,
+					dp_msd = triang.dp_msd, mod_sr = triang.mod_sr, raw_sr = sunny.sr,
+					ti = features.timing_irregularity or 0, burst_ratio = choke.burst_ratio,
+					dur = chartEvents.baseDuration, quad = features.quad_ratio, hand = features.hand_ratio,
+					choke = choke.choke_10s_nps, msd_overall = msds.overall, bpm = bpm,
+				} or nil
+				estimate = triang and HV.ISORFinalizeDP(triang, features, msds, sunny,
+					features.stream_purity, subrank, holdCount / math.max(#chartEvents.baseEvents, 1),
+					classification.confidence)
+				if estimate and diskKey then
+					local saved = {dan = estimate.dan, sublevel = estimate.sublevel, dp = estimate.dp,
+						family = estimate.family, confidence = estimate.confidence}
+					storeChartRatingCache(diskKey, saved)
 				end
 			end
-			local msds = {
-				overall = tonumber(msdValues[1]) or 0, stream = tonumber(msdValues[2]) or 0,
-				jumpstream = tonumber(msdValues[3]) or 0, handstream = tonumber(msdValues[4]) or 0,
-				stamina = tonumber(msdValues[5]) or 0, jackspeed = tonumber(msdValues[6]) or 0,
-				chordjack = tonumber(msdValues[7]) or 0, technical = tonumber(msdValues[8]) or 0,
-			}
-			local classification = sunny and features and HV.ISORClassifyFamily(sunny, features, #chartEvents.events)
-			local triang = sunny and features and choke and classification
-				and HV.ISORTriangulate(sunny.sr, sunny, choke, msds, classification.family, features)
-			local holdCount = 0
-			for _, event in ipairs(chartEvents.baseEvents) do if event.endTime and event.endTime > event.time then holdCount = holdCount + 1 end end
-			local subrank = triang and {
-				sk_key = triang.sk_key, dp_sr = triang.dp_sr, dp_choke = triang.dp_choke,
-				dp_msd = triang.dp_msd, mod_sr = triang.mod_sr, raw_sr = sunny.sr,
-				ti = features.timing_irregularity or 0, burst_ratio = choke.burst_ratio,
-				dur = chartEvents.baseDuration, quad = features.quad_ratio, hand = features.hand_ratio,
-				choke = choke.choke_10s_nps, msd_overall = msds.overall, bpm = bpm,
-			} or nil
-			estimate = triang and HV.ISORFinalizeDP(triang, features, msds, sunny,
-				features.stream_purity, subrank, holdCount / math.max(#chartEvents.baseEvents, 1),
-				classification.confidence)
-			if estimate and diskKey then
-				local saved = {dan = estimate.dan, sublevel = estimate.sublevel, dp = estimate.dp,
-					family = estimate.family, confidence = estimate.confidence}
-				storeChartRatingCache(diskKey, saved)
+			return estimate
+		end
+		local estimate = data.song and data.steps and calculateEstimateAtRate(rate)
+		-- Match Dan-Overlay's custom-rate monotonicity floor. Native rates remain
+		-- untouched; custom rates are bounded by the nearest native-rate result.
+		if estimate and math.abs(rate - 0.75) >= 0.0005 and math.abs(rate - 1.0) >= 0.0005
+			and math.abs(rate - 1.5) >= 0.0005 then
+			local anchorRate
+			if rate > 0.75 then anchorRate = rate >= 1.5 and 1.5 or (rate >= 1.0 and 1.0 or 0.75)
+			else anchorRate = 0.75 end
+			local anchor = calculateEstimateAtRate(anchorRate)
+			if anchor and type(anchor.dp) == "number" then
+				estimate.dp = rate > 0.75 and math.max(estimate.dp, anchor.dp) or math.min(estimate.dp, anchor.dp)
+				local tier = clamp(math.floor(estimate.dp) - 1, 0, 19)
+				local frac = math.floor((estimate.dp - math.floor(estimate.dp)) * 100 + 0.5) / 100
+				estimate.dan = ({"1st", "2nd", "3rd", "4th", "5th", "6th", "7th", "8th", "9th", "10th", "Alpha", "Beta", "Gamma", "Delta", "Epsilon", "Zeta", "Eta", "Theta", "Iota", "Kappa"})[tier + 1]
+				estimate.sublevel = frac < 0.20 and "Low" or frac < 0.40 and "Mid-Low" or frac < 0.60 and "Mid" or frac < 0.80 and "Mid-High" or "High"
+				local diskKey = chartKey and chartRatingCacheKey("isor-dp-v4", chartKey, rate)
+				if diskKey then storeChartRatingCache(diskKey, {dan = estimate.dan, sublevel = estimate.sublevel,
+					dp = estimate.dp, family = estimate.family, confidence = estimate.confidence}) end
 			end
 		end
 		estimate = data.song and data.steps and estimate or nil
