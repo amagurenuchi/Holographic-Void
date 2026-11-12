@@ -18,6 +18,12 @@ local dimText = color("0.5,0.5,0.5,1")
 local fontZoom = 0.55
 local fontZoomSmall = 0.45
 
+local function formatDanName(dan)
+	if dan == "0" then return "Below 1st" end
+	if dan == "∞" or dan == "Infinity" then return "Infinity" end
+	return dan
+end
+
 -- Gameplay reads the final Dan estimate from Save; it does not run Sunny SR
 -- or ISOR. The existing direct MSD display remains unchanged.
 local chartRatingCache = {}
@@ -257,9 +263,9 @@ local t = Def.ActorFrame {
 				pages[#pages + 1] = {text = string.format("%5.2f", meter), color = HVColor.GetMSDRatingColor(meter)}
 			end
 			if entry then
-				local danName = entry.dan
+				local danName = formatDanName(entry.dan)
 				local sublevel = type(entry.sublevel) == "string" and entry.sublevel or ""
-				pages[#pages + 1] = {text = danName .. (sublevel ~= "" and (" " .. sublevel) or ""), color = HVColor.GetMSDRatingColor(tonumber(entry.dp) or 1)}
+				pages[#pages + 1] = {text = danName .. (sublevel ~= "" and (" " .. sublevel) or ""), color = (HV.GetReformDanColor and HV.GetReformDanColor(entry)) or HVColor.GetMSDRatingColor(tonumber(entry.dp) or 1)}
 			end
 			self.hvRatingPages = pages
 			self.hvRatingPage = 1

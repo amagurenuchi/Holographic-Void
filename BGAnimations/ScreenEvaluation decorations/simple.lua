@@ -13,6 +13,12 @@ local rightX = SCREEN_CENTER_X + 10
 local rightW = SCREEN_CENTER_X - 20
 local barWidth = rightW - pad * 2
 
+local function formatDanName(dan)
+	if dan == "0" then return "Below 1st" end
+	if dan == "∞" or dan == "Infinity" then return "Infinity" end
+	return dan
+end
+
 local accentColor = (HVColor and HVColor.Accent) or color("#5ABAFF")
 local brightText = color("1,1,1,1")
 local dimText = (HVColor and HVColor.TextDim) or color("0.4,0.4,0.4,1")
@@ -613,8 +619,8 @@ local t = Def.ActorFrame {
 							if dataKey == chartKey and math.abs((tonumber(data.rate) or rate) - rate) < 0.0005 then estimate = data.isorEstimate end
 						end
 						if type(estimate) == "table" and type(estimate.dan) == "string" then
-							local text = estimate.dan .. (type(estimate.sublevel) == "string" and (" " .. estimate.sublevel) or "")
-							self.hvRatingPages[#self.hvRatingPages + 1] = {text = text, color = HVColor.GetMSDRatingColor(tonumber(estimate.dp) or 1)}
+							local text = formatDanName(estimate.dan) .. (type(estimate.sublevel) == "string" and (" " .. estimate.sublevel) or "")
+							self.hvRatingPages[#self.hvRatingPages + 1] = {text = text, color = (HV.GetReformDanColor and HV.GetReformDanColor(estimate)) or HVColor.GetMSDRatingColor(tonumber(estimate.dp) or 1)}
 						end
 					end
 					if #self.hvRatingPages > 0 then

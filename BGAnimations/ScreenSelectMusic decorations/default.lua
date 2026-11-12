@@ -3114,6 +3114,8 @@ local function getDanDisplayData(estimate, currentAccent)
 	local whiteColor = color("1,1,1,1")
 
 	local danStr = tostring(estimate.dan)
+	if estimate.belowFirst or danStr == "0" then return "0", "", color("#808080") end
+	if estimate.aboveKappa or danStr == "∞" then return "∞", "", color("#404040") end
 	local num = tonumber(danStr:match("^(%d+)"))
 	local iconText = ""
 	local danColor = accent
@@ -3223,7 +3225,7 @@ t[#t + 1] = Def.ActorFrame {
 			if isHovering and selectedData.steps then
 				local rate = tonumber(getCurRateValue()) or tonumber(selectedData.rate) or 1
 				local chartKey = selectedData.steps.GetChartKey and selectedData.steps:GetChartKey()
-				local diskKey = chartKey and chartRatingCacheKey("isor-dp-v4", chartKey, rate)
+				local diskKey = chartKey and chartRatingCacheKey("isor-dp-v5", chartKey, rate)
 				local estimate = selectedData.isorEstimate or (diskKey and persistentChartRatingCache[diskKey])
 				if estimate and type(estimate.dan) == "string" then
 					local mx, my = INPUTFILTER:GetMouseX(), INPUTFILTER:GetMouseY()
@@ -3278,7 +3280,7 @@ t[#t + 1] = Def.ActorFrame {
 		if rate <= 0 then rate = 1 end
 		local chartKey = data.steps and data.steps.GetChartKey and data.steps:GetChartKey()
 		local function calculateEstimateAtRate(targetRate)
-			local diskKey = chartKey and chartRatingCacheKey("isor-dp-v4", chartKey, targetRate)
+			local diskKey = chartKey and chartRatingCacheKey("isor-dp-v5", chartKey, targetRate)
 			local estimate = diskKey and persistentChartRatingCache[diskKey]
 			if type(estimate) ~= "table" or type(estimate.dp) ~= "number" or type(estimate.dan) ~= "string" then
 				estimate = nil
@@ -3350,11 +3352,17 @@ t[#t + 1] = Def.ActorFrame {
 			local anchor = calculateEstimateAtRate(anchorRate)
 			if anchor and type(anchor.dp) == "number" then
 				estimate.dp = rate > 0.75 and math.max(estimate.dp, anchor.dp) or math.min(estimate.dp, anchor.dp)
-				local tier = clamp(math.floor(estimate.dp) - 1, 0, 19)
-				local frac = math.floor((estimate.dp - math.floor(estimate.dp)) * 100 + 0.5) / 100
-				estimate.dan = ({"1st", "2nd", "3rd", "4th", "5th", "6th", "7th", "8th", "9th", "10th", "Alpha", "Beta", "Gamma", "Delta", "Epsilon", "Zeta", "Eta", "Theta", "Iota", "Kappa"})[tier + 1]
-				estimate.sublevel = frac < 0.20 and "Low" or frac < 0.40 and "Mid-Low" or frac < 0.60 and "Mid" or frac < 0.80 and "Mid-High" or "High"
-				local diskKey = chartKey and chartRatingCacheKey("isor-dp-v4", chartKey, rate)
+				if estimate.dp < 1 then
+					estimate.dan, estimate.sublevel = "0", ""
+				elseif estimate.dp >= 21 then
+					estimate.dan, estimate.sublevel = "∞", ""
+				else
+					local tier = clamp(math.floor(estimate.dp) - 1, 0, 19)
+					local frac = math.floor((estimate.dp - math.floor(estimate.dp)) * 100 + 0.5) / 100
+					estimate.dan = ({"1st", "2nd", "3rd", "4th", "5th", "6th", "7th", "8th", "9th", "10th", "Alpha", "Beta", "Gamma", "Delta", "Epsilon", "Zeta", "Eta", "Theta", "Iota", "Kappa"})[tier + 1]
+					estimate.sublevel = frac < 0.20 and "Low" or frac < 0.40 and "Mid-Low" or frac < 0.60 and "Mid" or frac < 0.80 and "Mid-High" or "High"
+				end
+				local diskKey = chartKey and chartRatingCacheKey("isor-dp-v5", chartKey, rate)
 				if diskKey then storeChartRatingCache(diskKey, {dan = estimate.dan, sublevel = estimate.sublevel,
 					dp = estimate.dp, family = estimate.family, confidence = estimate.confidence}) end
 			end

@@ -769,13 +769,18 @@ function HV.ISORFinalizeDP(triang, features, msds, sunny, purity, sub, lnRatio, 
 	if (tonumber(lnRatio) or 0)<=0.18 and (base>=10.5 or base>=1.2) then
 		triang.dp,correction=HV.ISORApplyRidge(base,features,msds,sunny,purity,sub)
 	else triang.dp=base end
-	triang.dp=math.min(20.5,triang.dp)
 	triang.ridge_correction=correction
 	triang.dp=math.floor(triang.dp*100+0.5)/100
-	local index=clamp(math.floor(triang.dp)-1,0,#isorDanOrder-1)
-	local frac=math.floor((triang.dp-math.floor(triang.dp))*100+0.5)/100
-	triang.dan=isorDanOrder[index+1]
-	triang.sublevel=frac<0.20 and "Low" or frac<0.40 and "Mid-Low" or frac<0.60 and "Mid" or frac<0.80 and "Mid-High" or "High"
+	if triang.dp < 1 then
+		triang.dan, triang.sublevel = "0", ""
+	elseif triang.dp >= 21 then
+		triang.dan, triang.sublevel = "∞", ""
+	else
+		local index=clamp(math.floor(triang.dp)-1,0,#isorDanOrder-1)
+		local frac=math.floor((triang.dp-math.floor(triang.dp))*100+0.5)/100
+		triang.dan=isorDanOrder[index+1]
+		triang.sublevel=frac<0.20 and "Low" or frac<0.40 and "Mid-Low" or frac<0.60 and "Mid" or frac<0.80 and "Mid-High" or "High"
+	end
 	triang.confidence=tonumber(familyConfidence) or 0
 	return triang
 end

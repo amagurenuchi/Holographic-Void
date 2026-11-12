@@ -6,6 +6,14 @@
 
 HV = HV or {}
 
+function HV.GetReformDanColor(estimate)
+	if type(estimate) == "table" then
+		if estimate.belowFirst or estimate.dan == "0" then return color("#808080") end
+		if estimate.aboveKappa or estimate.dan == "∞" then return color("#404040") end
+	end
+	return nil
+end
+
 local danOrder = {
 	"1st", "2nd", "3rd", "4th", "5th", "6th", "7th", "8th", "9th", "10th",
 	"Alpha", "Beta", "Gamma", "Delta", "Epsilon", "Zeta", "Eta", "Theta", "Iota", "Kappa"
@@ -132,7 +140,12 @@ local function lookupRole(value, role)
 	end
 
 	local band = selected.band
-	local position = clamp(bandPosition(value, band[1], band[2], band[3]), 0, 1)
+	local position = bandPosition(value, band[1], band[2], band[3])
+	if selected.index == #bands and value > band[3] then
+		position = math.max(1, position)
+	else
+		position = clamp(position, 0, 1)
+	end
 	local confidence = bandConfidence(value, band[1], band[2], band[3])
 	if #containing == 0 then confidence = confidence * 0.5 end
 	confidence = confidence * anchorQuality(band[4], band[5], band[6])
@@ -245,6 +258,14 @@ function HV.EstimateReformFromMSDs(msds)
 
 	local primary = primaryRole(roleScores, estimates)
 	if not primary then return nil end
+	-- Keep values outside the calibrated Dan range visibly distinct from its
+	-- endpoint tiers. Use the primary role's outer anchors for this decision.
+	local primaryBands = thresholds[primary]
+	local primaryScore = roleScores[primary]
+	if primaryScore < primaryBands[1][1] then
+		return {dan = "0", dp = 0, position = 0, sublevel = "", role = primary,
+			confidence = 0, roleEstimates = estimates, belowFirst = true}
+	end
 	local primaryEstimate = estimates[primary]
 	local finalDan, finalPosition = primaryEstimate.dan, primaryEstimate.position
 	local groupDan = compositeDan(estimates)
@@ -260,7 +281,11 @@ function HV.EstimateReformFromMSDs(msds)
 		end
 	end
 	local confidence = round(agreeing / #roleOrder, 3)
-	local sublevel = finalPosition < 0.20 and "Low"
+	local dp = math.floor((1 + finalIndex + finalPosition) * 100 + 0.5) / 100
+	if dp >= 21 then
+		finalDan = "∞"
+	end
+	local sublevel = finalDan == "∞" and "" or finalPosition < 0.20 and "Low"
 		or finalPosition < 0.40 and "Mid-Low"
 		or finalPosition < 0.60 and "Mid"
 		or finalPosition < 0.80 and "Mid-High"
@@ -268,11 +293,12 @@ function HV.EstimateReformFromMSDs(msds)
 
 	return {
 		dan = finalDan,
-		dp = math.floor((1 + finalIndex + finalPosition) * 100 + 0.5) / 100,
+		dp = dp,
 		position = finalPosition,
 		sublevel = sublevel,
 		role = primary,
 		confidence = confidence,
-		roleEstimates = estimates
+		roleEstimates = estimates,
+		aboveKappa = finalDan == "∞"
 	}
 end

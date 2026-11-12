@@ -10,6 +10,12 @@ local steps = GAMESTATE:GetCurrentSteps()
 local pn = GAMESTATE:GetEnabledPlayers()[1]
 local profile = PROFILEMAN:GetProfile(pn)
 
+local function formatDanName(dan)
+	if dan == "0" then return "Below 1st" end
+	if dan == "∞" or dan == "Infinity" then return "Infinity" end
+	return dan
+end
+
 -- Autoplay results are not player scores.  Keep this local to the evaluation
 -- screen so autoplay can still be used normally during gameplay.
 local function isAutoplayEvaluation()
@@ -1744,8 +1750,8 @@ local function scoreBoard(pn)
 						end
 						local estimate = resolveCachedDan()
 						if estimate then
-							local text = estimate.dan .. (type(estimate.sublevel) == "string" and (" " .. estimate.sublevel) or "")
-							pages[#pages + 1] = {text = text, color = HVColor.GetMSDRatingColor(tonumber(estimate.dp) or msd)}
+							local text = formatDanName(estimate.dan) .. (type(estimate.sublevel) == "string" and (" " .. estimate.sublevel) or "")
+							pages[#pages + 1] = {text = text, color = (HV.GetReformDanColor and HV.GetReformDanColor(estimate)) or HVColor.GetMSDRatingColor(tonumber(estimate.dp) or msd)}
 						end
 						self.hvRatingPages = pages
 						self.hvRatingPage = 1
@@ -3326,8 +3332,8 @@ HV.GetSimpleEvaluationData = function()
 									local key = tostring(steps:GetChartKey()) .. "|" .. string.format("%.8f", getCurRateValue())
 									local estimate = cache["isor-dp-v2|" .. key] or cache["isor-dp-v1|" .. key]
 									if type(estimate) == "table" and type(estimate.dan) == "string" then
-										rating = estimate.dan .. (estimate.sublevel and (" " .. estimate.sublevel) or "")
-										ratingColor = HVColor.GetMSDRatingColor(tonumber(estimate.dp) or msd)
+										rating = formatDanName(estimate.dan) .. (estimate.sublevel and (" " .. estimate.sublevel) or "")
+										ratingColor = (HV.GetReformDanColor and HV.GetReformDanColor(estimate)) or HVColor.GetMSDRatingColor(tonumber(estimate.dp) or msd)
 									end
 								end
 							end
