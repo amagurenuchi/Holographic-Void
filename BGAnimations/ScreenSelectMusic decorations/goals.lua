@@ -156,11 +156,12 @@ local t = Def.ActorFrame {
 		InitCommand = function(self) self:xy(-overlayW/2 + 24, -overlayH/2 + 52) end,
 
 		LoadFont("Common Normal") .. { InitCommand = function(self) self:halign(0.5):x(45):zoom(0.35):diffuse(accentColor):settext(THEME:GetString("Goals", "PriorityColumn")) end },
-		LoadFont("Zpix Normal") .. { InitCommand = function(self) self:halign(0):x(85):zoom(0.4):diffuse(accentColor):settext(THEME:GetString("Goals", "SongColumn")) end },
-		LoadFont("Common Normal") .. { InitCommand = function(self) self:halign(0.5):x(385):zoom(0.35):diffuse(accentColor):settext(THEME:GetString("Goals", "RateColumn")) end },
-		LoadFont("Common Normal") .. { InitCommand = function(self) self:halign(0.5):x(465):zoom(0.35):diffuse(accentColor):settext(THEME:GetString("Goals", "TargetColumn")) end },
-		LoadFont("Common Normal") .. { InitCommand = function(self) self:halign(0.5):x(545):zoom(0.35):diffuse(accentColor):settext(THEME:GetString("Goals", "PBColumn") or "PB") end },
-		LoadFont("Common Normal") .. { InitCommand = function(self) self:halign(0.5):x(605):zoom(0.35):diffuse(accentColor):settext(THEME:GetString("Goals", "StatusColumn")) end },
+		LoadFont("Common Normal") .. { InitCommand = function(self) self:halign(0):x(85):zoom(0.4):diffuse(accentColor):settext(THEME:GetString("Goals", "SongColumn")) end },
+		LoadFont("Common Normal") .. { InitCommand = function(self) self:halign(0.5):x(395):zoom(0.35):diffuse(accentColor):settext("MSD") end },
+		LoadFont("Common Normal") .. { InitCommand = function(self) self:halign(0.5):x(445):zoom(0.35):diffuse(accentColor):settext(THEME:GetString("Goals", "RateColumn")) end },
+		LoadFont("Common Normal") .. { InitCommand = function(self) self:halign(0.5):x(500):zoom(0.35):diffuse(accentColor):settext(THEME:GetString("Goals", "TargetColumn")) end },
+		LoadFont("Common Normal") .. { InitCommand = function(self) self:halign(0.5):x(560):zoom(0.35):diffuse(accentColor):settext(THEME:GetString("Goals", "PBColumn") or "PB") end },
+		LoadFont("Common Normal") .. { InitCommand = function(self) self:halign(0.5):x(620):zoom(0.35):diffuse(accentColor):settext(THEME:GetString("Goals", "StatusColumn")) end },
 	},
 	Def.Quad {
 		InitCommand = function(self)
@@ -234,10 +235,10 @@ local function makeGoalRow(i)
 			Name = "SongDetails",
 			InitCommand = function(self) self:xy(85, rowH/2 - 2) end,
 			
-			LoadFont("Zpix Normal") .. {
+			LoadFont("Common Normal") .. {
 				Name = "SongName",
 				InitCommand = function(self)
-					self:halign(0):zoom(0.5):diffuse(brightText):maxwidth(280 / 0.5)
+					self:halign(0):zoom(0.5):diffuse(brightText):maxwidth(290 / 0.5)
 				end,
 				GoalTableRefreshCommand = function(self)
 					if sg then
@@ -247,13 +248,14 @@ local function makeGoalRow(i)
 				end,
 			},
 			LoadFont("MSD 20px") .. {
-				Name = "Diff",
-				InitCommand = function(self) self:halign(0):y(12):zoom(0.28) end,
+				Name = "MSD",
+				InitCommand = function(self) self:halign(0.5):x(310):y(0):zoom(0.32) end,
 				GoalTableRefreshCommand = function(self)
 					if sg and goalsteps then
-						local d = ToEnumShortString(goalsteps:GetDifficulty())
 						local msd = goalsteps:GetMSD(sg:GetRate(), 1)
-						self:settext(string.format("%s %.1f", d, msd)):diffuse(HVColor.Difficulty[d] or subText)
+						self:settext(string.format("%.2f", msd)):diffuse(HVColor.GetMSDRatingColor(msd))
+					else
+						self:settext("")
 					end
 				end,
 			},
@@ -262,7 +264,7 @@ local function makeGoalRow(i)
 		-- Rate
 		LoadFont("Common Normal") .. {
 			Name = "Rate",
-			InitCommand = function(self) self:halign(0.5):valign(0.5):x(385):y(rowH/2 - 2):zoom(0.42):diffuse(subText) end,
+			InitCommand = function(self) self:halign(0.5):valign(0.5):x(445):y(rowH/2 - 2):zoom(0.42):diffuse(subText) end,
 			GoalTableRefreshCommand = function(self)
 				if sg then self:settextf("%.2fx", sg:GetRate()) end
 			end,
@@ -271,7 +273,7 @@ local function makeGoalRow(i)
 		-- Target % (Granular)
 		LoadFont("Common Normal") .. {
 			Name = "Target",
-			InitCommand = function(self) self:halign(0.5):valign(0.5):x(465):y(rowH/2 - 2):zoom(0.4):diffuse(brightText) end,
+			InitCommand = function(self) self:halign(0.5):valign(0.5):x(500):y(rowH/2 - 2):zoom(0.4):diffuse(brightText) end,
 			GoalTableRefreshCommand = function(self)
 				if sg then self:settext(formatGoalPercent(sg:GetPercent())) end
 			end,
@@ -280,10 +282,28 @@ local function makeGoalRow(i)
 		-- PB
 		LoadFont("Common Normal") .. {
 			Name = "PB",
-			InitCommand = function(self) self:halign(0.5):valign(0.5):x(545):y(rowH/2 - 2):zoom(0.38) end,
+			InitCommand = function(self) self:halign(0.5):valign(0.5):x(560):y(rowH/2 - 2):zoom(0.38) end,
 			GoalTableRefreshCommand = function(self)
 				if sg then
-					local pb = sg:GetPBUpTo()
+					local pb
+					-- Only show a PB recorded at this goal's target rate.
+					if ck then
+						pcall(function()
+							local byRate = SCOREMAN:GetScoresByKey(ck)
+							local targetRate = tonumber(sg:GetRate()) or 1
+							for _, rateScores in pairs(byRate or {}) do
+								local scores = rateScores:GetScores()
+								for _, score in ipairs(scores or {}) do
+									local scoreRate = tonumber(score:GetMusicRate())
+									if scoreRate and math.abs(scoreRate - targetRate) < 0.001
+										and not IsScoreInvalid(score)
+										and (not pb or getJ4NormalizedPercentage(score) > getJ4NormalizedPercentage(pb)) then
+										pb = score
+									end
+								end
+							end
+						end)
+					end
 					if pb then
 						local pbc = pb:GetWifeScore() * 100
 						self:settextf("%.2f%%", pbc):diffuse(sg:IsAchieved() and color("0.4,1,0.4,1") or subText)
@@ -297,7 +317,7 @@ local function makeGoalRow(i)
 		-- Status Label (Moved left slightly)
 		LoadFont("Common Normal") .. {
 			Name = "Status",
-			InitCommand = function(self) self:halign(0.5):valign(0.5):x(605):y(rowH/2 - 2):zoom(0.35) end,
+			InitCommand = function(self) self:halign(0.5):valign(0.5):x(620):y(rowH/2 - 2):zoom(0.35) end,
 			GoalTableRefreshCommand = function(self)
 				if sg then
 					if sg:IsVacuous() then self:settext(THEME:GetString("Goals", "Vacuous")):diffuse(color("0.9,0.9,0.3,1"))

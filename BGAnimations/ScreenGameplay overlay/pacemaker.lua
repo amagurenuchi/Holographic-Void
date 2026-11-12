@@ -60,19 +60,18 @@ local function getScoreFinalWifePercent(score)
 end
 
 local function getGoalTrackerTargetWife()
-	local mode = ThemePrefs.Get("HV_PacemakerTargetType") or "Target"
+	local mode = ThemePrefs.Get("HV_GoalTargetType") or "Target"
 	if mode == "PB" or mode == "PBReplay" then
 		local best = GetDisplayScore()
 		if best then
 			return getScoreFinalWifePercent(best)
 		end
 	end
-	return tonumber(ThemePrefs.Get("HV_PacemakerTargetGoal")) or 93
+	return tonumber(ThemePrefs.Get("HV_GoalTarget")) or 93
 end
 
 -- Abort completely if disabled via ThemePrefs
-local showPacemakerGraph = ThemePrefs.Get("HV_ShowPacemakerGraph")
-if not showPacemakerGraph then
+if not ThemePrefs.Get("HV_ShowPacemakerGraph") then
 	return Def.ActorFrame {}
 end
 
@@ -270,7 +269,7 @@ local t = Def.ActorFrame {
 	end,
 	ThemePrefChangedMessageCommand = function(self, params)
 		if not params or not params.Name then return end
-		if params.Name == "HV_PacemakerTargetType" or params.Name == "HV_PacemakerTargetGoal" then
+		if params.Name == "HV_GoalTargetType" or params.Name == "HV_GoalTarget" then
 			self:queuecommand("RefreshTarget")
 		end
 	end,

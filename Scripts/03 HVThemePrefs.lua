@@ -46,16 +46,11 @@ end
 -- Resolve which section a preference belongs to
 local function ResolveTable(pref)
 	local name = GetThemeName()
-	if PrefsTable[name] and PrefsTable[name][pref] ~= nil then
+	if type(PrefsTable[name]) == "table" and PrefsTable[name][pref] ~= nil then
 		return PrefsTable[name]
 	end
-	if PrefsTable[FallbackTheme] and PrefsTable[FallbackTheme][pref] ~= nil then
+	if type(PrefsTable[FallbackTheme]) == "table" and PrefsTable[FallbackTheme][pref] ~= nil then
 		return PrefsTable[FallbackTheme]
-	end
-	for section, _ in pairs(PrefsTable) do
-		if PrefsTable[section][pref] ~= nil then
-			return PrefsTable[section]
-		end
 	end
 	return nil
 end
@@ -104,7 +99,7 @@ ThemePrefs = {
 			ThemePrefs.Load()
 		end
 		local section = GetThemeName()
-		PrefsTable[section] = PrefsTable[section] or {}
+		if type(PrefsTable[section]) ~= "table" then PrefsTable[section] = {} end
 		for k, tbl in pairs(prefs) do
 			PrefDefinitions[k] = tbl
 			if PrefsTable[section][k] == nil then
@@ -128,9 +123,9 @@ ThemePrefs = {
 		if FILEMAN:DoesFileExist(NewIniPath) then
 			if IniFile then
 				Trace("Holographic Void: Migrating settings from " .. NewIniPath)
-				PrefsTable = IniFile.ReadFile(NewIniPath)
+				local data = IniFile.ReadFile(NewIniPath)
+				PrefsTable = type(data) == "table" and data or {}
 				ThemePrefs.NeedsSaved = true
-				ThemePrefs.Save()
 				return true
 			end
 		end
@@ -139,9 +134,9 @@ ThemePrefs = {
 		if FILEMAN:DoesFileExist(OldIniPath) then
 			if IniFile then
 				Trace("Holographic Void: Migrating legacy settings from " .. OldIniPath)
-				PrefsTable = IniFile.ReadFile(OldIniPath)
+				local data = IniFile.ReadFile(OldIniPath)
+				PrefsTable = type(data) == "table" and data or {}
 				ThemePrefs.NeedsSaved = true
-				ThemePrefs.Save()
 				return true
 			end
 		end
@@ -190,11 +185,13 @@ ThemePrefs = {
 		return nil
 	end,
 	Set = function(name, value)
-		local tbl = ResolveTable(name)
-		if not tbl and PrefDefinitions[name] then
+		local tbl
+		if PrefDefinitions[name] then
 			local section = GetThemeName()
-			PrefsTable[section] = PrefsTable[section] or {}
+			if type(PrefsTable[section]) ~= "table" then PrefsTable[section] = {} end
 			tbl = PrefsTable[section]
+		else
+			tbl = ResolveTable(name)
 		end
 		if tbl then
 			tbl[name] = coerce_pref_value(name, value)
@@ -394,15 +391,15 @@ local HVPrefs = {
 		Values = {false, true}
 	},
 
-	-- Gameplay: Mini Pacemaker Target Type
-	HV_PacemakerTargetType = {
+	-- Gameplay: Mini Goal Target Type
+	HV_GoalTargetType = {
 		Default = "Target",
 		Choices = {"Target", "PB", "PB (Replay)"},
 		Values = {"Target", "PB", "PBReplay"}
 	},
 
-	-- Gameplay: Mini Pacemaker Target Goal (percentage)
-	HV_PacemakerTargetGoal = {
+	-- Gameplay: Mini Goal Target (percentage)
+	HV_GoalTarget = {
 		Default = 93,
 		Choices = {
 			"0%", "1%", "2%", "3%", "4%", "5%", "6%", "7%", "8%", "9%", "10%",
@@ -445,15 +442,8 @@ local HVPrefs = {
 		Values = {false, true}
 	},
 
-	-- Gameplay: Goal Tracker Text
-	HV_GoalTrackerText = {
-		Default = true,
-		Choices = {"Off", "On"},
-		Values = {false, true}
-	},
-
 	-- Gameplay: Toggle target tracker comparison
-	HV_ShowTargetTracker = { Default = false },
+	-- HV_ShowTargetTracker = { Default = false },
 
 	-- Visual: Background/Menu particles
 	HV_Particles = {
@@ -462,15 +452,15 @@ local HVPrefs = {
 		Values = {false, true}
 	},
 	
-	-- Gameplay: Show Hit Mean Display
-	HV_ShowHitMean = {
-		Default = "Mean",
-		Choices = {"Off", "Mean", "Tap Offset", "Std Dev", "J4 Score", "MA Ratio", "Delta Hand"},
-		Values = {"Off", "Mean", "TapOffset", "StdDev", "J4", "MARatio", "DeltaHand"}
-	},
+	-- Gameplay: Show Hit Mean Display (unused duplicate; disabled)
+	-- HV_ShowHitMean = {
+	-- 	Default = "Mean",
+	-- 	Choices = {"Off", "Mean", "Tap Offset", "Std Dev", "J4 Score", "MA Ratio", "Delta Hand"},
+	-- 	Values = {"Off", "Mean", "TapOffset", "StdDev", "J4", "MARatio", "DeltaHand"}
+	-- },
 	HV_MiniProgressBar = { Default = true, Choices = {"Off", "On"}, Values = {false, true} },
 
-	-- Gameplay: Show Hit Mean Display (Legacy compatibility)
+	-- Gameplay: Show Hit Mean Display
 	HV_ShowMean = {
 		Default = "Mean",
 		Choices = {"Off", "Mean", "Std Dev", "J4 Score", "MA Ratio", "Delta Hand"},
@@ -607,17 +597,16 @@ local HVPrefs = {
 		Values = {false, true}
 	},
 
-	-- Gameplay: Assist Mode (Off, Clap, Metronome, Both)
-	HV_AssistMode = {
-		Default = "Off",
-		Choices = {"Off", "Clap", "Metronome", "Both"},
-		Values = {"Off", "Clap", "Metronome", "Both"}
-	},
 	-- Gameplay: Minimalistic Mode
 	HV_MinimalisticMode = {
 		Default = false,
 		Choices = {"Off", "On"},
 		Values = {false, true}
+	},
+	HV_EvaluationScreenToggle = {
+		Default = "Classic",
+		Choices = {"Simple", "Classic"},
+		Values = {"Simple", "Classic"}
 	},
 
 	-- Gameplay: Judgment Tally Mode
@@ -914,23 +903,7 @@ function HV.ComboBreakHighlight()
 	return isTrue(ThemePrefs.Get("HV_ComboBreakHighlight"))
 end
 
---- Check if assist mode is enabled.
-function HV.AssistMode()
-	local val = ThemePrefs.Get("HV_AssistMode")
-	return val ~= "Off" and val ~= nil
-end
-
---- Get assist mode type.
-function HV.GetAssistMode()
-	return ThemePrefs.Get("HV_AssistMode") or "Off"
-end
-
---- Check if the full goal tracker graph should be shown.
-function HV.ShowGoalTrackerGraph()
-	return isTrue(ThemePrefs.Get("HV_ShowPacemakerGraph"))
-end
-
---- Check if goal tracker text should be shown.
+--- Check if the pacemaker and goal tracker should be shown.
 function HV.ShowGoalTrackerText()
 	return isTrue(ThemePrefs.Get("HV_ShowGoalTracker"))
 end

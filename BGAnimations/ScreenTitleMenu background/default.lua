@@ -88,16 +88,62 @@ local function getIntensitySpeed(base)
 end
 
 local function getSelectedGamemodeLabel()
-	local game = GAMESTATE:GetCurrentGame()
-	local gameName = (game and game:GetName() or "unknown"):upper()
 	local style = GAMESTATE:GetCurrentStyle()
-	if style and style.GetName then
-		local styleName = tostring(style:GetName() or ""):upper()
-		if styleName ~= "" then
-			return "Current Gamemode: " .. gameName .. " · " .. styleName
+	local game = GAMESTATE:GetCurrentGame()
+	if not style then return "4K" end
+
+	local columns
+	if style.GetColumnsPerPlayer then
+		local ok, count = pcall(function() return style:GetColumnsPerPlayer(PLAYER_1) end)
+		if ok then columns = tonumber(count) end
+	end
+	if (not columns or columns < 1) and style.GetStepsType then
+		local ok, stepsType = pcall(function() return tostring(style:GetStepsType() or ""):lower() end)
+		if ok then
+			local counts = {
+				dance_single = 4, dance_double = 8, dance_solo = 6, dance_threepanel = 3,
+				pump_single = 5, pump_halfdouble = 6, pump_double = 10, pump_couple = 10, pump_routine = 10,
+				ez2_single = 5, ez2_double = 10, kb4 = 4, kb7 = 7,
+				techno_single4 = 4, techno_single5 = 5, techno_double4 = 8, techno_double5 = 10,
+			}
+			local key = stepsType:gsub("^stepstype_", ""):gsub("_oneplayer", "")
+			columns = counts[key]
 		end
 	end
-	return "Current Gamemode: " .. gameName
+	if (not columns or columns < 1) and style.GetName then
+		local ok, name = pcall(function() return tostring(style:GetName() or "") end)
+		if ok then
+			local styleName = name:lower():gsub("[%s%-]+", "_")
+			local gameName = game and game:GetName() and game:GetName():lower():gsub("[%s%-]+", "_") or ""
+			local suffixCounts = {
+				dance = { single = 4, double = 8, solo = 6, couple = 8, routine = 8 },
+				pump = { single = 5, halfdouble = 6, double = 10, couple = 10, routine = 10 },
+				ez2 = { single = 5, double = 10 },
+				para = { single = 5 },
+				techno = { single4 = 4, single5 = 5, double4 = 8, double5 = 10, single = 4, double = 8 },
+			}
+			local gameKey
+			for _, candidate in ipairs({"dance", "pump", "ez2", "para", "techno"}) do
+				if gameName:find(candidate, 1, true) then gameKey = candidate break end
+			end
+			local counts = gameKey and suffixCounts[gameKey]
+			if counts then
+				local bestLength = 0
+				for styleKey, count in pairs(counts) do
+					if #styleKey > bestLength and styleName:find(styleKey, 1, true) then
+						columns = count
+						bestLength = #styleKey
+					end
+				end
+			end
+			local numericKeys = styleName:match("(%d+)%s*[kK]")
+				or styleName:match("kb(%d+)") or gameName:match("kb(%d+)")
+				or gameName:match("(%d+)_?key")
+			columns = columns or tonumber(numericKeys)
+		end
+	end
+	if columns and columns > 0 then return string.format("%dK", math.floor(columns + 0.5)) end
+	return "4K"
 end
 
 -- Hitbox Constants
@@ -107,21 +153,38 @@ local pBtnCX = (SCREEN_RIGHT - 10) - pBtnW/2
 local pBtnCY = 10 + pBtnH/2
 local maxCompactProfiles = 4
 local compactRowH = 40
+local profileScrollOffset = 0
+local function getOnlineProfileY()
+	local visibleRows = math.min(maxCompactProfiles, math.max(0, PROFILEMAN:GetNumLocalProfiles() - 1))
+	return SCREEN_TOP + pBtnCY + pBtnH / 2 + 16 + visibleRows * (compactRowH + 2) + compactRowH / 2
+end
+HV.ScrollTitleProfilesAtMouse = function(x, y, step)
+	local listTop = pBtnCY + pBtnH / 2
+	local listBottom = listTop + 4 + maxCompactProfiles * (compactRowH + 2)
+	if x < SCREEN_RIGHT - pBtnW - 10 or x > SCREEN_RIGHT - 10 or y < listTop or y > listBottom then
+		return false
+	end
+	local maxOffset = math.max(0, PROFILEMAN:GetNumLocalProfiles() - 1 - maxCompactProfiles)
+	if maxOffset == 0 then return false end
+	profileScrollOffset = math.max(0, math.min(maxOffset, profileScrollOffset + step))
+	return true
+end
 
 -- Media Player Constants
-local mpBarH = 40
+local mpBarH = 48
 local mpBarY = SCREEN_BOTTOM - mpBarH/2
 local mpBtnSize = 24
-local mpPrevX = SCREEN_LEFT + 28
-local mpPlayX = SCREEN_LEFT + 60
-local mpNextX = SCREEN_LEFT + 92
+local mpPrevX = SCREEN_LEFT + 22
+local mpPlayX = SCREEN_LEFT + 50
+local mpNextX = SCREEN_LEFT + 78
 local mpBtnY = mpBarY
 local mpPlayPath = THEME:GetPathG("", "mp_play")
 local mpPausePath = THEME:GetPathG("", "mp_pause")
 local mpPrevPath = THEME:GetPathG("", "mp_prev")
 local mpNextPath = THEME:GetPathG("", "mp_next")
-local vizH = 32
-local vizY = mpBarY - (mpBarH / 2)
+local vizH = SCREEN_HEIGHT * 0.35
+local vizY = SCREEN_BOTTOM
+local jukeboxPause
 
 local t = Def.ActorFrame {
 	InitCommand = function(self)
@@ -131,6 +194,7 @@ local t = Def.ActorFrame {
 			if screen then
 				local sName = screen:GetName()
 				local isSelect = sName == "ScreenSelectProfile"
+				if isSelect and jukeboxPause then jukeboxPause() end
 				local prof = af:GetChild("ProfileChip")
 				local online = af:GetChild("OnlineProfileChip")
 				local mp = af:GetChild("MediaPlayer")
@@ -164,21 +228,25 @@ local t = Def.ActorFrame {
 			local hovered = nil
 			local choiceNames = {"Start", "Multi", "ColorTheme", "PackDownloader", "Options", "Quit"}
 			for i = 1, #choiceNames do
-				local static_iy = SCREEN_CENTER_Y + 40 * (i - ((#choiceNames + 1) / 2))
-				if virtualX >= SCREEN_CENTER_X-150 and virtualX <= SCREEN_CENTER_X+150 
-				   and virtualY >= static_iy-20 and virtualY <= static_iy+20 then
+				local static_iy = SCREEN_CENTER_Y + 32 * (i - ((#choiceNames + 1) / 2))
+				if virtualX >= SCREEN_LEFT + 36 and virtualX <= SCREEN_LEFT + 396
+				   and virtualY >= static_iy-16 and virtualY <= static_iy+16 then
 					hovered = i break
 				end
 			end
 
-			-- Selection Glow
-			local selGlow = af:GetChild("SelectionGlow")
-			if selGlow then
+			-- Center-out underline follows the hovered menu row.
+			local hoverLine = af:GetChild("HoverLine")
+			if hoverLine and hovered ~= HV.TitleState.mouse.lastHovered then
 				if hovered then
-					local selY = SCREEN_CENTER_Y + 40 * (hovered - ((#choiceNames + 1) / 2))
-					selGlow:stoptweening():linear(0.05):y(selY):diffusealpha(isGlowEnabled and 0.4 or 0)
+					local selY = SCREEN_CENTER_Y + 32 * (hovered - ((#choiceNames + 1) / 2)) + 12
+					local label = af:GetChild("ChoiceLabel" .. hovered)
+					local lineWidth = label and label:GetZoomedWidth() or 0
+					local lineX = label and (label:GetX() + lineWidth / 2) or (SCREEN_LEFT + 52)
+					hoverLine:stoptweening():xy(lineX, selY):zoomto(0, 2):diffusealpha(0.75)
+						:decelerate(0.35):zoomto(lineWidth, 2)
 				else
-					selGlow:stoptweening():linear(0.1):diffusealpha(0)
+					hoverLine:stoptweening():accelerate(0.18):zoomto(0, 1):diffusealpha(0)
 				end
 			end
 
@@ -224,6 +292,19 @@ local t = Def.ActorFrame {
 	end,
 	-- ... (rest of the system commands)
 	BeginCommand = function(self)
+		local screen = SCREENMAN:GetTopScreen()
+		if screen then
+			screen:AddInputCallback(function(event)
+				local button = event.DeviceInput and event.DeviceInput.button
+				if event.DeviceInput and
+					(button == "DeviceButton_mousewheel up" or button == "DeviceButton_mousewheel down") then
+					local mx, my = INPUTFILTER:GetMouseX(), INPUTFILTER:GetMouseY()
+					local step = button == "DeviceButton_mousewheel down" and 1 or -1
+					if HV.ScrollTitleProfilesAtMouse(mx, my, step) then return true end
+				end
+				return false
+			end)
+		end
 		if not DLMAN:IsLoggedIn() then
 			local user = ThemePrefs.Get("HV_Username")
 			local token = ThemePrefs.Get("HV_PasswordToken")
@@ -233,6 +314,7 @@ local t = Def.ActorFrame {
 		end
 	end,
 	EndCommand = function(self)
+		if jukeboxPause then jukeboxPause() end
 		SCREENMAN:set_input_redirected(PLAYER_1, false)
 		SCREENMAN:set_input_redirected(PLAYER_2, false)
 		-- Clear song history on screen exit
@@ -303,6 +385,42 @@ local t = Def.ActorFrame {
 	end
 }
 
+-- Shared service-screen image backdrop with the same mouse parallax.
+local parallaxZoom = 1.06
+local parallaxX = 20
+local parallaxY = 12
+local sharedBgActor
+t[#t + 1] = LoadActor(THEME:GetPathG("", "background.jpg")) .. {
+	InitCommand = function(self)
+		sharedBgActor = self
+		self:Center():zoomto(SCREEN_WIDTH * parallaxZoom, SCREEN_HEIGHT * parallaxZoom)
+		self.hv_curX, self.hv_targetX = SCREEN_CENTER_X, SCREEN_CENTER_X
+		self.hv_curY, self.hv_targetY = SCREEN_CENTER_Y, SCREEN_CENTER_Y
+	end
+}
+t[#t + 1] = Def.ActorFrame {
+	OnCommand = function(self)
+		self:SetUpdateFunction(function()
+			if not sharedBgActor then return end
+			if HV and HV.ParallaxEnabled and HV.ParallaxEnabled() then
+				local mx = INPUTFILTER:GetMouseX() or SCREEN_CENTER_X
+				local my = INPUTFILTER:GetMouseY() or SCREEN_CENTER_Y
+				sharedBgActor.hv_targetX = SCREEN_CENTER_X + (((mx / SCREEN_WIDTH) - 0.5) * 2 * parallaxX)
+				sharedBgActor.hv_targetY = SCREEN_CENTER_Y + (((my / SCREEN_HEIGHT) - 0.5) * 2 * parallaxY)
+			else
+				sharedBgActor.hv_targetX, sharedBgActor.hv_targetY = SCREEN_CENTER_X, SCREEN_CENTER_Y
+			end
+			sharedBgActor.hv_curX = sharedBgActor.hv_curX + (sharedBgActor.hv_targetX - sharedBgActor.hv_curX) * 0.16
+			sharedBgActor.hv_curY = sharedBgActor.hv_curY + (sharedBgActor.hv_targetY - sharedBgActor.hv_curY) * 0.16
+			sharedBgActor:xy(sharedBgActor.hv_curX, sharedBgActor.hv_curY)
+		end)
+	end
+}
+t[#t + 1] = Def.Quad {
+	InitCommand = function(self)
+		self:Center():zoomto(SCREEN_WIDTH, SCREEN_HEIGHT):diffuse(color("0.08,0.08,0.08,0.8"))
+	end
+}
 
 -- Jukebox Helper Functions
 local function jukeboxPlaySong(song)
@@ -329,7 +447,7 @@ local function canTogglePlayback()
 	return true
 end
 
-local function jukeboxPause()
+jukeboxPause = function()
 	local p = HV.TitleState.player
 	if p.paused or not p.song then return end
 	p.offset = p.offset + (GetTimeSinceStart() - p.lastStart)
@@ -423,9 +541,9 @@ local bgEffectsFrame = Def.ActorFrame {
 		if bgEffect == "None" then alpha = 0 end
 		self:finishtweening():diffusealpha(alpha)
 		
-		local selGlow = self:GetChild("SelectionGlow")
-		if selGlow then
-			selGlow:glow(accentColor):diffuse(accentColor)
+		local hoverLine = self:GetChild("HoverLine")
+		if hoverLine then
+			hoverLine:diffuse(accentColor)
 		end
 
 		self:playcommand("UpdateAlpha")
@@ -436,21 +554,19 @@ local bgEffectsFrame = Def.ActorFrame {
 	end,
 }
 
-t[#t + 1] = Def.Quad {
-	Name = "SelectionGlow",
-	InitCommand = function(self) self:xy(SCREEN_CENTER_X, SCREEN_CENTER_Y):zoomto(300, 40):diffusealpha(0):fadetop(0.2):fadebottom(0.2) end
-}
-
 --- Title Menu Text Labels (Custom rendering to bypass engine scroller text issues)
 local choiceLabels = {"START", "MULTI", "COLOR THEME", "PACK DOWNLOADER", "OPTIONS", "EXIT"}
-local choiceKeys = {"Start", "Multi", "ColorTheme", "PackDownloader", "Options", "Quit"}
+t[#t + 1] = Def.Quad {
+	Name = "HoverLine",
+	InitCommand = function(self) self:xy(SCREEN_LEFT + 52, SCREEN_CENTER_Y):zoomto(0, 2):diffuse(accentColor):diffusealpha(0) end
+}
 for i, label in ipairs(choiceLabels) do
-	local iy = SCREEN_CENTER_Y + 40 * (i - ((#choiceLabels + 1) / 2))
+	local iy = SCREEN_CENTER_Y + 32 * (i - ((#choiceLabels + 1) / 2))
 	t[#t + 1] = LoadFont("Common Normal") .. {
 		Name = "ChoiceLabel" .. i,
 		Text = label,
 		InitCommand = function(self)
-			self:xy(SCREEN_CENTER_X, iy):zoom(0.6):diffuse(color("0.5,0.5,0.5,1")):uppercase(true)
+			self:xy(SCREEN_LEFT + 52, iy):halign(0):zoom(0.6):diffuse(color("0.5,0.5,0.5,1")):uppercase(true)
 		end
 	}
 end
@@ -642,12 +758,12 @@ t[#t + 1] = Def.Quad {
 
 t[#t + 1] = Def.ActorFrame {
 	Name = "LogoContainer",
-	InitCommand=function(self) self:xy(SCREEN_CENTER_X, SCREEN_TOP+50) end,
+	InitCommand=function(self) self:xy(SCREEN_CENTER_X, SCREEN_CENTER_Y - 130) end,
 	-- Selected gamemode
 	LoadFont("Common Normal") .. {
 		Name = "GamemodeLabel",
 		InitCommand = function(self)
-			self:y(-24):zoom(0.4):diffuse(subText)
+			self:x(0):y(-24):halign(0):zoom(0.4):diffuse(subText)
 		end,
 		OnCommand = function(self)
 			self:playcommand("Set")
@@ -664,8 +780,9 @@ t[#t + 1] = Def.ActorFrame {
 	},
 	-- Persistent Glow Layer
 	LoadFont("Common Large") .. { 
+		Name="LogoGlow",
 		Text="HOLOGRAPHIC VOID", 
-		InitCommand=function(self) self:zoom(0.75):diffuse(accentColor):diffusealpha(0) end,
+		InitCommand=function(self) self:x(0):halign(0.5):zoom(0.75):diffuse(accentColor):diffusealpha(0) end,
 		RefreshCommand=function(self)
 			self:stopeffect():stoptweening()
 			if tostring(ThemePrefs.Get("HV_EnableGlow")) == "true" then
@@ -680,13 +797,26 @@ t[#t + 1] = Def.ActorFrame {
 	},
 	-- Main Text
 	LoadFont("Common Large") .. {
+		Name="LogoTitle",
 		Text="HOLOGRAPHIC VOID",
-		InitCommand=function(self) self:zoom(0.75):diffuse(brightText) end
+		InitCommand=function(self) self:x(0):halign(0.5):zoom(0.75):diffuse(brightText) end,
+		OnCommand=function(self)
+			local parent = self:GetParent()
+			local halfWidth = self:GetZoomedWidth() / 2
+			parent:x(SCREEN_LEFT + 52 + halfWidth)
+			local glow = parent:GetChild("LogoGlow")
+			if glow then glow:x(0) end
+			for _, childName in ipairs({"GamemodeLabel", "AuthorLabel"}) do
+				local child = parent:GetChild(childName)
+				if child then child:x(-halfWidth) end
+			end
+		end
 	},
 	-- Author Text
 	LoadFont("Common Normal") .. {
+		Name="AuthorLabel",
 		Text="by " .. themeAuthor,
-		InitCommand=function(self) self:y(25):zoom(0.4):diffuse(subText) end
+		InitCommand=function(self) self:x(0):y(25):halign(0):zoom(0.4):diffuse(subText) end
 	},
 }
 
@@ -699,10 +829,13 @@ t[#t + 1] = Def.ActorFrame {
 		af:GetChild("T"):settextf("%02d:%02d:%02d", Hour(), Minute(), Second())
 		
 		local srv = af:GetChild("S")
+		local srvDetail = af:GetChild("S2")
 		if IsNetSMOnline() then
-			srv:settext(THEME:GetString("ScreenTitleMenu", "Server") .. " · " .. (GetServerName() or THEME:GetString("ScreenTitleMenu", "Connected"))):diffuse(color("0.65,1,0.72,1"))
+			srv:settext(THEME:GetString("ScreenTitleMenu", "Server")):diffuse(subText)
+			srvDetail:settext(GetServerName() or THEME:GetString("ScreenTitleMenu", "Connected")):diffuse(color("0.65,1,0.72,1"))
 		else
-			srv:settext(THEME:GetString("ScreenTitleMenu", "Server") .. " · " .. THEME:GetString("ScreenTitleMenu", "Offline")):diffuse(dimText)
+			srv:settext(THEME:GetString("ScreenTitleMenu", "Server")):diffuse(dimText)
+			srvDetail:settext(THEME:GetString("ScreenTitleMenu", "Offline")):diffuse(dimText)
 		end
 
 		local alrm = af:GetChild("A")
@@ -725,15 +858,18 @@ t[#t + 1] = Def.ActorFrame {
 	end) end,
 	LoadFont("Common Normal") .. { Name="D", InitCommand=function(self) self:xy(SCREEN_LEFT+16, SCREEN_TOP+14):halign(0):zoom(0.5):diffuse(subText) end },
 	LoadFont("Common Normal") .. { Name="T", InitCommand=function(self) self:xy(SCREEN_LEFT+16, SCREEN_TOP+30):halign(0):zoom(0.35):diffuse(subText) end },
-	LoadFont("Common Normal") .. { Name="S", InitCommand=function(self) self:xy(SCREEN_LEFT+16, SCREEN_TOP+44):halign(0):zoom(0.3):diffuse(dimText) end },
-	LoadFont("Common Normal") .. { Name="A", InitCommand=function(self) self:xy(SCREEN_LEFT+16, SCREEN_TOP+58):halign(0):zoom(0.3):diffuse(dimText) end },
+	LoadFont("Common Normal") .. { Name="S", InitCommand=function(self) self:xy(SCREEN_RIGHT-16, SCREEN_BOTTOM-29):halign(1):zoom(0.3):diffuse(dimText) end },
+	LoadFont("Common Normal") .. { Name="S2", InitCommand=function(self) self:xy(SCREEN_RIGHT-16, SCREEN_BOTTOM-18):halign(1):zoom(0.3):diffuse(dimText) end },
+	LoadFont("Common Normal") .. { Name="A", InitCommand=function(self) self:xy(SCREEN_LEFT+16, SCREEN_TOP+44):halign(0):zoom(0.3):diffuse(dimText) end },
 	
 	-- Online Profile Display (Under Alarm)
-	Def.ActorFrame {
+	(function()
+	local onlineChip = Def.ActorFrame {
 		Name = "OnlineProfileChip",
 		InitCommand = function(self)
-			self:xy(SCREEN_LEFT + 16, SCREEN_TOP + 100):visible(false)
+			self:xy(SCREEN_RIGHT - pBtnW - 10, getOnlineProfileY()):visible(false)
 			self:SetUpdateFunction(function(af)
+				af:y(getOnlineProfileY())
 				local loggedIn = DLMAN:IsLoggedIn()
 				af:visible(loggedIn)
 				if not loggedIn then return end
@@ -756,7 +892,10 @@ t[#t + 1] = Def.ActorFrame {
 		
 		Def.Quad {
 			InitCommand = function(self)
-				self:halign(0):zoomto(pBtnW, compactRowH):diffuse(color("0.08,0.22,0.1,0.85")):diffuseleftedge(accentColor)
+				self:halign(0):zoomto(pBtnW, compactRowH)
+					:diffuse(color("0.08,0.22,0.1,0"))
+					:diffuseleftedge(color("0.12,0.42,0.2,0.9"))
+					:diffuserightedge(color("0.08,0.22,0.1,0"))
 			end
 		},
 		LoadFont("Common Normal") .. {
@@ -772,6 +911,31 @@ t[#t + 1] = Def.ActorFrame {
 			InitCommand = function(self) self:xy(72, 10):halign(0):zoom(0.45):diffuse(dimText) end
 		}
 	}
+	for i = 0, 23 do
+		local x = i * pBtnW / 24
+		local alpha = 0.45 * i / 23
+		for _, y in ipairs({-compactRowH / 2, compactRowH / 2}) do
+			local borderY = y
+			onlineChip[#onlineChip + 1] = Def.Quad {
+				InitCommand = function(self)
+					self:xy(x, borderY):halign(0):zoomto(pBtnW / 24 + 0.5, 1)
+						:diffuse(accentColor):diffusealpha(alpha)
+				end
+			}
+		end
+	end
+	onlineChip[#onlineChip + 1] = Def.Quad {
+		InitCommand = function(self)
+			self:halign(0):zoomto(1, compactRowH):diffuse(color("1,1,1,0")):diffusealpha(0)
+		end
+	}
+	onlineChip[#onlineChip + 1] = Def.Quad {
+		InitCommand = function(self)
+			self:x(pBtnW - 1):halign(0):zoomto(1, compactRowH):diffuse(accentColor):diffusealpha(0.45)
+		end
+	}
+	return onlineChip
+	end)(),
 }
 
 -- Profile chip (Top right) + Inline Profile List
@@ -797,6 +961,8 @@ t[#t + 1] = Def.ActorFrame {
 			local selIdx = HV.TitleState.selectedProfile or 0
 			-- Clamp selection
 			if selIdx >= numLocal then selIdx = 0; HV.TitleState.selectedProfile = 0 end
+			local maxScroll = math.max(0, numLocal - 1 - maxCompactProfiles)
+			profileScrollOffset = math.max(0, math.min(maxScroll, profileScrollOffset))
 
 			-- Main Chip: Always show local profile selected via TitleState
 			status:settext(THEME:GetString("ScreenTitleMenu", "Local")):diffuse(dimText)
@@ -839,7 +1005,7 @@ t[#t + 1] = Def.ActorFrame {
 						row:visible(false)
 					else
 						-- Map compact row index to profile index (skip selected)
-						local profileIdx = ci
+						local profileIdx = ci + profileScrollOffset
 						if profileIdx >= selIdx then profileIdx = profileIdx + 1 end
 						if profileIdx < numLocal then
 							row:visible(true)
@@ -980,7 +1146,7 @@ do
 			freqIntervals = audioVisualizer.multiplyIntervals(audioVisualizer.defaultIntervals, 4),
 			color = accentColor,
 			onBarUpdate = function(self)
-				self:diffuse(accentColor):diffusealpha(0.55)
+				self:diffuse(accentColor):diffusealpha(0.5)
 			end
 		}
 	end
@@ -988,18 +1154,12 @@ do
 	t[#t + 1] = Def.ActorFrame {
 		Name = "MediaVisualizer",
 		InitCommand = function(self)
-			self:xy(SCREEN_LEFT, vizY):draworder(-10000)
+			self:xy(SCREEN_LEFT, vizY):draworder(10000)
 		end,
-		Def.Quad {
-			InitCommand = function(self)
-				self:xy(SCREEN_WIDTH / 2, -vizH / 2):zoomto(SCREEN_WIDTH, vizH + 2)
-				self:diffuse(color("0.05,0.05,0.05,0.35"))
-			end
-		},
 		(visCore and (visCore .. {
 			Name = "VisualizerCore",
 			InitCommand = function(self)
-				self:draworder(-9999)
+				self:draworder(1)
 			end,
 			PlayStatusChangedMessageCommand = function(self)
 				local p = HV.TitleState.player
@@ -1020,6 +1180,11 @@ t[#t + 1] = Def.ActorFrame {
 		local lastStateKey = nil
 		self:SetUpdateFunction(function(af)
 			local p = HV.TitleState.player
+			-- Advance the jukebox when the current track reaches its known length.
+			if p.song and not p.paused and p.duration > 0 then
+				local elapsed = p.offset + (GetTimeSinceStart() - p.lastStart)
+				if elapsed >= p.duration then jukeboxNext() end
+			end
 			-- Update song text
 			local songTxt = af:GetChild("SongText")
 			if songTxt then
@@ -1038,10 +1203,10 @@ t[#t + 1] = Def.ActorFrame {
 			if timeTxt then
 				if p.song and not p.paused then
 					local elapsed = p.offset + (GetTimeSinceStart() - p.lastStart)
-					timeTxt:settext(SecondsToMSS(elapsed))
+					timeTxt:settext(SecondsToMSS(elapsed) .. " / " .. SecondsToMSS(p.duration))
 					timeTxt:diffuse(subText)
 				elseif p.song and p.offset then
-					timeTxt:settext(SecondsToMSS(p.offset))
+					timeTxt:settext(SecondsToMSS(p.offset) .. " / " .. SecondsToMSS(p.duration))
 					timeTxt:diffuse(dimText)
 				else
 					timeTxt:settext("-:--")
@@ -1057,7 +1222,7 @@ t[#t + 1] = Def.ActorFrame {
 						elapsed = p.offset + (GetTimeSinceStart() - p.lastStart)
 					end
 					local percent = math.max(0, math.min(1, elapsed / p.duration))
-					bar:zoomto(SCREEN_WIDTH * percent, 2)
+					bar:zoomto(220 * percent, 2)
 				else
 					bar:zoomto(0, 2)
 				end
@@ -1084,18 +1249,11 @@ t[#t + 1] = Def.ActorFrame {
 			end
 		end)
 	end,
-	-- Bar background
-	Def.Quad {
-		InitCommand = function(self)
-			self:xy(SCREEN_CENTER_X, mpBarY):zoomto(SCREEN_WIDTH, mpBarH)
-			self:diffuse(color("0.06,0.06,0.06,0.92"))
-		end
-	},
 	-- Top edge accent line (Progress Bar)
 	Def.Quad {
 		Name = "ProgressBar",
 		InitCommand = function(self)
-			self:xy(SCREEN_LEFT, mpBarY - mpBarH/2):halign(0):zoomto(0, 2)
+			self:xy(SCREEN_LEFT + 12, SCREEN_BOTTOM - 2):halign(0):zoomto(0, 2)
 			self:diffuse(accentColor):diffusealpha(0.6)
 		end
 	},
@@ -1146,8 +1304,8 @@ t[#t + 1] = Def.ActorFrame {
 		Name = "SongText",
 		Text = "NO TRACK",
 		InitCommand = function(self)
-			self:xy(SCREEN_LEFT + 120, mpBtnY):halign(0):zoom(0.35)
-			self:diffuse(dimText):maxwidth((SCREEN_WIDTH - 200) / 0.35)
+			self:xy(SCREEN_LEFT + 108, mpBarY - 7):halign(0):zoom(0.35)
+			self:diffuse(dimText):maxwidth(280 / 0.35)
 		end
 	},
 	-- Elapsed time
@@ -1155,7 +1313,7 @@ t[#t + 1] = Def.ActorFrame {
 		Name = "ElapsedTime",
 		Text = "-:--",
 		InitCommand = function(self)
-			self:xy(SCREEN_RIGHT - 16, mpBtnY):halign(1):zoom(0.3)
+			self:xy(SCREEN_LEFT + 108, mpBarY + 9):halign(0):zoom(0.28)
 			self:diffuse(dimText)
 		end
 	}
@@ -1169,7 +1327,7 @@ t[#t + 1] = Def.ActorFrame { Name="CB", OnCommand=function(self) self:diffusealp
 -- Standalone Effects Button (Bottom Right)
 t[#t + 1] = Def.ActorFrame {
 	Name = "EffectsButton",
-	InitCommand = function(self) self:xy(SCREEN_RIGHT - 20, SCREEN_BOTTOM - 60) end,
+	InitCommand = function(self) self:xy(SCREEN_RIGHT - 20, SCREEN_BOTTOM - 48) end,
 	
 	-- Toggleable Panel
 	Def.ActorFrame {
@@ -1276,7 +1434,7 @@ t[#t + 1] = Def.ActorFrame {
 -- Standalone Alarm Button (Bottom Left)
 t[#t + 1] = Def.ActorFrame {
 	Name = "AlarmButton",
-	InitCommand = function(self) self:xy(SCREEN_LEFT + 20, mpBarY - 60) end,
+	InitCommand = function(self) self:xy(SCREEN_LEFT + 20, SCREEN_BOTTOM - 50) end,
 	
 	-- Alarm Settings Panel
 	Def.ActorFrame {

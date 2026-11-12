@@ -71,6 +71,7 @@ end
 
 -- Function to select a score when clicked
 local function selectScore(idx)
+	if HV.EvaluationCompact then return end
 	if not hsTable[idx] then return end
 	selectedScoreIndex = idx
 	-- Set the score for viewing in the main eval screen

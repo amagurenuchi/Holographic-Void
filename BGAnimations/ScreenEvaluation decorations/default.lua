@@ -490,6 +490,33 @@ local function formatEvaluationPercent(pct)
 	return formatWifePercent(pct)
 end
 
+HV.AnimateEvaluationFloat = function(actor, target, updateDisplay, duration, startDelay, startProgress)
+	if not updateDisplay then return end
+	if not actor or type(actor.SetUpdateFunction) ~= "function" then
+		updateDisplay(target)
+		return
+	end
+	actor:SetUpdateFunction(nil)
+	duration = duration or 1
+	startProgress = math.max(0, math.min(1, startProgress or 0))
+	local function clockNow()
+		return (GetTimeSinceStart and GetTimeSinceStart()) or os.clock()
+	end
+	local startsAt = clockNow() + (startDelay or 0.35)
+	actor:SetUpdateFunction(function(self)
+		local remainingDuration = duration * (1 - startProgress)
+		local elapsed = math.max(0, clockNow() - startsAt)
+		local progress = remainingDuration > 0
+			and (startProgress + (1 - startProgress) * math.min(1, elapsed / remainingDuration)) or 1
+		local value = target * math.sin(progress * (math.pi / 2))
+		updateDisplay(value)
+		if progress >= 1 then
+			updateDisplay(target)
+			self:SetUpdateFunction(nil)
+		end
+	end)
+end
+
 -- osu!mania ScoreV1 long-form score, ported from Fatigue.
 -- This is deliberately separate from the 320-point accuracy rescore: osu!'s
 -- displayed score is normalized to 1,000,000 and includes combo bonus.
@@ -962,7 +989,19 @@ local function isOver(actor)
 	return mx >= x - w * ha and mx <= x + w * (1 - ha) and my >= y - h * va and my <= y + h * (1 - va)
 end
 
-local showGraphs = false
+HV.EvaluationCompact = ThemePrefs.Get("HV_EvaluationScreenToggle") == "Simple"
+HV.EvaluationShowGraphs = false
+
+function HV.ToggleEvaluationMode()
+	local screen = SCREENMAN:GetTopScreen()
+	if not screen then return end
+	local nextMode = ThemePrefs.Get("HV_EvaluationScreenToggle") == "Simple" and "Classic" or "Simple"
+	ThemePrefs.Set("HV_EvaluationScreenToggle", nextMode)
+	ThemePrefs.ForceSave()
+	HV.EvaluationModeRestartPending = true
+	screen:SetNextScreenName(screen:GetName())
+	screen:StartTransitioningScreen("SM_GoToNextScreen")
+end
 
 local t = Def.ActorFrame {
 	Name = "EvalDecorations",
@@ -1012,8 +1051,10 @@ local t = Def.ActorFrame {
 				return 
 			end
 
-			-- Only log once per screen entry AND only if we just came from gameplay
-				if not screen.HV_GradeCounted then
+			-- Restarting only to change evaluation mode must not count the score twice.
+			local modeRestart = HV.EvaluationModeRestartPending == true
+			HV.EvaluationModeRestartPending = false
+			if not modeRestart and not screen.HV_GradeCounted then
 				if not scoringVoided and HV.GameplaySessionValid and GRADECOUNTERSTORAGE and GRADECOUNTERSTORAGE.incrementSession then
 					GRADECOUNTERSTORAGE:incrementSession(pss:GetWifeGrade())
 					-- Clear the flag after a short delay to allow other actors (like XP display) to see it first
@@ -1090,7 +1131,7 @@ local function scoreBoard(pn)
 
 	local board = Def.ActorFrame {
 		InitCommand = function(self)
-			self:xy(frameX - 55, frameY):diffusealpha(0)
+			self:xy(frameX - 55, frameY):diffusealpha(0):visible(not HV.EvaluationCompact)
 		end,
 		OnCommand = function(self)
 			self:sleep(0.25):linear(0.4):x(frameX):diffusealpha(1)
@@ -1303,7 +1344,7 @@ local function scoreBoard(pn)
 
 				local receptorSize = tonumber(ThemePrefs.Get("HV_Mini")) or 100
 				if math.abs(receptorSize - 100) > 0.001 then
-				table.insert(active, "RS" .. math.round(receptorSize))
+				table.insert(active, math.round(receptorSize) .. "%")
 				end
 
 				self:GetChild("Separator"):visible(#active > 0)
@@ -1907,38 +1948,35 @@ local function scoreBoard(pn)
 			Name = "WifeScoreWrapper",
 			InitCommand = function(self) self:xy(110, 5) end,
 			OnCommand = function(self)
+				self:playcommand("AnimateScore", {startDelay = 0.35, startProgress = 0})
+			end,
+			AnimateScoreCommand = function(self, params)
 				local label = self:GetChild("WifeScoreLabel")
 				local wife = rescoredPercentage or (evaluationWifeScore() * 100)
-				-- Set the final value immediately as a fallback.  The animated update
-				-- below may not run on every evaluation screen lifecycle.
+				if usingCustomWindows and lastSnapshot and lastSnapshot.GetWifePercent then
+					local ok, value = pcall(lastSnapshot.GetWifePercent, lastSnapshot)
+					if ok and tonumber(value) then wife = tonumber(value) * 100 end
+				end
 				label:settext(formatEvaluationPercent(wife))
-				label:sleep(0.35):linear(0.15):diffusealpha(1)
-				
-				-- Incremental counting
-				local val = math.max(0, wife)
-				-- it is buggy idk why.
-				local duration = 0.3
-				local curTime = 0
-				local targetWife = wife
-				self:SetUpdateFunction(function(self, delta)
-					curTime = curTime + delta
-					local progress = math.min(1, curTime / duration)
-					local currentWifeDisplay = targetWife * math.sin(progress * (math.pi / 2)) -- Ease out Sine
-					label:settext(formatEvaluationPercent(currentWifeDisplay))
-					
-					if progress >= 1 then
-						self:SetUpdateFunction(nil)
-					end
-				end)
+				if params and params.startDelay and params.startDelay > 0 then
+					label:diffusealpha(0):sleep(params.startDelay):linear(0.15):diffusealpha(1)
+				else
+					label:stoptweening():diffusealpha(1)
+				end
+				HV.AnimateEvaluationFloat(self, wife, function(value)
+					label:settext(formatEvaluationPercent(value))
+				end, 1, params and params.startDelay or 0, params and params.startProgress or 0)
 			end,
-			ResetJudgeMessageCommand = function(self) 
-				self:SetUpdateFunction(nil)
-				self:playcommand("On") 
+			ResetJudgeMessageCommand = function(self)
+				self:playcommand("AnimateScore", {startDelay = 0, startProgress = 0.5})
 			end,
 			ManiaModeChangedMessageCommand = function(self)
-				self:SetUpdateFunction(nil)
-				self:playcommand("On")
+				self:playcommand("AnimateScore", {startDelay = 0, startProgress = 0.5})
 			end,
+			ToggleCustomWindowsMessageCommand = function(self) self:playcommand("AnimateScore", {startDelay = 0, startProgress = 0.5}) end,
+			LoadedCustomWindowMessageCommand = function(self) self:playcommand("AnimateScore", {startDelay = 0, startProgress = 0.5}) end,
+			UnloadedCustomWindowMessageCommand = function(self) self:playcommand("AnimateScore", {startDelay = 0, startProgress = 0.5}) end,
+			CustomWindowStateChangedMessageCommand = function(self) self:playcommand("AnimateScore", {startDelay = 0, startProgress = 0.5}) end,
 
 			LoadFont("Common Normal") .. {
 				Name = "J4WifeScoreLabel",
@@ -1975,7 +2013,7 @@ local function scoreBoard(pn)
 				InitCommand = function(self) self:halign(0):valign(0):xy(0,-3):zoom(0.72):diffuse(mainText):diffusealpha(0):glow(color("0,0,0,0")) end,
 				OnCommand = function(self)
 					local wife = rescoredPercentage or (evaluationWifeScore() * 100)
-					self:settext(formatEvaluationPercent(wife)):sleep(0.35):linear(0.15):diffusealpha(1)
+					self:settext(formatEvaluationPercent(wife))
 				end,
 				PerfectScoreGlowCommand = function(self) self:linear(0.45):glow(accentColor):linear(0.45):glow(color("0,0,0,0")):queuecommand("PerfectScoreGlow") end,
 				SetJudgeCommand = function(self)
@@ -2149,11 +2187,17 @@ local function scoreBoard(pn)
 			Name = "WifeDPDisplay",
 			InitCommand = function(self) self:xy(110, 45):diffusealpha(0):visible(not usingCustomWindows) end,
 			ManiaModeChangedMessageCommand = function(self)
-				self:visible(true)
-				self:playcommand("On")
+				self:playcommand("AnimateScore", {startDelay = 0, startProgress = 0.5})
 			end,
 			OnCommand = function(self)
-				if usingCustomWindows then self:visible(false); return end
+				self:playcommand("AnimateScore", {startDelay = 0.35, startProgress = 0})
+			end,
+			AnimateScoreCommand = function(self, params)
+				if usingCustomWindows then
+					self:SetUpdateFunction(nil)
+					self:visible(false)
+					return
+				end
 				self:visible(true)
 				local wholePart = self:GetChild("WholeDP")
 				local decimalPart = self:GetChild("DecimalDP")
@@ -2166,32 +2210,28 @@ local function scoreBoard(pn)
 				local dp = isManiaModeEnabled() and getOsuManiaLongScore() or customDP or ((displayPct / 100) * songMaxPoints)
 				local targetDP = dp
 
-				local duration = 0.3
-				local curTime = 0
-
-				self:stoptweening():sleep(0.4):linear(0.15):diffusealpha(1)
-				
-				self:SetUpdateFunction(function(self, delta)
-					curTime = curTime + delta
-					local progress = math.min(1, curTime / duration)
-					local currentDP = targetDP * math.sin(progress * (math.pi / 2))
+				if params and params.startDelay and params.startDelay > 0 then
+					self:diffusealpha(0):sleep(params.startDelay):linear(0.15):diffusealpha(1)
+				else
+					self:stoptweening():diffusealpha(1)
+				end
+				HV.AnimateEvaluationFloat(self, targetDP, function(currentDP)
 					if isManiaModeEnabled() then wholePart:settext(formatOsuManiaLongScore(currentDP + 0.5)); decimalPart:settext("")
 					else setDPTextActors(wholePart, decimalPart, currentDP, (displayPct >= 99) and 4 or 2) end
-					
-					if progress >= 1 then
-						self:SetUpdateFunction(nil)
-					end
-				end)
+				end, 1, params and params.startDelay or 0, params and params.startProgress or 0)
 			end,
 			SetJudgeCommand = function(self)
-				if HV.ManiaState and HV.ManiaState.enabled then self:playcommand("On") end
+				if HV.ManiaState and HV.ManiaState.enabled then
+					self:playcommand("AnimateScore", {startDelay = 0, startProgress = 0.5})
+				end
 			end,
-			CustomWindowStateChangedMessageCommand = function(self) self:playcommand("On") end,
-			LoadedCustomWindowMessageCommand = function(self) self:playcommand("On") end,
-			UnloadedCustomWindowMessageCommand = function(self) self:playcommand("On") end,
+			ToggleCustomWindowsMessageCommand = function(self) self:playcommand("AnimateScore", {startDelay = 0, startProgress = 0.5}) end,
+			CustomWindowStateChangedMessageCommand = function(self) self:playcommand("AnimateScore", {startDelay = 0, startProgress = 0.5}) end,
+			LoadedCustomWindowMessageCommand = function(self) self:playcommand("AnimateScore", {startDelay = 0, startProgress = 0.5}) end,
+			UnloadedCustomWindowMessageCommand = function(self) self:playcommand("AnimateScore", {startDelay = 0, startProgress = 0.5}) end,
 			ResetJudgeMessageCommand = function(self) 
 				self:SetUpdateFunction(nil)
-				self:playcommand("On") 
+				self:playcommand("AnimateScore", {startDelay = 0, startProgress = 0.5})
 			end,
 			
 			-- Whole part
@@ -2770,15 +2810,19 @@ local offsetPlotHeight = 160
 
 t[#t + 1] = Def.ActorFrame {
 	Name = "RightPanel",
-	InitCommand = function(self) self:x(rightX + 50):diffusealpha(0) end,
+	InitCommand = function(self) self:x(rightX + 50):diffusealpha(0):visible(not HV.EvaluationCompact) end,
 	OnCommand = function(self)
 		self:sleep(0.25):linear(0.4):x(rightX):diffusealpha(1)
 		SCREENMAN:GetTopScreen():AddInputCallback(scroller)
 		SCREENMAN:GetTopScreen():AddInputCallback(function(event)
 			if event.DeviceInput and event.type == "InputEventType_FirstPress" then
+				if event.DeviceInput.button == "DeviceButton_tab" then
+					HV.ToggleEvaluationMode()
+					return true
+				end
 				if event.DeviceInput.button == "DeviceButton_left mouse button" then
 					local mx, my = INPUTFILTER:GetMouseX(), INPUTFILTER:GetMouseY()
-					if not isOnlineEvaluation() and mx >= 22 and mx <= 267 and my >= SCREEN_HEIGHT - 52 and my <= SCREEN_HEIGHT - 18 then
+					if not HV.EvaluationCompact and not isOnlineEvaluation() and mx >= 22 and mx <= 267 and my >= SCREEN_HEIGHT - 52 and my <= SCREEN_HEIGHT - 18 then
 						editEvaluationScoreComment()
 						return true
 					end
@@ -2860,11 +2904,11 @@ t[#t + 1] = Def.ActorFrame {
 			self:xy(rightW, 22):zoomto(110, 24):halign(1):diffuse(accentColor):diffusealpha(0.2)
 		end,
 		UpdateToggleMessageCommand = function(self)
-			self:diffusealpha(showGraphs and 0.4 or 0.2)
+			self:diffusealpha(HV.EvaluationShowGraphs and 0.4 or 0.2)
 		end,
 		MouseLeftClickMessageCommand = function(self)
 			if isOver(self) then
-				showGraphs = not showGraphs
+				HV.EvaluationShowGraphs = not HV.EvaluationShowGraphs
 				MESSAGEMAN:Broadcast("ToggleGraphs")
 				MESSAGEMAN:Broadcast("UpdateToggle")
 			end
@@ -2881,8 +2925,8 @@ t[#t + 1] = Def.ActorFrame {
 	-- ============================================================
 	Def.ActorFrame {
 		Name = "Graphs",
-		InitCommand = function(self) self:xy(0, 40) self:visible(showGraphs) end,
-		ToggleGraphsMessageCommand = function(self) self:visible(showGraphs) end,
+		InitCommand = function(self) self:xy(0, 40) self:visible(HV.EvaluationShowGraphs and not HV.EvaluationCompact) end,
+		ToggleGraphsMessageCommand = function(self) self:visible(HV.EvaluationShowGraphs and not HV.EvaluationCompact) end,
 
 		-- Graph Area Label
 		LoadFont("Common Normal") .. {
@@ -3027,8 +3071,8 @@ t[#t + 1] = Def.ActorFrame {
 	-- ============================================================
 	Def.ActorFrame {
 		Name = "OffsetPlotWrapper",
-		InitCommand = function(self) self:xy(0, 50) self:visible(not showGraphs) end,
-		ToggleGraphsMessageCommand = function(self) self:visible(not showGraphs) end,
+		InitCommand = function(self) self:xy(0, 50) self:visible(not HV.EvaluationShowGraphs or HV.EvaluationCompact) end,
+		ToggleGraphsMessageCommand = function(self) self:visible(not HV.EvaluationShowGraphs or HV.EvaluationCompact) end,
 		
 		LoadActor(THEME:GetPathG("", "OffsetGraph")) .. {
 			InitCommand = function(self)
@@ -3095,7 +3139,7 @@ t[#t + 1] = Def.ActorFrame {
 -- ============================================================
 local scoreboardFrame = Def.ActorFrame {
 	Name = "ScoreboardContainer",
-	InitCommand = function(self) self:xy(rightX + 10, offsetPlotHeight + 110) end,
+	InitCommand = function(self) self:xy(rightX + 10, offsetPlotHeight + 110):visible(not HV.EvaluationCompact) end,
 }
 
 if inMulti then
@@ -3106,6 +3150,246 @@ end
 
 t[#t + 1] = scoreboardFrame
 t[#t + 1] = LoadActor("../_cursor")
+
+-- Data bridge used by the dedicated Simple evaluation layout actor.
+HV.GetSimpleEvaluationData = function()
+	local rightX = SCREEN_CENTER_X + 10
+	local rightW = SCREEN_WIDTH - rightX - 10
+	return {
+		song = song, steps = steps, pss = pss, score = curScore, rate = getCurRateValue(),
+		judges = judges, judgmentColors = judgmentColors,
+		totalNotes = songTotalNotes,
+		getRate = function() return getCurRateValue() or 1 end,
+		getRateText = function()
+			local r = getCurRateValue() or 1
+			if formatEvalRateValue then return formatEvalRateValue(r) end
+			return string.format("%.2fx", r)
+		end,
+		getJudge = function() return judge end,
+		getJudgeText = function()
+			if HV.ManiaState and HV.ManiaState.enabled then
+				return string.format("osu!mania OD %.1f", HV.ManiaState.od)
+			end
+			return string.format("Judge: %d", judge)
+		end,
+		getCustomWindowName = function()
+			if not usingCustomWindows then return "" end
+			local ok, name = pcall(getCurrentCustomWindowConfigName)
+			return ok and tostring(name or "") or ""
+		end,
+		getOffsetPriorityStatus = function()
+			if HV.ManiaState and HV.ManiaState.enabled then return true end
+			if usingCustomWindows and customWindowUsesOldestNoteFirst then
+				local ok, active = pcall(customWindowUsesOldestNoteFirst)
+				return ok and active == true
+			end
+			return false
+		end,
+		getGrade = function()
+			local grade = isManiaModeEnabled() and getOsuManiaGrade(rescoredPercentage, maniaRescore)
+				or (rescoredPercentage and GetGradeFromPercent(rescoredPercentage / 100) or evaluationGrade())
+			if grade and not tostring(grade):find("^Grade_") then grade = "Grade_" .. grade end
+			return HV.GetGradeName(ToEnumShortString(grade)), HVColor.GetGradeColor(ToEnumShortString(grade))
+		end,
+		getNearestGrade = function()
+			if isManiaModeEnabled() or usingCustomWindows then return "" end
+			return nearestGradeComparison(rescoredPercentage)
+		end,
+		getWifeValue = function()
+			if usingCustomWindows and lastSnapshot and lastSnapshot.GetWifePercent then
+				local ok, wife = pcall(lastSnapshot.GetWifePercent, lastSnapshot)
+				if ok and tonumber(wife) then return tonumber(wife) * 100 end
+			end
+			return rescoredPercentage or evaluationWifeScore() * 100
+		end,
+		formatWifeValue = function(value) return formatEvaluationPercent(value) end,
+		getWife = function()
+			local wife = rescoredPercentage or evaluationWifeScore() * 100
+			if usingCustomWindows and lastSnapshot and lastSnapshot.GetWifePercent then
+				local ok, snapshotWife = pcall(lastSnapshot.GetWifePercent, lastSnapshot)
+				if ok and tonumber(snapshotWife) then wife = tonumber(snapshotWife) * 100 end
+			end
+			return formatEvaluationPercent(wife)
+		end,
+		getJ4Wife = function()
+			local scoreJudge = getJudgeForScore(curScore)
+			if usingCustomWindows or isManiaModeEnabled() or scoreJudge <= 4 or judge == 4 then return "" end
+			local rst = getRescoreElements(pss, curScore)
+			if not rst then return "" end
+			rst.dvt = getFilteredDvt()
+			local j4Pct = getRescoredWife3Judge(3, 4, rst)
+			return j4Pct and ("J4: " .. formatWifePercent(j4Pct)) or ""
+		end,
+		getWifeComparison = function()
+			local failed = curScore and curScore.GetWifeGrade and curScore:GetWifeGrade() == "Grade_Failed"
+			if failed or usingCustomWindows or isManiaModeEnabled() then return "" end
+			local current = getComparisonWifePercent(curScore, pss, playedJudge)
+				or rescoredPercentage or (evaluationWifeScore() * 100)
+			local best = getComparisonWifePercent(recScore, pss, playedJudge)
+			if isCurrentBestScore() then
+				return "Best!"
+			elseif best then
+				local diff = current - best
+				local decimals = current < 99.7 and 2 or (current > 99.9 and 4 or 3)
+				local judgeLabel = judge ~= playedJudge and string.format(" (J%d)", playedJudge) or ""
+				return string.format("%s %+." .. decimals .. "f%%%s", comparisonArrow(diff), diff, judgeLabel)
+			else return "▲ New!" end
+		end,
+		getClearType = function()
+			local currentCT = clearType or (scoringVoided and "Noplay" or "Clear")
+			return getClearTypeText(currentCT), getClearTypeColor(currentCT)
+		end,
+		getDifficulty = function()
+			if not steps then return "", color("1,1,1,1") end
+			local diff = ToEnumShortString(steps:GetDifficulty())
+			local diffShort = {
+				Beginner = "BG", Easy = "EZ", Medium = "NM", Hard = "HD", Challenge = "IN", Edit = "ED"
+			}
+			local diffLabel = diffShort[diff] or diff:sub(1,2):upper()
+			local keyLabel = getKeycountLabelForSteps and getKeycountLabelForSteps(steps)
+			return (keyLabel and (keyLabel .. " " .. diffLabel)) or diffLabel, HVColor.GetDifficultyColor(diff)
+		end,
+		getMeterText = function()
+			if not steps then return "", color("1,1,1,1") end
+			local msd = steps.GetMSD and steps:GetMSD(getCurRateValue(), 1) or 0
+			if HV.ShowMSD() and msd > 0 then
+				return string.format("%.2f", msd), HVColor.GetMSDRatingColor(msd)
+			else
+				return tostring(steps:GetMeter()), color("1,1,1,1")
+			end
+		end,
+		getMSD = function()
+			if steps and steps.GetMSD then
+				local ok, value = pcall(steps.GetMSD, steps, getCurRateValue(), 1)
+				if ok then return tonumber(value) or 0 end
+			end
+			return 0
+		end,
+		getSSR = function()
+			if scoringVoided then return 0 end
+			if curScore and curScore.GetSkillsetSSR then
+				local ok, value = pcall(curScore.GetSkillsetSSR, curScore, "Overall")
+				if ok then return tonumber(value) or 0 end
+			end
+			return 0
+		end,
+		getMSDSSR = function()
+			local ssr = scoringVoided and 0 or (curScore and curScore.GetSkillsetSSR and curScore:GetSkillsetSSR("Overall") or 0)
+			return string.format("%.2f", ssr), HVColor.GetMSDRatingColor(ssr)
+		end,
+		getProfileDisplay = function()
+			local online = isOnlineEvaluation()
+			local name
+			if online then
+				name = HV.OnlineEvaluationName or HV.OnlineReplayName
+				if not name and curScore then
+					local getter = curScore.GetDisplayName or curScore.GetName
+					if getter then
+						local ok, value = pcall(getter, curScore)
+						if ok and value and value ~= "" then name = tostring(value) end
+					end
+				end
+			else
+				name = profile and profile.GetDisplayName and profile:GetDisplayName() or nil
+			end
+			if (not name or name == "") and DLMAN and DLMAN.IsLoggedIn and DLMAN:IsLoggedIn() then
+				name = DLMAN:GetUsername()
+			end
+			local level = profile and HV.GetLevel and HV.GetLevel(profile) or nil
+			local levelColor = level and HV.GetLevelColor and HV.GetLevelColor(level) or nil
+			local progress, currentXP, nextXP = 0, 0, 0
+			if profile and HV.GetLevelProgress then
+				local ok, p, current, total = pcall(HV.GetLevelProgress, profile)
+				if ok then progress, currentXP, nextXP = tonumber(p) or 0, tonumber(current) or 0, tonumber(total) or 0 end
+			end
+			local rating
+			if not online and HV.ShowMSD() and DLMAN and DLMAN.IsLoggedIn and DLMAN:IsLoggedIn() and DLMAN.GetSkillsetRating then
+				local ok, value = pcall(DLMAN.GetSkillsetRating, DLMAN, "Overall")
+				if ok then rating = tonumber(value) end
+			end
+			if not online and HV.ShowMSD() and (not rating or rating <= 0) and profile and profile.GetPlayerRating then
+				local ok, value = pcall(profile.GetPlayerRating, profile)
+				if ok then rating = tonumber(value) end
+			end
+			return {
+				name = (name and name ~= "" and name) or "Player 1",
+				avatar = getAvatarPath(pn), level = level, levelColor = levelColor,
+				showLevel = profile ~= nil and not online,
+				progress = math.max(0, math.min(1, progress)),
+				progressWidth = (SCREEN_CENTER_X - 20) * 0.18,
+				progressText = level and string.format("%d / %d XP", currentXP, nextXP) or "",
+				rating = rating
+			}
+		end,
+		getModDisplay = function()
+			local ps = GAMESTATE:GetPlayerState(pn)
+			local po = ps and ps:GetPlayerOptions("ModsLevel_Current")
+			local modStr = (curScore and curScore.GetModifiers and curScore:GetModifiers())
+				or (ps and ps:GetPlayerOptionsString("ModsLevel_Current")) or ""
+			if modStr == "" and ps then modStr = ps:GetPlayerOptionsString("ModsLevel_Preferred") or "" end
+			local normalized = modStr:lower():gsub("[%s_]+", "")
+			local speed, mode = 400, "C"
+			if GetSpeedModeAndValueFromPoptions then speed, mode = GetSpeedModeAndValueFromPoptions(pn) end
+			local rate = (curScore and curScore.GetMusicRate and curScore:GetMusicRate()) or getCurRateValue() or 1
+			local life = GetLifeDifficulty()
+			local playedJudge = curScore and getJudgeForScore(curScore) or GetTimingDifficulty()
+			local fail = po and po:FailSetting() or "FailType_Immediate"
+			local active = {}
+			for mod, short in pairs(evalModShorthands) do
+				local matched = string.find(normalized, mod:lower(), 1, true)
+				if mod == "Mines" then
+					matched = string.find(normalized, "mines", 1, true) and not string.find(normalized, "nomines", 1, true)
+				elseif mod == "Shuffle" then
+					matched = string.find(normalized, "shuffle", 1, true)
+						and not string.find(normalized, "softshuffle", 1, true)
+						and not string.find(normalized, "supershuffle", 1, true)
+				end
+				if matched then active[#active + 1] = short end
+			end
+			local receptorSize = tonumber(ThemePrefs.Get("HV_Mini")) or 100
+			if math.abs(receptorSize - 100) > 0.001 then active[#active + 1] = math.round(receptorSize) .. "%" end
+			local lifeKey = "L7"
+			if life <= 1 then lifeKey = "L1" elseif life <= 6 then lifeKey = "L" .. tostring(life) end
+			local failText = fail == "FailType_Off" and "F:OFF" or (fail == "FailType_EndOfSong" and "F:END" or "F:IMM")
+			local mainBPM = getMainBPM(song, steps)
+			return {
+				speed = formatEvalSpeedMode(mode, speed), rate = formatEvalRateValue(rate),
+				bpm = mainBPM > 0 and string.format("[%d]", math.round(mainBPM * rate)) or "[???]",
+				life = string.format("L%d", life),
+				lifeColor = (HVColor.GetLifeBarColor and HVColor.GetLifeBarColor(lifeKey)) or color("#FFFFFF"),
+				judge = string.format("J%d", playedJudge), fail = failText,
+				failColor = fail == "FailType_Immediate" and HVColor.Accent or color("#CF9898"),
+				assist = hasEvaluationAssistEnabled(po, modStr), accent = HVColor.Accent,
+				dim = HVColor.TextDim or color("0.4,0.4,0.4,1"),
+				mods = table.concat(active, "  ")
+			}
+		end,
+		getJudgment = function(name, index)
+			if usingCustomWindows then
+				if not lastSnapshot or not lastSnapshot.GetJudgments then return 0 end
+				local ok, judgments = pcall(lastSnapshot.GetJudgments, lastSnapshot)
+				if not ok or type(judgments) ~= "table" then return 0 end
+				local key = name == "Ridiculous" and "W1" or tostring(name):gsub("^TapNoteScore_", "")
+				return tonumber(judgments[key]) or 0
+			end
+			return getEvaluationRescoredJudgeCount(dvt, judge, name, index)
+		end,
+		getJudgmentLabel = function(name, index) return getEvaluationJudgeLabel(name, index) end,
+		getActiveJudgeCount = function() return getActiveJudgeRowCount() end,
+		getOffsetData = function()
+			return {
+				width = rightW - 20, height = 100, showTrendLine = false,
+				song = song, steps = steps, nrv = nrv, dvt = dvt, ctt = ctt, ntt = ntt,
+				maniaWindows = maniaRescore and maniaRescore.windows or nil,
+				chordCohesion = curScore and curScore.GetChordCohesion and curScore:GetChordCohesion() or false,
+				columns = steps and steps:GetNumColumns() or 4,
+				cbl = cbl, cbr = cbr, cbm = cbm, showMiddle = showMiddle
+			}
+		end
+	}
+end
+
+t[#t + 1] = LoadActor("simple")
 
 t[#t + 1] = Def.ActorFrame {
 	Name = "GlobalScoreTooltip",

@@ -863,10 +863,10 @@ end
 -- ============================================================
 local showGoalTrackerText = HV.ShowGoalTrackerText() and not isSync
 if showGoalTrackerText then
-	local pacemakerMode = ThemePrefs.Get("HV_PacemakerTargetType")
+	local pacemakerMode = ThemePrefs.Get("HV_GoalTargetType")
 	if not pacemakerMode or pacemakerMode == "" then pacemakerMode = "Target" end
 
-	local targetGoalPref = ThemePrefs.Get("HV_PacemakerTargetGoal")
+	local targetGoalPref = ThemePrefs.Get("HV_GoalTarget")
 	local targetGoalPct = tonumber(targetGoalPref) or 93
 	local targetGoal = targetGoalPct / 100
 
@@ -1237,7 +1237,7 @@ t[#t + 1] = Def.ActorFrame {
 		-- Apply Combo Animation if enabled
 		-- Triggering here avoids Engine race conditions on key release
 		if HV.ComboAnimation and HV.ComboAnimation() then
-			-- Avoid 1.3 zoom mistakenly triggering on hold releases
+			-- Avoid zoom mistakenly triggering on hold releases
 			if not params.HoldNoteScore then
 				local tns = params.TapNoteScore
 				if tns and tns ~= "TapNoteScore_None" and tns ~= "TapNoteScore_Miss" and tns ~= "TapNoteScore_HitMine" and tns ~= "TapNoteScore_AvoidMine" and tns ~= "TapNoteScore_CheckpointHit" and tns ~= "TapNoteScore_CheckpointMiss" then
@@ -2251,7 +2251,7 @@ if not isSync then
 				display = string.format("%.4f%%", threshold)
 				txt:xy(11, 20)
 			elseif condition == "Sync to Goal" then
-				local threshold = tonumber(ThemePrefs.Get("HV_PacemakerTargetGoal")) or 93.00
+				local threshold = tonumber(ThemePrefs.Get("HV_GoalTarget")) or 93.00
 				if GetDisplayScore() then
 					threshold = getJ4NormalizedPercentage(GetDisplayScore())
 				end
@@ -2622,7 +2622,7 @@ t[#t + 1] = Def.Actor {
 				triggered = true 
 			end
 		elseif condition == "Sync to Goal" then
-			local threshold = tonumber(ThemePrefs.Get("HV_PacemakerTargetGoal")) or 93.00
+			local threshold = tonumber(ThemePrefs.Get("HV_GoalTarget")) or 93.00
 			if GetDisplayScore() then threshold = getJ4NormalizedPercentage(GetDisplayScore()) end
 			local subtractiveWife = ((HV_MaxPoints - HV_PointsLost) / HV_MaxPoints) * 100
 			if subtractiveWife <= threshold then

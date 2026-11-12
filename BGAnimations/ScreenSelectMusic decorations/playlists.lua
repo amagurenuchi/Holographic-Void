@@ -36,6 +36,23 @@ local function saveProfile()
 	end
 end
 
+local function getPlaylistChartPB(chartKey, rate)
+	local best
+	local ok = pcall(function()
+		local byRate = SCOREMAN:GetScoresByKey(chartKey)
+		local rateKey = string.format("%.2f", rate):gsub("%.?0+$", "") .. "x"
+		if rateKey == "1x" then rateKey = "1.0x" elseif rateKey == "2x" then rateKey = "2.0x" end
+		local rateScores = byRate and byRate[rateKey]
+		local scores = rateScores and rateScores:GetScores()
+		for _, score in ipairs(scores or {}) do
+			if not IsScoreInvalid(score) and (not best or getJ4NormalizedPercentage(score) > getJ4NormalizedPercentage(best)) then
+				best = score
+			end
+		end
+	end)
+	return ok and best or nil
+end
+
 local function RefreshPlaylistList()
 	allplaylists = {}
 	local ok, playlists = pcall(function() return SONGMAN:GetPlaylists() end)
@@ -795,18 +812,8 @@ for i = 1, math.max(chartsPerPage, playlistsPerPage) do
 
 					-- Show personal best if available
 					local pb = ""
-					pcall(function()
-						local best = SCOREMAN:GetScoresByKey(entry.key)
-						if best then
-							for _, sl in pairs(best) do
-								local scores = sl:GetScores()
-								if scores and #scores > 0 then
-									pb = string.format("%.2f%%", scores[1]:GetWifeScore() * 100)
-									break
-								end
-							end
-						end
-					end)
+					local best = getPlaylistChartPB(entry.key, entry.chart:GetRate())
+					if best then pb = string.format("%.2f%%", best:GetWifeScore() * 100) end
 					self:GetChild("SubText"):settext(pb):visible(true)
 					self:GetChild("DelBtn"):visible(true)
 					self:GetChild("DelBtn"):diffusealpha(0.6)

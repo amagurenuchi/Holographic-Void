@@ -23,6 +23,25 @@ local function formatIntroPercent(percent)
 	return string.format(percent > 99.9 and "%.4f%%" or "%.2f%%", percent)
 end
 
+local function getCurrentRatePB()
+	local steps = GAMESTATE:GetCurrentSteps()
+	if not steps then return nil end
+	local ok, byRate = pcall(function() return SCOREMAN:GetScoresByKey(steps:GetChartKey()) end)
+	if not ok or not byRate then return nil end
+	local rateKey = getCurRateString()
+	local okList, rateScores = pcall(function() return byRate[rateKey] end)
+	if not okList or not rateScores then return nil end
+	local okScores, scores = pcall(function() return rateScores:GetScores() end)
+	if not okScores or not scores then return nil end
+	local best
+	for _, score in ipairs(scores) do
+		if not IsScoreInvalid(score) and (not best or getJ4NormalizedPercentage(score) > getJ4NormalizedPercentage(best)) then
+			best = score
+		end
+	end
+	return best
+end
+
 -- Invalidating mods (fetched at BeginCommand)
 local invalidMods = {}
 
@@ -259,17 +278,17 @@ t[#t+1] = Def.ActorFrame{
 		-- Target Goal
 		local showGoal = ThemePrefs.Get("HV_ShowGoalTracker")
 		if showGoal then
-			local pacemakerMode = ThemePrefs.Get("HV_PacemakerTargetType") or "Target"
+			local pacemakerMode = ThemePrefs.Get("HV_GoalTargetType") or "Target"
 			if pacemakerMode == "PB" or pacemakerMode == "PBReplay" then
-				local best = GetDisplayScore()
+				local best = getCurrentRatePB()
 				if best then
 					targetActor:settext("Target: PB " .. formatIntroPercent(getJ4NormalizedPercentage(best)))
 				else
-					local goal = ThemePrefs.Get("HV_PacemakerTargetGoal") or 93
+					local goal = ThemePrefs.Get("HV_GoalTarget") or 93
 					targetActor:settext("Target: " .. formatIntroPercent(goal))
 				end
 			else
-				local goal = ThemePrefs.Get("HV_PacemakerTargetGoal") or 93
+				local goal = ThemePrefs.Get("HV_GoalTarget") or 93
 				targetActor:settext("Target: " .. formatIntroPercent(goal))
 			end
 			targetActor:visible(true)
@@ -284,14 +303,14 @@ t[#t+1] = Def.ActorFrame{
 			local condition = ThemePrefs.Get("HV_AutoFailCondition")
 			local threshold = ""
 			if condition == "Wife Percent" or condition == "Sync to Goal" then
-				local goal = condition == "Sync to Goal" and (tonumber(ThemePrefs.Get("HV_PacemakerTargetGoal")) or 93) or (ThemePrefs.Get("HV_AutoFailThreshold_Wife") or 93)
+				local goal = condition == "Sync to Goal" and (tonumber(ThemePrefs.Get("HV_GoalTarget")) or 93) or (ThemePrefs.Get("HV_AutoFailThreshold_Wife") or 93)
 				threshold = (condition == "Sync to Goal" and "Goal < " or "< ") .. formatIntroPercent(goal)
 			elseif condition == "Judgement Count" then
 				local judge = ThemePrefs.Get("HV_AutoFailJudgement") or "Miss"
 				local judgeName = THEME:GetString("TapNoteScore", judge)
 				threshold = string.format("> %d %s", ThemePrefs.Get("HV_AutoFailThreshold_Count") or 10, judgeName)
 			elseif condition == "Personal Best" then
-				local best = GetDisplayScore()
+				local best = getCurrentRatePB()
 				local pbStr = ""
 				if best then
 					pbStr = " (" .. formatIntroPercent(getJ4NormalizedPercentage(best)) .. ")"
