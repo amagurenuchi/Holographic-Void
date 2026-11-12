@@ -11,7 +11,18 @@ local HV_RidiculousCount = 0
 local HV_AutoFailStopped = false
 local failSfxPath = THEME:GetPathS("", "ScreenGameplay failed")
 local failSfxPlayed = false
-local sideImagePath = THEME:GetPathG("", "side")
+-- Check the theme's actual files directly. GetPathG("side") can resolve a
+-- missing asset through the fallback theme and show its missing-texture image.
+local sideImagePath
+for _, ext in ipairs({ ".png", ".jpg", ".jpeg", ".gif" }) do
+	local path = "Themes/Holographic-Void/Graphics/side" .. ext
+	local ok, exists = pcall(function() return FILEMAN:DoesFileExist(path) end)
+	if ok and exists then
+		sideImagePath = path
+		break
+	end
+end
+local hasSideImage = sideImagePath ~= nil
 
 local function PlayFailSfxOnce()
 	if failSfxPlayed then return end
@@ -626,10 +637,16 @@ end
 
 -- Optional gameplay decoration. Keep this actor out of the tree entirely if
 -- the theme asset has been removed or is unavailable.
-if sideImagePath and sideImagePath ~= "" and FILEMAN:DoesFileExist(sideImagePath) then
+if hasSideImage then
 	t[#t + 1] = Def.Sprite {
 		Name = "GameplaySideImage",
 		InitCommand = function(self)
+			local loaded = pcall(function() self:Load(sideImagePath) end)
+			if not loaded then
+				self:visible(false)
+				return
+			end
+
 			local columns = 4
 			local style = GAMESTATE:GetCurrentStyle()
 			if style and style.ColumnsPerPlayer then
@@ -643,7 +660,6 @@ if sideImagePath and sideImagePath ~= "" and FILEMAN:DoesFileExist(sideImagePath
 			local fieldWidth = ((columns * 64 * widthScale) + ((columns - 1) * spacing)) * miniScale
 			local fieldRight = SCREEN_CENTER_X + gameplayCoord("NotefieldX") + fieldWidth / 2
 
-			self:Load(sideImagePath)
 			local imageWidth = self:GetWidth()
 			local imageHeight = self:GetHeight()
 			if imageWidth <= 0 or imageHeight <= 0 then
