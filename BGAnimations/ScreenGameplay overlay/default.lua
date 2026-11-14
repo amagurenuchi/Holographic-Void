@@ -206,6 +206,13 @@ local t = Def.ActorFrame {
 		
 		HV.LastGameplayTime = os.time()
 		HV.GameplaySessionValid = true
+		-- Keep the pre-play PB so the end-of-chart notice can distinguish a
+		-- newly set record from a score that was already rank one.
+		local previousPB = GetDisplayScore()
+		HV.GameplayMilestoneChartKey = GAMESTATE:GetCurrentSteps()
+			and GAMESTATE:GetCurrentSteps():GetChartKey() or nil
+		HV.GameplayMilestoneRate = getCurRateValue and getCurRateValue() or 1
+		HV.GameplayMilestonePreviousPB = previousPB and getJ4NormalizedPercentage(previousPB) or nil
 
 		-- Properly initialize total chart points once song/steps are loaded
 		HV_MaxPoints = (getMaxNotes(PLAYER_1) or 1) * 2
@@ -2504,6 +2511,7 @@ t[#t+1] = Def.ActorFrame{
 			
 			-- Delay slightly to ensure statistics are stabilized
 			self:sleep(0.05)
+			MESSAGEMAN:Broadcast("ShowGameplayMilestoneTooltip")
 			
 			local epn = pn or GAMESTATE:GetEnabledPlayers()[1] or PLAYER_1
 			local epss = STATSMAN:GetCurStageStats():GetPlayerStageStats(epn)
@@ -2710,5 +2718,86 @@ t[#t + 1] = Def.Actor {
 }
 
 
+
+-- Show end-of-play milestones during the gameplay exit pause. The stage score
+-- has been finalized by the time ScreenGameplay starts its transition.
+local function getGameplayMilestones()
+	local notices = {}
+	local livePlay = HV.GameplaySessionValid == true
+		and not (HV.IsReplayPlayback and HV.IsReplayPlayback())
+		and HV.OnlineEvaluationActive ~= true and HV.OnlineReplayActive ~= true
+	if not livePlay then return notices end
+
+	local pss = STATSMAN:GetCurStageStats():GetPlayerStageStats()
+	if not pss then return notices end
+	local steps = GAMESTATE:GetCurrentSteps()
+	local chartKey = steps and steps:GetChartKey()
+	local rate = tonumber(HV.GameplayMilestoneRate) or 1
+	local scorePercent = (pss.GetWifeScore and (tonumber(pss:GetWifeScore()) or 0) or 0) * 100
+	local sameChart = chartKey and chartKey == HV.GameplayMilestoneChartKey
+	local sameRate = math.abs(rate - (tonumber(HV.GameplayMilestoneRate) or rate)) < 0.005
+	local previousPB = tonumber(HV.GameplayMilestonePreviousPB)
+	local newPersonalBest = sameChart and sameRate
+		and (not previousPB or scorePercent > previousPB + 0.00001)
+
+	local profile = GetPlayerOrMachineProfile(pn) or PROFILEMAN:GetProfile(pn)
+	if profile and chartKey and profile.GetGoalTable then
+		pcall(function() profile:SetFromAll() end)
+		local ok, goals = pcall(function() return profile:GetGoalTable() end)
+		if ok and goals then
+			for _, goal in ipairs(goals) do
+				local okGoal, achieved = pcall(function()
+					return goal:GetChartKey() == chartKey
+						and math.abs((tonumber(goal:GetRate()) or 1) - rate) < 0.005
+						and scorePercent >= ((tonumber(goal:GetPercent()) or 2) * 100)
+				end)
+				if okGoal and achieved then
+					notices[#notices + 1] = "GOAL COMPLETED"
+					break
+				end
+			end
+		end
+	end
+	if newPersonalBest then
+		notices[#notices + 1] = "PERSONAL BEST SET"
+	end
+	return notices
+end
+
+t[#t + 1] = Def.ActorFrame {
+	Name = "GameplayMilestoneTooltip",
+	InitCommand = function(self)
+		-- Keep this in the gameplay overlay's normal actor layer, alongside the
+		-- end-of-chart Full Combo and above celebration.
+		self:xy(SCREEN_CENTER_X, 72):diffusealpha(0)
+	end,
+	ShowGameplayMilestoneTooltipMessageCommand = function(self)
+		local notices = getGameplayMilestones()
+		if #notices == 0 then return end
+		self:diffusealpha(1)
+		local bg = self:GetChild("BG")
+		local border = self:GetChild("Border")
+		local height = 18 + (#notices * 22)
+		if bg then bg:zoomto(270, height) end
+		if border then border:zoomto(2, height) end
+		for i, notice in ipairs(notices) do
+			local label = self:GetChild("Notice" .. i)
+			if label then
+				label:settext(notice):xy(0, -height / 2 + 13 + ((i - 1) * 22))
+					:diffuse(i == 1 and HVColor.Accent or color("0.7,1,0.75,1")):visible(true)
+			end
+		end
+	end,
+	Def.Quad {
+		Name = "BG",
+		InitCommand = function(self) self:diffuse(color("0.025,0.035,0.055,0.94")) end
+	},
+	Def.Quad {
+		Name = "Border",
+		InitCommand = function(self) self:x(-134):diffuse(HVColor.Accent) end
+	},
+	LoadFont("Common Normal") .. { Name = "Notice1", InitCommand = function(self) self:zoom(0.46):visible(false) end },
+	LoadFont("Common Normal") .. { Name = "Notice2", InitCommand = function(self) self:zoom(0.46):visible(false) end }
+}
 
 return t

@@ -11,8 +11,8 @@ t[#t+1] = Def.Quad{
 		self:FullScreen():diffuse(color("0,0,0,0.9")):x(-SCREEN_WIDTH)
 	end,
 	OffCommand = function(self)
-		-- Start the slide quickly after the song finishes
-		self:sleep(0.4):linear(0.3):x(SCREEN_CENTER_X)
+		-- Keep gameplay visible for three seconds before showing the result.
+		self:sleep(3):linear(0.3):x(SCREEN_CENTER_X)
 	end
 }
 
@@ -24,8 +24,8 @@ t[#t+1] = LoadFont("Common Normal")..{
 		self:Center():zoom(0.6):diffusealpha(0):x(-SCREEN_WIDTH)
 	end,
 	OffCommand = function(self)
-		-- Follow the slide
-		self:sleep(0.4):linear(0.3):x(SCREEN_CENTER_X):diffusealpha(0.8)
+		-- Keep gameplay visible for three seconds before showing the result.
+		self:sleep(3.4):linear(0.3):x(SCREEN_CENTER_X):diffusealpha(0.8)
 		self:diffuseshift()
 		self:effectcolor1(color("#FFFFFF")):effectcolor2(HVColor.Accent or color("#00FF00"))
 		
