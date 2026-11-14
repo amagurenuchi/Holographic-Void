@@ -3392,6 +3392,9 @@ main_af[#main_af + 1] = Def.ActorFrame {
 		HV.SelectMusicOptionsPromptVisible = false
 	end,
 	BeginCommand = function(self)
+		-- This global can outlive the screen if gameplay interrupts the prompt
+		-- without sending HidePressStartForOptions. Clear stale state on return.
+		HV.SelectMusicOptionsPromptVisible = false
 		local screen = SCREENMAN:GetTopScreen()
 		if not screen then return end
 		
