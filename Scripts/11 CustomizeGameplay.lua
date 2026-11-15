@@ -1045,16 +1045,6 @@ function MovableInput(event)
 		if event.defaultreset then
 			Movable.pressed = true
 			if current ~= nil and current.condition and notReleased and current.external == nil then
-				local sizevals = {
-					Height = true,
-					Width = true,
-					Zoom = true,
-					Spacing = true,
-				}
-				local posvals = {
-					X = true,
-					Y = true,
-				}
 				local keys = {
 					"DeviceButton_left", -- right redundant
 					"DeviceButton_up", -- down redundant
@@ -1064,13 +1054,16 @@ function MovableInput(event)
 					local curKey = current[b]
 					if curKey ~= nil then
 						local keyProperty = curKey.property
-						local prop = current.name .. string.gsub(keyProperty, "Add", "")
-						local newVal = 0
-						if posvals[keyProperty] then
-							newVal = getDefaultGameplayCoordinate(prop)
-						elseif sizevals[keyProperty] then
-							newVal = getDefaultGameplaySize(prop)
+						local propertyName = string.gsub(keyProperty, "Add", "")
+						local prop = current.name .. propertyName
+						local newVal = getDefaultGameplayCoordinate(prop)
+							or getDefaultGameplaySize(prop)
+						if prop == "FullProgressBarY" then
+							local position = HV.GetProgressBarPosition()
+							newVal = position == "Bottom"
+								and (SCREEN_BOTTOM - 14) or 20
 						end
+						newVal = newVal or MovableValues[prop] or 0
 						local diff = newVal - (MovableValues[prop] or 0)
 						MovableValues[prop] = newVal
 						if curKey.arbitraryFunction then
@@ -1082,10 +1075,9 @@ function MovableInput(event)
 							else
 								curKey.arbitraryFunction(newVal)
 							end
+						elseif prop == "FullProgressBarY" and current.element and current.element.y then
+							current.element:y(newVal)
 						elseif keyProperty == "AddX" or keyProperty == "AddY" then
-							if keyProperty == "AddY" then
-								diff = -diff -- sigh
-							end
 							propsFunctions[keyProperty](current.element, diff)
 						elseif current.actor then
 							propsFunctions[keyProperty](current.actor, newVal)

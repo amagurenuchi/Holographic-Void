@@ -500,8 +500,13 @@ t[#t + 1] = Def.ActorFrame {
 -- ============================================================
 local progressBarPosition = HV.GetProgressBarPosition()
 local barW = SCREEN_WIDTH * 0.4
-local barH = 6
-local barY = progressBarPosition == "Top" and 12 or (progressBarPosition == "Bottom" and SCREEN_BOTTOM - 12 or 12)
+local barH = 10
+local barPad = 8
+
+local defaultBarY = progressBarPosition == "Bottom"
+	and (SCREEN_BOTTOM - 14) or 20
+
+local barY = defaultBarY
 
 local showProgressBar = progressBarPosition ~= "Off" and not isSync
 
@@ -520,8 +525,24 @@ if showProgressBar then
 t[#t + 1] = Def.ActorFrame {
 	Name = "ProgressBarContainer",
 	InitCommand = function(self)
-		self:xy(gameplayCoord("FullProgressBarX"), gameplayCoord("FullProgressBarY"))
+		self:xy(gameplayCoord("FullProgressBarX"), barY)
 		self:visible(minimalisticHUDVisible(showProgressBar))
+	end,
+	ThemePrefChangedMessageCommand = function(self, params)
+		if not params or params.Name ~= "HV_ProgressBarPosition" then return end
+		local position = HV.GetProgressBarPosition()
+		if position == "Off" then return end
+		local newY = position == "Bottom"
+			and (SCREEN_BOTTOM - 14) or 20
+		local slot = pn_to_profile_slot(PLAYER_1)
+		local playerData = playerConfig:get_data(slot)
+		local keymode = getCurrentKeyMode()
+		playerData.GameplayXYCoordinates[keymode] = playerData.GameplayXYCoordinates[keymode] or {}
+		playerData.GameplayXYCoordinates[keymode].FullProgressBarY = nil
+		if MovableValues then MovableValues.FullProgressBarY = newY end
+		if SavePlayerConfig then SavePlayerConfig(slot) end
+		barY = newY
+		self:stoptweening():y(newY)
 	end,
 	HV_MinimalisticModeChangedMessageCommand = function(self, params)
 		animateGameplayHUDVisibility(self, minimalisticHUDVisible(showProgressBar, params and params.Enabled))
@@ -549,7 +570,7 @@ t[#t + 1] = Def.ActorFrame {
 		Name = "ProgressFill",
 		InitCommand = function(self)
 			self:halign(0):x(-barW / 2)
-				:zoomto(0, barH):diffuse(accentColor):diffusealpha(0.7)
+				:zoomto(0, barH):diffuse(HVColor.AccentDim or accentColor):diffusealpha(0.82)
 		end,
 		UpdateBarsCommand = function(self)
 			-- local song = GAMESTATE:GetCurrentSong()
@@ -565,11 +586,11 @@ t[#t + 1] = Def.ActorFrame {
 		end
 	},
 
-	-- Remaining Time (incorporating music rate and ms)
+	-- Elapsed and remaining times sit at the bar's two ends.
 	LoadFont("Common Normal") .. {
 		Name = "TimeRemaining",
 		InitCommand = function(self)
-			self:x(barW / 2 + 8):zoom(0.35):halign(0):diffuse(dimText)
+			self:xy(barW / 2 - barPad, 0):zoom(0.34):halign(1):diffuse(mainText)
 		end,
 		UpdateBarsCommand = function(self)
 			-- local song = GAMESTATE:GetCurrentSong()
@@ -586,11 +607,10 @@ t[#t + 1] = Def.ActorFrame {
 		end
 	},
 
-	-- Elapsed Time (incorporating music rate and ms)
 	LoadFont("Common Normal") .. {
 		Name = "TimeElapsed",
 		InitCommand = function(self)
-			self:x(-barW / 2 - 8):zoom(0.35):halign(1):diffuse(subText)
+			self:xy(-barW / 2 + barPad, 0):zoom(0.34):halign(0):diffuse(mainText)
 		end,
 		UpdateBarsCommand = function(self)
 			local song = GAMESTATE:GetCurrentSong()
@@ -605,7 +625,47 @@ t[#t + 1] = Def.ActorFrame {
 
 	}
 	,
-	MovableBorder(barW, 16, 1, 0, 0)
+	LoadFont("Zpix Normal") .. {
+		Name = "SongTitle",
+		InitCommand = function(self)
+			self:xy(0, 0):zoom(0.35):diffuse(mainText)
+				:maxwidth((barW - 2 * barPad) / 0.35)
+		end,
+		CurrentSongChangedMessageCommand = function(self)
+			self:queuecommand("RefreshSongInfo")
+		end,
+		BeginCommand = function(self)
+			self:queuecommand("RefreshSongInfo")
+		end,
+		RefreshSongInfoCommand = function(self)
+			self:stoptweening():diffusealpha(1)
+			self.cycleIndex = 1
+			local song = GAMESTATE:GetCurrentSong()
+			if song then
+				self.cycleText = {
+					song:GetDisplayMainTitle() or "",
+					song:GetDisplayArtist() or "",
+					song:GetGroupName() or ""
+				}
+				self:settext(self.cycleText[1])
+			else
+				self.cycleText = nil
+				self:settext("")
+			end
+			self:queuecommand("CycleSongInfo")
+		end,
+		CycleSongInfoCommand = function(self)
+			if not self.cycleText or #self.cycleText == 0 then return end
+			self:stoptweening():sleep(3):linear(0.1):diffusealpha(0)
+				:queuecommand("SetNextSongInfo")
+		end,
+		SetNextSongInfoCommand = function(self)
+			self.cycleIndex = (self.cycleIndex % #self.cycleText) + 1
+			self:settext(self.cycleText[self.cycleIndex])
+			self:linear(0.1):diffusealpha(1):queuecommand("CycleSongInfo")
+		end
+	},
+	MovableBorder(barW, barH + 4, 1, 0, 0)
 }
 end -- End progress bar visibility check
 
@@ -2077,60 +2137,7 @@ t[#t + 1] = Def.ActorFrame {
 	},
 	MovableBorder(150, 18, 1, 0, 0)
 }
-
-t[#t + 1] = Def.ActorFrame {
-	Name = "SongInfoHUD",
-	InitCommand = function(self)
-		self:xy(SCREEN_CENTER_X, SCREEN_BOTTOM - 14)
-		self:visible(minimalisticHUDVisible(true))
-	end,
-	HV_MinimalisticModeChangedMessageCommand = function(self, params)
-		animateGameplayHUDVisibility(self, minimalisticHUDVisible(true, params and params.Enabled))
-	end,
-	OnCommand = function(self)
-		self:diffusealpha(0.6)
-	end,
-
-	LoadFont("Zpix Normal") .. {
-		InitCommand = function(self)
-			self:zoom(0.35):diffuse(mainText):maxwidth(SCREEN_WIDTH * 0.5 / 0.35)
-		end,
-		CurrentSongChangedMessageCommand = function(self)
-			self:queuecommand("RefreshSongInfo")
-		end,
-		BeginCommand = function(self)
-			self:queuecommand("RefreshSongInfo")
-		end,
-		RefreshSongInfoCommand = function(self)
-			self:stoptweening():diffusealpha(1)
-			self.cycleIndex = 1
-			local song = GAMESTATE:GetCurrentSong()
-			if song then
-				self.cycleText = {
-					song:GetDisplayMainTitle() or "",
-					song:GetDisplayArtist() or "",
-					song:GetGroupName() or ""
-				}
-				self.cycleIndex = 1
-				self:settext(self.cycleText[1])
-			else
-				self.cycleText = nil
-			end
-			self:queuecommand("CycleSongInfo")
-		end,
-		CycleSongInfoCommand = function(self)
-			if not self.cycleText or #self.cycleText == 0 then return end
-			self:stoptweening():sleep(3):linear(0.1):diffusealpha(0)
-				:queuecommand("SetNextSongInfo")
-		end,
-		SetNextSongInfoCommand = function(self)
-			self.cycleIndex = (self.cycleIndex % #self.cycleText) + 1
-			self:settext(self.cycleText[self.cycleIndex])
-			self:linear(0.1):diffusealpha(1):queuecommand("CycleSongInfo")
-		end
-	}
-}
-end
+end -- End song title/BPM display visibility check
 
 -- ============================================================
 -- TOASTY (fires at combo 250, 500, 750, 1000, ...)
@@ -2737,8 +2744,8 @@ local function getGameplayMilestones()
 	local sameChart = chartKey and chartKey == HV.GameplayMilestoneChartKey
 	local sameRate = math.abs(rate - (tonumber(HV.GameplayMilestoneRate) or rate)) < 0.005
 	local previousPB = tonumber(HV.GameplayMilestonePreviousPB)
-	local newPersonalBest = sameChart and sameRate
-		and (not previousPB or scorePercent > previousPB + 0.00001)
+	local newPersonalBest = sameChart and sameRate and previousPB ~= nil
+		and scorePercent > previousPB + 0.00001
 
 	local profile = GetPlayerOrMachineProfile(pn) or PROFILEMAN:GetProfile(pn)
 	if profile and chartKey and profile.GetGoalTable then
@@ -2752,52 +2759,40 @@ local function getGameplayMilestones()
 						and scorePercent >= ((tonumber(goal:GetPercent()) or 2) * 100)
 				end)
 				if okGoal and achieved then
-					notices[#notices + 1] = "GOAL COMPLETED"
+					notices[#notices + 1] = "Goal Complete!"
 					break
 				end
 			end
 		end
 	end
 	if newPersonalBest then
-		notices[#notices + 1] = "PERSONAL BEST SET"
+		notices[#notices + 1] = "New Best!"
 	end
 	return notices
 end
 
+local milestoneTextY = SCREEN_CENTER_Y + 58
 t[#t + 1] = Def.ActorFrame {
 	Name = "GameplayMilestoneTooltip",
 	InitCommand = function(self)
-		-- Keep this in the gameplay overlay's normal actor layer, alongside the
-		-- end-of-chart Full Combo and above celebration.
-		self:xy(SCREEN_CENTER_X, 72):diffusealpha(0)
+		-- Place the message below the Full Combo and above celebration.
+		self:xy(SCREEN_CENTER_X, milestoneTextY + 10):diffusealpha(0)
 	end,
 	ShowGameplayMilestoneTooltipMessageCommand = function(self)
 		local notices = getGameplayMilestones()
 		if #notices == 0 then return end
-		self:diffusealpha(1)
-		local bg = self:GetChild("BG")
-		local border = self:GetChild("Border")
-		local height = 18 + (#notices * 22)
-		if bg then bg:zoomto(270, height) end
-		if border then border:zoomto(2, height) end
+		self:stoptweening():diffusealpha(0):y(milestoneTextY + 10)
+			:sleep(0.05):decelerate(0.25):y(milestoneTextY):diffusealpha(1)
 		for i, notice in ipairs(notices) do
 			local label = self:GetChild("Notice" .. i)
 			if label then
-				label:settext(notice):xy(0, -height / 2 + 13 + ((i - 1) * 22))
+				label:settext(notice):xy(0, (i - 1) * 20)
 					:diffuse(i == 1 and HVColor.Accent or color("0.7,1,0.75,1")):visible(true)
 			end
 		end
 	end,
-	Def.Quad {
-		Name = "BG",
-		InitCommand = function(self) self:diffuse(color("0.025,0.035,0.055,0.94")) end
-	},
-	Def.Quad {
-		Name = "Border",
-		InitCommand = function(self) self:x(-134):diffuse(HVColor.Accent) end
-	},
 	LoadFont("Common Normal") .. { Name = "Notice1", InitCommand = function(self) self:zoom(0.46):visible(false) end },
-	LoadFont("Common Normal") .. { Name = "Notice2", InitCommand = function(self) self:zoom(0.46):visible(false) end }
+	LoadFont("Common Normal") .. { Name = "Notice2", InitCommand = function(self) self:zoom(0.46):y(20):visible(false) end }
 }
 
 return t
