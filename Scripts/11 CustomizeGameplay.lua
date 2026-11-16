@@ -103,18 +103,6 @@ function setMovableKeymode(key)
 	loadValuesTable()
 end
 
-local Round = notShit.round
-local Floor = notShit.floor
-local queuecommand = Actor.queuecommand
-local playcommand = Actor.queuecommand
-local settext = BitmapText.settext
-
-local function isCustomizeAutoplayActive()
-	if getAutoplay and getAutoplay() ~= 0 then return true end
-	local ps = GAMESTATE:GetPlayerState(PLAYER_1)
-	return ps and ps.GetPlayerController and ps:GetPlayerController() == "PlayerController_Autoplay"
-end
-
 function setMovableActor(buttons, actor, border)
 	if not allowedCustomization then return end
 	for _, button in ipairs(buttons) do
@@ -159,6 +147,10 @@ function setMovableNotefield(notefield, columns)
 	Movable.DeviceButton_t.element = noteColumns
 	Movable.DeviceButton_t.condition = true
 	Movable.DeviceButton_n.condition = true
+	Movable.DeviceButton_n._lastSpacing = MovableValues.NotefieldSpacing or 0
+	if Movable.DeviceButton_n._lastSpacing ~= 0 then
+		spaceNotefieldCols(Movable.DeviceButton_n._lastSpacing)
+	end
 	Movable.DeviceButton_n.DeviceButton_up.arbitraryFunction = spaceNotefieldCols
 	Movable.DeviceButton_n.DeviceButton_down.arbitraryFunction = spaceNotefieldCols
 end
@@ -176,6 +168,287 @@ local propsFunctions = {
 	end,
 	Rotation = Actor.rotationz,
 }
+
+function GetGameplayCustomizationEntries()
+	local entries, seen = {}, {}
+	for button, entry in pairs(Movable) do
+		if type(entry) == "table" and entry.name and entry.elementTree and entry.properties then
+			local group = entry.name .. ":" .. entry.elementTree .. ":" .. table.concat(entry.properties, ",")
+			if not seen[group] then
+				seen[group] = true
+				entries[#entries + 1] = {button = button, data = entry, key = group}
+			end
+		end
+	end
+	table.sort(entries, function(a, b)
+		if a.data.name == b.data.name then
+			return a.data.elementTree < b.data.elementTree
+		end
+		return a.data.name < b.data.name
+	end)
+	return entries
+end
+
+local function applyCustomizationEntry(entry, previousValues)
+	local data = entry.data
+	local actor = data.actor or data.element
+	local hasSpacing = false
+	for _, suffix in ipairs(data.properties or {}) do if suffix == "Spacing" then hasSpacing = true end end
+	if not actor and not hasSpacing then return end
+	for _, suffix in ipairs(data.properties or {}) do
+		local value = MovableValues[data.name .. suffix]
+		if value == nil then
+			value = data.elementTree == "GameplaySizes"
+				and getDefaultGameplaySize(data.name .. suffix)
+				or getDefaultGameplayCoordinate(data.name .. suffix)
+		end
+		if value == nil then value = 0 end
+		if suffix == "X" or suffix == "Y" then
+			local difference = value - (previousValues and previousValues[data.name .. suffix] or value)
+			local method = propsFunctions[suffix == "X" and "AddX" or "AddY"]
+			if data.name == "Combo" and actor and difference ~= 0 then
+				method(actor, difference)
+			elseif data.children then
+				for _, childName in ipairs(data.children) do
+					local child = data.element[childName]
+					if child and difference ~= 0 then method(child, difference) end
+				end
+			elseif actor and difference ~= 0 then
+				method(actor, difference)
+			end
+		elseif data.arbitraryFunction then
+			data.arbitraryFunction(value)
+		elseif suffix == "Spacing" then
+			spaceNotefieldCols(value - (data._lastSpacing or 0))
+			data._lastSpacing = value
+		elseif data.elementList then
+			local method = propsFunctions[suffix]
+			if method then for _, elem in ipairs(data.element) do method(elem, value) end end
+		elseif suffix == "Scale" then
+			actor:playcommand("UpdateEBScale", {scale = value})
+		elseif propsFunctions[suffix] then
+			propsFunctions[suffix](actor, value)
+		end
+	end
+end
+
+function SelectGameplayCustomizationEntry(entry)
+	local borders = {}
+	local selectedBorder
+	for _, candidate in ipairs(GetGameplayCustomizationEntries()) do
+		local border = candidate.data.Border
+		if border then
+			local matches = entry ~= nil and candidate.key == entry.key
+			borders[border] = borders[border] or matches
+			if matches then
+				selectedBorder = border
+			end
+		end
+	end
+	for border, selected in pairs(borders) do
+		-- Borders are rendered by the editor's screen-level outline. Keeping
+		-- embedded borders hidden lets the outline work for hidden HUD actors.
+		border:visible(false):diffusealpha(selected and 1 or 0)
+	end
+	GameplayCustomizationSelectedBorder = selectedBorder
+	MESSAGEMAN:Broadcast("MovableUpdated", {button = entry and entry.button})
+end
+
+function AdjustGameplayCustomization(entry, suffix, direction)
+	local data = entry and entry.data
+	if not data or data.condition == false or data.external then return end
+	local propertyKey = data.name .. suffix
+	local current = tonumber(MovableValues[propertyKey]) or 0
+	if propertyKey == "FullProgressBarY" and data.actor and data.actor.GetTrueY then
+		local ok, absoluteY = pcall(function() return data.actor:GetTrueY() end)
+		if ok and type(absoluteY) == "number" then current = absoluteY end
+	end
+	local increment = 1
+	local key = suffix == "X" and "DeviceButton_right"
+		or suffix == "Y" and "DeviceButton_down"
+		or (suffix == "Height" and "DeviceButton_down")
+		or (suffix == "Width" and "DeviceButton_right")
+		or "DeviceButton_right"
+	local adjustment = data[key] or data.DeviceButton_up or data.DeviceButton_down
+	if adjustment and adjustment.inc then increment = math.abs(adjustment.inc) end
+	local nextValue = current + increment * direction
+	if propertyKey == "ErrorBarScale" then nextValue = math.max(0, nextValue) end
+	MovableValues[propertyKey] = nextValue
+	if suffix == "Spacing" then
+		spaceNotefieldCols(increment * direction)
+		data._lastSpacing = nextValue
+	elseif data.arbitraryFunction then
+		data.arbitraryFunction(nextValue)
+	elseif suffix == "Scale" then
+		local actor = data.actor or data.element
+		if actor then actor:playcommand("UpdateEBScale", {scale = nextValue}) end
+	elseif suffix == "X" or suffix == "Y" then
+		local axis = suffix
+		local delta = increment * direction
+		if suffix == "Y" and data.name == "Notefield" and not usingReverse then delta = -delta end
+		local method = propsFunctions[axis == "X" and "AddX" or "AddY"]
+		if data.name == "Combo" and data.element then
+			method(data.element, delta)
+		elseif data.children then
+			for _, childName in ipairs(data.children) do
+				local child = data.element[childName]
+				if child then method(child, delta) end
+			end
+		elseif data.actor then method(data.actor, delta)
+		elseif data.element then method(data.element, delta) end
+	elseif data.elementList then
+		for _, elem in ipairs(data.element) do propsFunctions[suffix](elem, nextValue) end
+	else
+		local actor = data.actor or data.element
+		if actor and propsFunctions[suffix] then propsFunctions[suffix](actor, nextValue) end
+	end
+	if data.Border and (suffix == "Zoom" or suffix == "Width" or suffix == "Height") then
+		data.Border:playcommand("Change" .. suffix, {val = nextValue})
+	end
+	local playerData = playerConfig:get_data(pn_to_profile_slot(PLAYER_1))
+	playerData[data.elementTree][keymode] = playerData[data.elementTree][keymode] or {}
+	playerData[data.elementTree][keymode][propertyKey] = nextValue
+	playerConfig:set_dirty(pn_to_profile_slot(PLAYER_1))
+end
+
+function MoveGameplayCustomizationPosition(entry, suffix, screenDelta)
+	local data = entry and entry.data
+	if not data or data.condition == false or data.external then return end
+	if (suffix ~= "X" and suffix ~= "Y") or screenDelta == 0 then return end
+	local key = data.name .. suffix
+	local valueDelta = screenDelta
+	if suffix == "Y" and data.name == "Notefield" and not usingReverse then
+		valueDelta = -screenDelta
+	end
+	local nextValue = (tonumber(MovableValues[key]) or 0) + valueDelta
+	MovableValues[key] = nextValue
+	if data.name == "FullProgressBar" and suffix == "Y" then
+		local actor = data.actor or data.element
+		if actor then actor:y(nextValue) end
+	elseif data.name == "Combo" and data.element then
+		local method = propsFunctions[suffix == "X" and "AddX" or "AddY"]
+		method(data.element, screenDelta)
+	elseif data.children then
+		local method = propsFunctions[suffix == "X" and "AddX" or "AddY"]
+		for _, childName in ipairs(data.children) do
+			local child = data.element and data.element[childName]
+			if child then method(child, screenDelta) end
+		end
+	else
+		local actor = data.actor or data.element
+		local method = propsFunctions[suffix == "X" and "AddX" or "AddY"]
+		if actor then method(actor, screenDelta) end
+	end
+	local playerData = playerConfig:get_data(pn_to_profile_slot(PLAYER_1))
+	playerData[data.elementTree][keymode] = playerData[data.elementTree][keymode] or {}
+	playerData[data.elementTree][keymode][key] = nextValue
+	playerConfig:set_dirty(pn_to_profile_slot(PLAYER_1))
+end
+
+function ResetGameplayCustomizationProperty(entry, suffix)
+	local data = entry and entry.data
+	if not data or data.condition == false or data.external then return end
+	local propertyKey = data.name .. suffix
+	local defaultValue = data.elementTree == "GameplaySizes"
+		and getDefaultGameplaySize(propertyKey)
+		or getDefaultGameplayCoordinate(propertyKey)
+	if defaultValue == nil then return end
+	if propertyKey == "FullProgressBarY" then
+		local position = HV.GetProgressBarPosition()
+		defaultValue = position == "Bottom" and (SCREEN_BOTTOM - 14) or 12
+	end
+	local current = tonumber(MovableValues[propertyKey]) or 0
+	local delta = defaultValue - current
+	MovableValues[propertyKey] = defaultValue
+	if suffix == "Spacing" then
+		spaceNotefieldCols(delta)
+		data._lastSpacing = defaultValue
+	elseif data.arbitraryFunction then
+		data.arbitraryFunction(defaultValue)
+	elseif suffix == "Scale" then
+		local actor = data.actor or data.element
+		if actor then actor:playcommand("UpdateEBScale", {scale = defaultValue}) end
+	elseif suffix == "X" or suffix == "Y" then
+		if data.name == "FullProgressBar" and suffix == "Y" and data.element and data.element.y then
+			data.element:y(defaultValue)
+		elseif data.name == "Combo" and data.element and delta ~= 0 then
+			local method = propsFunctions[suffix == "X" and "AddX" or "AddY"]
+			method(data.element, delta)
+		elseif data.children then
+			local method = propsFunctions[suffix == "X" and "AddX" or "AddY"]
+			for _, childName in ipairs(data.children) do
+				local child = data.element[childName]
+				if child and delta ~= 0 then method(child, delta) end
+			end
+		else
+			local actor = data.actor or data.element
+			local method = propsFunctions[suffix == "X" and "AddX" or "AddY"]
+			if actor and delta ~= 0 then method(actor, delta) end
+		end
+	elseif data.elementList then
+		for _, actor in ipairs(data.element) do propsFunctions[suffix](actor, defaultValue) end
+	else
+		local actor = data.actor or data.element
+		if actor and propsFunctions[suffix] then propsFunctions[suffix](actor, defaultValue) end
+	end
+	if data.Border and (suffix == "Zoom" or suffix == "Width" or suffix == "Height") then
+		data.Border:playcommand("Change" .. suffix, {val = defaultValue})
+	end
+	local playerData = playerConfig:get_data(pn_to_profile_slot(PLAYER_1))
+	playerData[data.elementTree][keymode] = playerData[data.elementTree][keymode] or {}
+	playerData[data.elementTree][keymode][propertyKey] = defaultValue
+	playerConfig:set_dirty(pn_to_profile_slot(PLAYER_1))
+end
+
+function GetGameplayCustomizationSnapshot()
+	local pdata = playerConfig:get_data(pn_to_profile_slot(PLAYER_1))
+	local function clone(source)
+		local copy = {}
+		for key, value in pairs(source or {}) do
+			copy[key] = type(value) == "table" and clone(value) or value
+		end
+		return copy
+	end
+	return {
+		coords = clone(pdata.GameplayXYCoordinates[keymode]),
+		sizes = clone(pdata.GameplaySizes[keymode]),
+		values = clone(MovableValues)
+	}
+end
+
+function RestoreGameplayCustomizationSnapshot(snapshot)
+	if not snapshot then return end
+	local previousValues = {}
+	for key, value in pairs(MovableValues) do previousValues[key] = value end
+	local pdata = playerConfig:get_data(pn_to_profile_slot(PLAYER_1))
+	pdata.GameplayXYCoordinates[keymode] = snapshot.coords
+	pdata.GameplaySizes[keymode] = snapshot.sizes
+	MovableValues = snapshot.values
+	for _, entry in ipairs(GetGameplayCustomizationEntries()) do applyCustomizationEntry(entry, previousValues) end
+	playerConfig:set_dirty(pn_to_profile_slot(PLAYER_1))
+end
+
+function ResetGameplayCustomizationKeymode()
+	local pdata = playerConfig:get_data(pn_to_profile_slot(PLAYER_1))
+	local previousValues = {}
+	for key, value in pairs(MovableValues) do previousValues[key] = value end
+	local coords, sizes = {}, {}
+	for _, entry in ipairs(GetGameplayCustomizationEntries()) do
+		for _, suffix in ipairs(entry.data.properties) do
+			local property = entry.data.name .. suffix
+			if entry.data.elementTree == "GameplayXYCoordinates" then
+				coords[property] = getDefaultGameplayCoordinate(property) or 0
+			else
+				sizes[property] = getDefaultGameplaySize(property) or 1
+			end
+		end
+	end
+	pdata.GameplayXYCoordinates[keymode] = coords
+	pdata.GameplaySizes[keymode] = sizes
+	loadValuesTable()
+	for _, entry in ipairs(GetGameplayCustomizationEntries()) do applyCustomizationEntry(entry, previousValues) end
+	playerConfig:set_dirty(pn_to_profile_slot(PLAYER_1))
+end
 
 Movable = {
 	message = {},
@@ -926,272 +1199,6 @@ Movable = {
 	
 }
 
-local function updatetext(button)
-	local text = {Movable[button].textHeader}
-	for _, prop in ipairs(Movable[button].properties) do
-		local fullProp = Movable[button].name .. prop
-		local val = MovableValues[fullProp]
-		if type(val) == "number" then
-			val = string.format("%.2f", val)
-		end
-		table.insert(text, prop .. ": " .. (val or "nil"))
-	end
-	Movable.current = button
-	Movable.message:settext(table.concat(text, "\n"))
-	Movable.message:visible(Movable.pressed)
-	MESSAGEMAN:Broadcast("MovableUpdated", {button = button})
-end
-
-local function charToDeviceButton(ch)
-	if not ch then return nil end
-	if ch:match("^[a-z0-9]$") then return "DeviceButton_" .. ch end
-	local symbolMap = {
-		[","] = "DeviceButton_comma",
-		["."] = "DeviceButton_period",
-		["/"] = "DeviceButton_slash",
-		["\\"] = "DeviceButton_backslash",
-		["-"] = "DeviceButton_minus",
-		["="] = "DeviceButton_equals",
-		[";"] = "DeviceButton_semicolon",
-		["'"] = "DeviceButton_apostrophe",
-		["["] = "DeviceButton_left bracket",
-		["]"] = "DeviceButton_right bracket",
-		["`"] = "DeviceButton_grave",
-		[" "] = "DeviceButton_space",
-	}
-	return symbolMap[ch]
-end
-
-local function normalizeMovableButton(event)
-	if not event then return nil end
-	local deviceButton = event.DeviceInput and event.DeviceInput.button or nil
-	if deviceButton and Movable[deviceButton] then
-		return deviceButton
-	end
-
-	local shifted = INPUTFILTER:IsBeingPressed("left shift") or INPUTFILTER:IsBeingPressed("right shift")
-	if DeviceBtnToChar and deviceButton then
-		local asChar = DeviceBtnToChar(deviceButton, shifted)
-		local mapped = charToDeviceButton(asChar and asChar:lower() or nil)
-		if mapped and Movable[mapped] then
-			return mapped
-		end
-	end
-
-	local logicalButton = event.button
-	if type(logicalButton) == "string" then
-		local key = logicalButton:match("^Key%s+(.+)$")
-		if key then
-			local mapped = charToDeviceButton(key:lower())
-			if mapped and Movable[mapped] then
-				return mapped
-			end
-		end
-	end
-
-	return deviceButton
-end
-
-function MovableInput(event)
-	if SCREENMAN:GetTopScreen():GetName() == "ScreenGameplaySyncMachine" then return end
-	if not allowedCustomization then return false end
-	if isCustomizeAutoplayActive() then
-		-- this will eat any other mouse input than a right click (toggle)
-		-- so we don't have to worry about anything weird happening with the ersatz inputs -mina
-		if event.DeviceInput and event.DeviceInput.is_mouse then	
-			if event.DeviceInput.button == "DeviceButton_right mouse button" then
-				Movable.current = "None"
-				Movable.pressed = false
-				Movable.message:visible(Movable.pressed)
-			end
-			return 
-		end
-
-		local button = normalizeMovableButton(event)	
-		event.hellothisismouse = event.hellothisismouse and true or false -- so that's why bools kept getting set to nil -mina
-		local notReleased = not (event.type == "InputEventType_Release")
-		-- changed to toggle rather than hold down -mina
-		if (Movable[button] and Movable[button].condition and notReleased) or event.hellothisismouse then
-			Movable.pressed = not Movable.pressed or event.hellothisismouse	-- this stuff is getting pretty hacky now -mina
-			if Movable.current ~= button and not event.hellothisismouse then
-				Movable.pressed = true	-- allow toggling using the kb to directly move to a different key rather than forcing an untoggle first -mina
-			end
-			Movable.current = button
-			if not Movable.pressed then 
-				Movable.current = "None"
-			end
-			updatetext(button)	-- this will only update the text when the toggles occur
-		end
-		
-		local current = Movable[Movable.current]
-
-		-- left/right move along the x axis and up/down along the y; set them directly here -mina
-		if event.hellothisismouse then
-			if event.axis == "x" then
-				button = "DeviceButton_left"
-			else
-				button = "DeviceButton_up"
-			end
-			Movable.pressed = true	-- we need to do this or the mouse input facsimile will toggle on when moving x, and off when moving y
-		end
-
-		if button == "DeviceButton_backspace" then
-			event.defaultreset = true
-		else
-			event.defaultreset = false
-		end
-
-		-- reset to default
-		if event.defaultreset then
-			Movable.pressed = true
-			if current ~= nil and current.condition and notReleased and current.external == nil then
-				local keys = {
-					"DeviceButton_left", -- right redundant
-					"DeviceButton_up", -- down redundant
-				}
-				-- run update functions for "all keys"
-				for _, b in ipairs(keys) do
-					local curKey = current[b]
-					if curKey ~= nil then
-						local keyProperty = curKey.property
-						local propertyName = string.gsub(keyProperty, "Add", "")
-						local prop = current.name .. propertyName
-						local newVal = getDefaultGameplayCoordinate(prop)
-							or getDefaultGameplaySize(prop)
-						if prop == "FullProgressBarY" then
-							local position = HV.GetProgressBarPosition()
-							newVal = position == "Bottom"
-								and (SCREEN_BOTTOM - 14) or 20
-						end
-						newVal = newVal or MovableValues[prop] or 0
-						local diff = newVal - (MovableValues[prop] or 0)
-						MovableValues[prop] = newVal
-						if curKey.arbitraryFunction then
-							if curKey.arbitraryInc then
-								-- this definitely breaks for something probably maybe
-								-- this is just for visuals anyways
-								-- pressing the default button and restarting gameplay fixes it
-								curKey.arbitraryFunction(diff)
-							else
-								curKey.arbitraryFunction(newVal)
-							end
-						elseif prop == "FullProgressBarY" and current.element and current.element.y then
-							current.element:y(newVal)
-						elseif keyProperty == "AddX" or keyProperty == "AddY" then
-							propsFunctions[keyProperty](current.element, diff)
-						elseif current.actor then
-							propsFunctions[keyProperty](current.actor, newVal)
-						elseif current.children then
-							for _, attribute in ipairs(current.children) do
-								propsFunctions[keyProperty](current.element[attribute], newVal)
-							end
-						elseif current.elementList then
-							for _, elem in ipairs(current.element) do
-								propsFunctions[keyProperty](elem, newVal)
-							end
-						else
-							propsFunctions[keyProperty](current.element, newVal)
-						end
-			
-						if not current.noBorder then
-							local border = Movable[Movable.current]["Border"]
-							if keyProperty == "Height" or keyProperty == "Width" or keyProperty == "Zoom" then
-								border:playcommand("Change" .. keyProperty, {val = newVal} )
-							end
-						end
-						updatetext(Movable.current)
-						local playerData = playerConfig:get_data(pn_to_profile_slot(PLAYER_1))
-						playerData[current.elementTree][keymode] = playerData[current.elementTree][keymode] or {}
-						playerData[current.elementTree][keymode][prop] = MovableValues[prop]
-						playerConfig:set_dirty(pn_to_profile_slot(PLAYER_1))
-					end
-				end
-				return false
-			end
-		end
-		
-		if current and Movable.pressed and current[button] and current.condition and notReleased and current.external == nil then
-			local curKey = current[button]
-			local keyProperty = curKey.property
-			local prop = current.name .. string.gsub(keyProperty, "Add", "")
-			local newVal
-
-			-- directly set newval if we're using the mouse -mina
-			if event.hellothisismouse then
-				if current.mouseRelativeToCenter and keyProperty == "AddX" then
-					newVal = event.val - SCREEN_CENTER_X
-				elseif current.mouseRelativeToCenter and keyProperty == "AddY" then
-					newVal = event.val - SCREEN_CENTER_Y
-				elseif keyProperty == "AddX" and current.element and current.element.GetTrueX and current.element.GetX then
-					newVal = event.val - (current.element:GetTrueX() - current.element:GetX())
-				elseif keyProperty == "AddY" and current.element and current.element.GetTrueY and current.element.GetY then
-					newVal = event.val - (current.element:GetTrueY() - current.element:GetY())
-				else
-					newVal = event.val
-				end
-			else
-				newVal = (MovableValues[prop] or 0) + (curKey.inc * ((curKey.notefieldY and not usingReverse) and -1 or 1))
-				if prop == "ErrorBarScale" then
-					newVal = math.max(0, newVal)
-				end
-			end
-			
-			MovableValues[prop] = newVal
-			if curKey.arbitraryFunction then
-				if curKey.arbitraryInc then
-					curKey.arbitraryFunction(curKey.inc)
-				else
-					curKey.arbitraryFunction(newVal)
-				end
-			elseif keyProperty == "AddX" or keyProperty == "AddY" then
-				if event.hellothisismouse then
-					local axisProp = string.gsub(keyProperty, "Add", "")
-					if current.actorUsesAbsolutePosition and current.mouseRelativeToCenter then
-						local appliedVal = newVal + (axisProp == "X" and SCREEN_CENTER_X or SCREEN_CENTER_Y)
-						propsFunctions[axisProp](current.element, appliedVal)
-					else
-						propsFunctions[axisProp](current.element, newVal)
-					end
-				else
-					propsFunctions[keyProperty](current.element, curKey.inc)
-				end
-			elseif current.actor then
-				propsFunctions[keyProperty](current.actor, newVal)
-			elseif current.children then
-				for _, attribute in ipairs(current.children) do
-					propsFunctions[curKey.property](current.element[attribute], newVal)
-				end
-			elseif current.elementList then
-				for _, elem in ipairs(current.element) do
-					propsFunctions[keyProperty](elem, newVal)
-				end
-			else
-				propsFunctions[keyProperty](current.element, newVal)
-			end
-
-			if not current.noBorder then
-				local border = Movable[Movable.current]["Border"]
-				if keyProperty == "Height" or keyProperty == "Width" or keyProperty == "Zoom" then
-					border:playcommand("Change" .. keyProperty, {val = newVal} )
-				end
-			end
-
-			if not event.hellothisismouse then
-				updatetext(Movable.current)	-- updates text when keyboard movements are made (mouse already updated)
-			end
-			local playerData = playerConfig:get_data(pn_to_profile_slot(PLAYER_1))
-			playerData[current.elementTree][keymode] = playerData[current.elementTree][keymode] or {}
-			playerData[current.elementTree][keymode][prop] = newVal
-			playerConfig:set_dirty(pn_to_profile_slot(PLAYER_1))
-			-- commented this to save I/O time and reduce lag
-			-- just make sure to call this somewhere else to make sure stuff saves.
-			-- (like when the screen changes....)
-			--playerConfig:save(pn_to_profile_slot(PLAYER_1))
-		end
-	end
-	return false
-end
-
 function setBorderAlignment(self, h, v)
 	self:RunCommandsOnChildren(
 		function(self)
@@ -1209,94 +1216,15 @@ function setBorderToText(b, t)
 end
 
 -- this is supreme lazy -mina
-local function elementtobutton(name)
-	local aliases = {
-		PlayerJudgment = "Judge",
-		ComboDisplay = "Combo",
-		CenteredScore = "DisplayPercent",
-		TextPacemaker = "TargetTracker",
-		ProgressBarContainer = "FullProgressBar",
-		MiniProgressBarContainer = "MiniProgressBar",
-		VerticalLifeBar = "LifeP1",
-		TallyAndMetrics = "JudgeCounter",
-		NotefieldMean = "DisplayMean",
-		NPSCalcContainer = "NPSDisplay",
-		SSRDisplay = "SSRDisplay",
-		NPSGraph = "NPSGraph",
-		InGameLeaderboard = "Leaderboard",
-		ReplayControls = "ReplayButtons",
-		AutofailDisplay = "AutoFailDisplay",
-	}
-	name = aliases[name] or name
-	name = name == "Judgment" and "Judge" or name
-	for k,v in pairs(Movable) do
-		if type(v) == 'table' and v.name == name and v.properties[1] == "X" then
-			return k
-		end
-	end
-end
-
-local function bordermousereact(self)
-	self:queuecommand("mousereact")
-end
-
-local function getMovableButtonForActor(actor)
-	local current = actor
-	while current do
-		local name = current.GetName and current:GetName() or nil
-		local button = name and elementtobutton(name) or nil
-		if button and Movable[button] then
-			return button
-		end
-		current = current.GetParent and current:GetParent() or nil
-	end
-	return nil
-end
-
-local function movewhendragged(self)
-	local b = getMovableButtonForActor(self)
-	if not b or not Movable[b] then
-		self:GetParent():diffusealpha(0.1)
-		return
-	end
-	if isOver(self) or (Movable.pressed and Movable.current == b) then
-		if Movable.pressed and Movable.current == b then
-			self:GetParent():diffusealpha(0.75)	-- this is active
-		else
-			self:GetParent():diffusealpha(0.35)	-- this has been moused over
-		end
-		
-		-- second half of the expr stops elements from being activated if you mouse over them while moving something else
-		if INPUTFILTER:IsBeingPressed("Mouse 0", "Mouse") and (Movable.current == b or Movable.current == "None") then
-			local nx = Round(INPUTFILTER:GetMouseX())
-			local ny = Round(INPUTFILTER:GetMouseY())
-			if Movable[b] and Movable[b].propertyOffsets ~= nil then
-				nx = nx - Movable[b].propertyOffsets[1]
-				ny = ny - Movable[b].propertyOffsets[2]
-			end
-			MovableInput({DeviceInput = {button = b}, hellothisismouse = true, axis = "x", val = nx})
-			MovableInput({DeviceInput = {button = b}, hellothisismouse = true, axis = "y", val = ny})
-		end
-	elseif Movable.pressed then 
-		self:GetParent():diffusealpha(0.35)		-- something is active, but not this
-	else
-		self:GetParent():diffusealpha(0.1)		-- nothing is active and this is not moused over
-	end
-end
-
 -- border function in use -mina
 function MovableBorder(width, height, bw, x, y)
 	if not allowedCustomization then return end	-- we don't want to be loading all this garbage if we aren't in customization
 	return Def.ActorFrame {
 		Name = "Border",
-		InitCommand=function(self)
-			self:xy(x,y):diffusealpha(0)
-			self:SetUpdateFunction(bordermousereact)
-		end,
+		InitCommand=function(self) self:xy(x,y):visible(false):diffusealpha(0) end,
 		OnCommand=function(self)
 			if SCREENMAN:GetTopScreen():GetName() == "ScreenGameplaySyncMachine" then
 				self:visible(false)
-				self:SetUpdateFunction(nil)
 			end
 		end,
 		UpdateEBWidthCommand=function(self, params)
@@ -1341,9 +1269,6 @@ function MovableBorder(width, height, bw, x, y)
 			InitCommand=function(self)
 				self:zoomto(width,height):MaskDest()
 			end,
-			mousereactCommand=function(self)
-				movewhendragged(self)	-- this quad owns the mouse movement function -mina
-			end
 		},
 	}
 end

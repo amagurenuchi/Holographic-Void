@@ -504,7 +504,7 @@ local barH = 10
 local barPad = 8
 
 local defaultBarY = progressBarPosition == "Bottom"
-	and (SCREEN_BOTTOM - 14) or 20
+	and (SCREEN_BOTTOM - 14) or 12
 
 local barY = defaultBarY
 
@@ -533,7 +533,7 @@ t[#t + 1] = Def.ActorFrame {
 		local position = HV.GetProgressBarPosition()
 		if position == "Off" then return end
 		local newY = position == "Bottom"
-			and (SCREEN_BOTTOM - 14) or 20
+			and (SCREEN_BOTTOM - 14) or 12
 		local slot = pn_to_profile_slot(PLAYER_1)
 		local playerData = playerConfig:get_data(slot)
 		local keymode = getCurrentKeyMode()
@@ -2361,7 +2361,7 @@ if not isSync then
 	t[#t + 1] = LoadActor("avatar")
 end
 t[#t + 1] = LoadActor("intro")
-t[#t + 1] = LoadActor("messagebox")
+t[#t + 1] = LoadActor("customize_gameplay")
 
 -- ============================================================
 -- NG INDICATOR (POPUP)
