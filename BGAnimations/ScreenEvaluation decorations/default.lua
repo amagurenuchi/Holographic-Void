@@ -1,17 +1,14 @@
 --- Holographic Void: ScreenEvaluation Decorations
 -- Full-featured evaluation screen ported from spawncamping-wallhack.
+-- Features: Life/Combo graphs, Avatar+Player info, Grade+Score with rescoring (needs testing to ensure nothing breaks),
+--   ClearType comparison, Tap/Hold/Mine judgments, Timing stats (mean/sd),
+--   CB L/R breakdown, Paginated Local/Online Scoreboard, Full Offset Plot.
 
 local song = GAMESTATE:GetCurrentSong()
 local pss = STATSMAN:GetCurStageStats():GetPlayerStageStats()
 local steps = GAMESTATE:GetCurrentSteps()
 local pn = GAMESTATE:GetEnabledPlayers()[1]
 local profile = PROFILEMAN:GetProfile(pn)
-
-local function formatDanName(dan)
-	if dan == "0" then return "Below 1st" end
-	if dan == "∞" or dan == "Infinity" then return "Infinity" end
-	return dan
-end
 
 -- Autoplay results are not player scores.  Keep this local to the evaluation
 -- screen so autoplay can still be used normally during gameplay.
@@ -54,9 +51,6 @@ end
 -- a large scoreBoard() closure and Etterna's Lua build limits its upvalues.
 scoringVoided = isAutoplayEvaluation()
 HV.EvaluationScoringVoided = scoringVoided
-
--- Helpers used by scoreBoard are also globals for the same Lua upvalue-limit
--- reason. Keep scoreBoard from capturing dozens of individual helper locals.
 
 if scoringVoided then
 	return Def.ActorFrame {
@@ -167,7 +161,7 @@ local function roundTo(value, places)
 	return math.floor(value * scale + 0.5) / scale
 end
 
-function getJudgeForScore(score)
+local function getJudgeForScore(score)
 	local playedJudge = 4
 	local norm = PREFSMAN:GetPreference("SortBySSRNormPercent")
 	if not norm and score and type(score.GetJudgeScale) == "function" then
@@ -187,7 +181,7 @@ function getJudgeForScore(score)
 	return math.max(4, math.min(9, playedJudge))
 end
 
-function formatWifePercent(pct)
+local function formatWifePercent(pct)
 	local precision = pct >= 99 and 4 or 2
 	local rounded = roundTo(pct, precision)
 	if pct >= 100 then return "100%" end
@@ -217,7 +211,7 @@ local evalModShorthands = {
 	["Reverse"] = "REV", ["Mines"] = "MNS",
 }
 
-function formatEvalSpeedMode(mode, speed)
+local function formatEvalSpeedMode(mode, speed)
 	mode = mode or "C"
 	speed = speed or 400
 	if mode == "x" then
@@ -226,14 +220,14 @@ function formatEvalSpeedMode(mode, speed)
 	return mode .. tostring(speed)
 end
 
-function formatEvalRateValue(rate)
+local function formatEvalRateValue(rate)
 	local formatted = string.format("%.2f", tonumber(rate) or 1):gsub("%.?0+$", "") .. "x"
 	if formatted == "1x" then formatted = "1.0x" end
 	if formatted == "2x" then formatted = "2.0x" end
 	return formatted
 end
 
-function hasEvaluationAssistEnabled(po, modStr)
+local function hasEvaluationAssistEnabled(po, modStr)
 	local normalizedModStr = (modStr or ""):lower():gsub("[%s_]+", "")
 	if po then
 		if po.AssistClap and po:AssistClap() then return true end
@@ -244,7 +238,7 @@ function hasEvaluationAssistEnabled(po, modStr)
 		or string.find(normalizedModStr, "autoplay")
 end
 
-function setDPTextActors(wholeActor, decimalActor, dp, precision)
+local function setDPTextActors(wholeActor, decimalActor, dp, precision)
 	local roundedDp = roundTo(dp, precision)
 	local format = "%0." .. precision .. "f"
 	local formatted = string.format(format, roundedDp)
@@ -261,7 +255,7 @@ end
 -- Filter the module-level dvt by tap note type, mirroring getRescoreElementsFromScore.
 -- Without this, mine-hit offsets pass through wife3() giving ~+2 pts each while
 -- minesHit*-7 is ALSO applied, netting -5 per mine instead of the correct -7.
-function getFilteredDvt()
+local function getFilteredDvt()
 	if not dvt then return {} end
 	if ntt and #ntt == #dvt then
 		local out = {}
@@ -276,7 +270,7 @@ function getFilteredDvt()
 	return dvt -- no type vector: return as-is (PSS path, already clean)
 end
 
-function refreshRescoredPercentage()
+local function refreshRescoredPercentage()
 	if scoringVoided then
 		maniaRescore = nil
 		rescoredPercentage = nil
@@ -385,7 +379,7 @@ function calculateCustomWindowScore(configName, rst)
 end
 
 
-function updateVectors()
+local function updateVectors()
 	if scoringVoided then
 		nrv, dvt, ctt, ntt, totalTaps = {}, {}, {}, {}, 0
 		return
@@ -491,7 +485,7 @@ HV.SelectEvaluationScore = function(selected)
 	return true
 end
 
-function formatEvaluationPercent(pct)
+local function formatEvaluationPercent(pct)
 	if isManiaModeEnabled() then return string.format("%.2f%%", roundTo(pct, 2)) end
 	return formatWifePercent(pct)
 end
@@ -526,7 +520,7 @@ end
 -- osu!mania ScoreV1 long-form score, ported from Fatigue.
 -- This is deliberately separate from the 320-point accuracy rescore: osu!'s
 -- displayed score is normalized to 1,000,000 and includes combo bonus.
-function getOsuManiaLongScore()
+local function getOsuManiaLongScore()
 	if not maniaRescore then return 0 end
 	local counts = maniaRescore.counts or {}
 	local maxScore, totalTaps = 1000000, (steps and steps:GetRadarValues(pn):GetValue("RadarCategory_Notes") or 0)
@@ -555,7 +549,7 @@ function getOsuManiaLongScore()
 	return math.max(0, math.min(maxScore, math.floor(baseScore + (maxScore * 0.5 / totalNotes) * bonusValue + 0.5)))
 end
 
-function formatOsuManiaLongScore(score)
+local function formatOsuManiaLongScore(score)
 	local value = tostring(math.max(0, math.floor(tonumber(score) or 0)))
 	while true do
 		local replaced
@@ -565,7 +559,7 @@ function formatOsuManiaLongScore(score)
 	return value
 end
 
-function getOsuManiaGrade(accuracy, rescoreData)
+local function getOsuManiaGrade(accuracy, rescoreData)
 	accuracy = tonumber(accuracy) or 0
 	-- ScoreV2: X rank requires every hit to be 300 or MAX (no 200/100/50/miss)
 	if HV.ManiaState and HV.ManiaState.useScoreV2 and rescoreData and rescoreData.counts then
@@ -593,7 +587,7 @@ local maniaGradeColors = {
 	D = color("#FF4D5A")
 }
 
-function getOsuManiaGradeColor(grade)
+local function getOsuManiaGradeColor(grade)
 	return maniaGradeColors[grade] or brightText
 end
 judge = getJudgeForScore(curScore)
@@ -607,7 +601,7 @@ local function localWifeAbsMean(dvt) return wifeAbsMean(dvt) end
 local function localWifeSd(dvt) return wifeSd(dvt) end
 local function localWifeMax(dvt) return wifeMax(dvt) end
 
-function getKeycountLabelForSteps(curSteps)
+local function getKeycountLabelForSteps(curSteps)
 	if not curSteps then return nil end
 
 	local st = tostring(curSteps:GetStepsType() or ""):lower()
@@ -693,7 +687,7 @@ end
 -- Cache for RA/LA ratios to avoid repeated replay loading
 local cachedRatios = nil
 clearRatioCache = function() cachedRatios = nil end
-function getRatios()
+local function getRatios()
 	if not cachedRatios then
 		local ra, la, ridic, marvRA, ludic, ridicLA = calculateRatios(curScore)
 		cachedRatios = {ra, la, ridic, marvRA, ludic, ridicLA}
@@ -747,7 +741,7 @@ function comparisonArrow(diff)
 	return diff >= 0 and "▲" or "▼"
 end
 
-function isCurrentBestScore()
+local function isCurrentBestScore()
 	-- A newly completed play can become rank 1, but it should still show
 	-- the advantage over the previous best.  "Best!" is for a best score
 	-- opened from the evaluation leaderboard.
@@ -792,7 +786,7 @@ local ncol = steps and steps:GetNumColumns() or 4
 local middleCol = (ncol - 1) / 2
 local showMiddle = middleCol == math.floor(middleCol)
 
-function recountCBs()
+local function recountCBs()
 	local cbWindow = (tst[judge] or 1) * 90
 	-- CBs include W4, W5, and Miss, so count offsets beyond the W3 boundary.
 	if usingCustomWindows and getCustomWindowConfigJudgmentWindow then
@@ -846,14 +840,14 @@ if HV.EmulateRidiculousEnabled() and not scoringVoided then
 	ridiculousCount = ok and HV.GetRidiculousCountFromOffsets(offsets, ms.JudgeScalers[getJudgeForScore(curScore)] or 1) or nil
 end
 
-function getEvaluationJudgeCount(judgeName, judgeIndex)
+local function getEvaluationJudgeCount(judgeName, judgeIndex)
 	if scoringVoided then return 0 end
 	if judgeName == "Ridiculous" then return ridiculousCount or 0 end
 	if judgeName == "TapNoteScore_W1" and ridiculousCount then return evaluationTapCount(judgeName) - ridiculousCount end
 	return evaluationTapCount(judgeName)
 end
 
-function getEvaluationRescoredJudgeCount(offsetVector, judgeScale, judgeName, judgeIndex)
+local function getEvaluationRescoredJudgeCount(offsetVector, judgeScale, judgeName, judgeIndex)
 	if scoringVoided then return 0 end
 	if maniaRescore then return maniaRescore.counts[judgeIndex] or 0 end
 	if usingCustomWindows and lastSnapshot and lastSnapshot.GetJudgments then
@@ -887,16 +881,16 @@ customWindowUsesOldestNoteFirst = function()
 end
 
 local maniaJudgeLabels = {"MAX", "300", "200", "100", "50", "MISS"}
-function getEvaluationJudgeLabel(judgeName, judgeIndex)
+local function getEvaluationJudgeLabel(judgeName, judgeIndex)
 	if maniaRescore or (HV.ManiaState and HV.ManiaState.enabled) then return maniaJudgeLabels[judgeIndex] or "" end
 	return judgeName == "Ridiculous" and THEME:GetString("TapNoteScore", "Ridiculous") or getJudgeStrings(judgeName)
 end
 
-function getActiveJudgeRowCount()
+local function getActiveJudgeRowCount()
 	return isManiaModeEnabled() and 6 or #judges
 end
 
-function getRATallyCount(rowIndex)
+local function getRATallyCount(rowIndex)
 	if scoringVoided then return 0 end
 	local ra, la, ridic, marvRA, ludic, ridicLA = getRatios()
 	if rowIndex == 1 then return ludic
@@ -1703,77 +1697,20 @@ local function scoreBoard(pn)
 			-- MSD (Common Large, 2 decimal points)
 			LoadFont("MSD 20px") .. {
 				InitCommand = function(self)
-					self:halign(1):valign(0):xy(0, -2):zoom(0.6):maxwidth((frameW - pad * 2) / 3)
-					self.transitionDuration = 0.25
+					self:halign(1):valign(0):xy(0, -2):zoom(0.6)
 				end,
 				OnCommand = function(self)
-					self:stoptweening()
 					if steps then
-						local rate = tonumber(getCurRateValue()) or 1
-						local okMSD, value = pcall(steps.GetMSD, steps, rate, 1)
-						local msd = okMSD and (tonumber(value) or 0) or 0
-						local function resolveCachedDan()
-							if not (HV.EnableDanCalculator and HV.EnableDanCalculator()) then return nil end
-							local chartKey = steps.GetChartKey and tostring(steps:GetChartKey())
-							if not chartKey then return nil end
-							local key = chartKey .. "|" .. string.format("%.8f", rate)
-							local estimate = nil
-						if FILEMAN and FILEMAN.DoesFileExist and FILEMAN:DoesFileExist("Save/Holographic Void_settings/ChartRatingCache.lua") then
-								local file = RageFileUtil.CreateRageFile()
-								if file:Open("Save/Holographic Void_settings/ChartRatingCache.lua", 1) then
-									local source = file:Read()
-									local chunk = type(source) == "string" and loadstring(source) or nil
-									if chunk then
-										setfenv(chunk, {})
-										local ok, cache = pcall(chunk)
-										if ok and type(cache) == "table" then
-											estimate = cache["isor-dp-v2|" .. key] or cache["isor-dp-v1|" .. key]
-										end
-									end
-									file:Close()
-								end
-								file:destroy()
-							end
-							if type(estimate) ~= "table" and HV.CurrentSongData then
-								local data = HV.CurrentSongData
-								local currentKey = data.steps and data.steps.GetChartKey and tostring(data.steps:GetChartKey())
-								local currentRate = tonumber(data.rate) or 1
-								if currentKey == chartKey and math.abs(currentRate - rate) < 0.0005
-									and type(data.isorEstimate) == "table" then estimate = data.isorEstimate end
-							end
-							if type(estimate) ~= "table" or type(estimate.dan) ~= "string" then return nil end
-							return estimate
-						end
-						local pages = {}
+						local msd = steps:GetMSD(getCurRateValue(), 1)
 						if HV.ShowMSD() and msd > 0 then
-							pages[#pages + 1] = {text = string.format("%.2f", msd), color = HVColor.GetMSDRatingColor(msd)}
-						end
-						local estimate = resolveCachedDan()
-						if estimate then
-							local text = formatDanName(estimate.dan) .. (type(estimate.sublevel) == "string" and (" " .. estimate.sublevel) or "")
-							pages[#pages + 1] = {text = text, color = (HV.GetReformDanColor and HV.GetReformDanColor(estimate)) or HVColor.GetMSDRatingColor(tonumber(estimate.dp) or msd)}
-						end
-						self.hvRatingPages = pages
-						self.hvRatingPage = 1
-						if #pages > 0 then
-							self:settext(pages[1].text):diffuse(pages[1].color)
-							self:diffusealpha(1)
-							if #pages > 1 then self:sleep(3):queuecommand("FadeRatingOut") end
+							self:settextf("%.2f", msd)
+							self:diffuse(HVColor.GetMSDRatingColor(msd))
+							self:diffuse(HVColor.GetMSDRatingColor(msd))
 						else
-							self:settext(tostring(steps:GetMeter())):diffuse(brightText)
+							self:settext(tostring(steps:GetMeter()))
+							self:diffuse(brightText)
 						end
 					end
-				end,
-				FadeRatingOutCommand = function(self)
-					if not self.hvRatingPages or #self.hvRatingPages < 2 then return end
-					self:stoptweening():linear(self.transitionDuration * 0.5):diffusealpha(0):queuecommand("CycleRating")
-				end,
-				CycleRatingCommand = function(self)
-					if not self.hvRatingPages or #self.hvRatingPages < 2 then return end
-					self.hvRatingPage = self.hvRatingPage % #self.hvRatingPages + 1
-					local page = self.hvRatingPages[self.hvRatingPage]
-					self:settext(page.text):diffuse(page.color)
-					self:stoptweening():linear(self.transitionDuration * 0.5):diffusealpha(1):sleep(3):queuecommand("FadeRatingOut")
 				end
 			}
 		},
@@ -3316,33 +3253,7 @@ HV.GetSimpleEvaluationData = function()
 			if not steps then return "", color("1,1,1,1") end
 			local msd = steps.GetMSD and steps:GetMSD(getCurRateValue(), 1) or 0
 			if HV.ShowMSD() and msd > 0 then
-				local rating = string.format("%.2f", msd)
-				local ratingColor = HVColor.GetMSDRatingColor(msd)
-				if HV.EnableDanCalculator and HV.EnableDanCalculator() then
-					local path = "Save/Holographic Void_settings/ChartRatingCache.lua"
-					if FILEMAN and FILEMAN.DoesFileExist and FILEMAN:DoesFileExist(path) then
-						local file = RageFileUtil.CreateRageFile()
-						if file:Open(path, 1) then
-							local source = file:Read()
-							local chunk = type(source) == "string" and loadstring(source) or nil
-							if chunk then
-								setfenv(chunk, {})
-								local ok, cache = pcall(chunk)
-								if ok and type(cache) == "table" then
-									local key = tostring(steps:GetChartKey()) .. "|" .. string.format("%.8f", getCurRateValue())
-									local estimate = cache["isor-dp-v2|" .. key] or cache["isor-dp-v1|" .. key]
-									if type(estimate) == "table" and type(estimate.dan) == "string" then
-										rating = formatDanName(estimate.dan) .. (estimate.sublevel and (" " .. estimate.sublevel) or "")
-										ratingColor = (HV.GetReformDanColor and HV.GetReformDanColor(estimate)) or HVColor.GetMSDRatingColor(tonumber(estimate.dp) or msd)
-									end
-								end
-							end
-							file:Close()
-						end
-						file:destroy()
-					end
-				end
-				return rating, ratingColor
+				return string.format("%.2f", msd), HVColor.GetMSDRatingColor(msd)
 			else
 				return tostring(steps:GetMeter()), color("1,1,1,1")
 			end

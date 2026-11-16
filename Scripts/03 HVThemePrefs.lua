@@ -266,11 +266,6 @@ local HVPrefs = {
 		Choices = {"Off", "On"},
 		Values = {false, true}
 	},
-	HV_EnableDanCalculator = {
-		Default = true,
-		Choices = {"Off", "On"},
-		Values = {false, true}
-	},
 
 
 	-- Gameplay: Show player profile stats on select music
@@ -352,8 +347,8 @@ local HVPrefs = {
 	},
 	HV_OsuManiaStarRating = {
 		Default = "Classic",
-		Choices = {"Off", "Classic", "Sunny Rework"},
-		Values = {"Off", "Classic", "Sunny Rework"},
+		Choices = {"Off", "Classic", "Enissay rework"},
+		Values = {"Off", "Classic", "Enissay rework"},
 	},
 
 	-- Gameplay: Toggle real-time NPS display
@@ -800,10 +795,6 @@ end
 --- Check if MSD ratings should be shown.
 function HV.ShowMSD()
 	return isTrue(ThemePrefs.Get("HV_ShowMSD"))
-end
-
-function HV.EnableDanCalculator()
-	return isTrue(ThemePrefs.Get("HV_EnableDanCalculator"))
 end
 
 

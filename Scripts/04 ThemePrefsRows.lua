@@ -62,15 +62,10 @@ local HVPrefRows = {
 		Choices = {"Off", "On"},
 		Values = {false, true},
 	},
-	HV_EnableDanCalculator = {
-		Default = true,
-		Choices = {"Off", "On"},
-		Values = {false, true},
-	},
 	HV_OsuManiaStarRating = {
 		Default = "Classic",
-		Choices = {"Off", "Classic", "Sunny Rework"},
-		Values = {"Off", "Classic", "Sunny Rework"},
+		Choices = {"Off", "Classic", "Enissay rework"},
+		Values = {"Off", "Classic", "Enissay rework"},
 	},
 
 
@@ -523,7 +518,7 @@ function HVThemeOptionsLines()
 		-- Gameplay HUD
 		"HV_MinimalisticMode", "HV_ShowJudgment", "HV_EmulateRidiculous", "HV_JudgmentAnimation", "HV_RecentJudgmentDisplay", "HV_PrioritizeLowerJudgements", "HV_DisplayLowerJudgementOffset", "HV_OffsetDisplayJudgement", "HV_ShowCombo", "HV_ComboAnimation", "HV_ShowCurrentWife",
 			"HV_ShowJudgeCounter", "HV_JudgeCounterMode", "HV_ShowNGIndicator",
-		"HV_ShowPlayerInfo", "HV_ProgressBarPosition", "HV_ShowInGameLeaderboard", "HV_EnableDanCalculator",
+		"HV_ShowPlayerInfo", "HV_ProgressBarPosition", "HV_ShowInGameLeaderboard",
 		
 		-- Gameplay Tools
 		"HV_ShowNPS", "HV_NPSWindowSize", "HV_ShowNPSGraph", "HV_ErrorBarMode",
@@ -573,11 +568,7 @@ local function HVThemePrefRow(name, title)
 		end
 		-- If not found, default based on truthiness or fallback to first index
 		if not found then
-			if name == "HV_OsuManiaStarRating" then
-				for i, v in ipairs(self.Values) do
-					if v == "Classic" then list[i] = true; break end
-				end
-			elseif val == "true" or val == true or val == 1 or val == "1" then
+			if val == "true" or val == true or val == 1 or val == "1" then
 				list[#list] = true -- Usually 'On'
 			else
 				list[1] = true -- Usually 'Off'
@@ -617,10 +608,6 @@ _G["OptionRowSongSelectBGM"] = OptionRowSongSelectBGM
 
 function OptionRowShowMSD()
 	return HVThemePrefRow("HV_ShowMSD", "Show MSD Ratings")
-end
-
-function OptionRowEnableDanCalculator()
-	return HVThemePrefRow("HV_EnableDanCalculator", "Dan Calculator")
 end
 
 function OptionRowOsuManiaStarRating()
