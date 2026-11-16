@@ -7,10 +7,8 @@ end
 
 local accent = (HVColor and HVColor.Accent) or color("#00E5FF")
 
--- Theme Info Reader
+-- Theme Version Reader
 local themeVersion = "Unknown"
-local themeDescription = nil
-local themeCommitDate = nil
 local themeName = THEME:GetCurThemeName()
 local paths = {
 	"Themes/" .. themeName .. "/ThemeInfo.ini",
@@ -23,19 +21,9 @@ end
 
 for _, path in ipairs(paths) do
 	local info = IniFile.ReadFile(path)
-	if info and info["ThemeInfo"] then
-		if info["ThemeInfo"]["Version"] and info["ThemeInfo"]["Version"] ~= "" then
-			themeVersion = info["ThemeInfo"]["Version"]
-		end
-		if info["ThemeInfo"]["Description"] and info["ThemeInfo"]["Description"] ~= "" then
-			themeDescription = info["ThemeInfo"]["Description"]
-		end
-		if info["ThemeInfo"]["CommitDate"] and info["ThemeInfo"]["CommitDate"] ~= "" then
-			themeCommitDate = info["ThemeInfo"]["CommitDate"]
-		end
-		if themeVersion ~= "Unknown" or themeDescription or themeCommitDate then
-			break
-		end
+	if info and info["ThemeInfo"] and info["ThemeInfo"]["Version"] then
+		themeVersion = info["ThemeInfo"]["Version"]
+		break
 	end
 end
 
@@ -266,12 +254,7 @@ textGroup[#textGroup + 1] = Def.Quad {
 
 heroGroup[#heroGroup + 1] = textGroup
 
--- 5. Version Subtitle, Commit Date, Divider Lines & Description
-local versionLabel = "v" .. themeVersion
-if themeCommitDate and themeCommitDate ~= "" then
-	versionLabel = versionLabel .. "  (" .. themeCommitDate .. ")"
-end
-
+-- 5. Version Subtitle & Fine Divider Lines
 local subMetaGroup = Def.ActorFrame {
 	InitCommand = function(self)
 		self:y(38):diffusealpha(0)
@@ -282,21 +265,10 @@ local subMetaGroup = Def.ActorFrame {
 	end
 }
 
--- Version / Commit Date text badge
-subMetaGroup[#subMetaGroup + 1] = LoadFont("Common Normal") .. {
-	Text = versionLabel,
-	InitCommand = function(self)
-		self:zoom(0.4):diffuse(color("#A0AAB5"))
-	end
-}
-
--- Dynamic divider lines flanking version badge
-local lineOffset = (themeCommitDate and themeCommitDate ~= "") and 115 or 72
-
 -- Left fine line
 subMetaGroup[#subMetaGroup + 1] = Def.Quad {
 	InitCommand = function(self)
-		self:x(-lineOffset):zoomto(0, 1):diffuse(accent):diffusealpha(0.5)
+		self:x(-72):zoomto(0, 1):diffuse(accent):diffusealpha(0.5)
 	end,
 	OnCommand = function(self)
 		self:sleep(0.75):decelerate(0.4):zoomto(50, 1)
@@ -306,25 +278,20 @@ subMetaGroup[#subMetaGroup + 1] = Def.Quad {
 -- Right fine line
 subMetaGroup[#subMetaGroup + 1] = Def.Quad {
 	InitCommand = function(self)
-		self:x(lineOffset):zoomto(0, 1):diffuse(accent):diffusealpha(0.5)
+		self:x(72):zoomto(0, 1):diffuse(accent):diffusealpha(0.5)
 	end,
 	OnCommand = function(self)
 		self:sleep(0.75):decelerate(0.4):zoomto(50, 1)
 	end
 }
 
--- Optional Theme Description below version badge
-if themeDescription and themeDescription ~= "" then
-	subMetaGroup[#subMetaGroup + 1] = LoadFont("Common Normal") .. {
-		Text = themeDescription,
-		InitCommand = function(self)
-			self:y(14):zoom(0.33):diffuse(color("#6B7A8D")):diffusealpha(0)
-		end,
-		OnCommand = function(self)
-			self:sleep(0.85):decelerate(0.45):diffusealpha(0.75)
-		end
-	}
-end
+-- Version text badge
+subMetaGroup[#subMetaGroup + 1] = LoadFont("Common Normal") .. {
+	Text = "v" .. themeVersion,
+	InitCommand = function(self)
+		self:zoom(0.4):diffuse(color("#A0AAB5"))
+	end
+}
 
 heroGroup[#heroGroup + 1] = subMetaGroup
 

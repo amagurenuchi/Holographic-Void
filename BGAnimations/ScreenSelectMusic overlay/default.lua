@@ -1014,17 +1014,16 @@ main_af[#main_af + 1] = Def.ActorFrame {
 				local virtualX = INPUTFILTER:GetMouseX()
 				local virtualY = INPUTFILTER:GetMouseY()
 
-				local footerY = SCREEN_HEIGHT - footerH
-				local overFooterTabs = virtualY >= footerY and virtualY <= SCREEN_HEIGHT
-				-- Footer clicks switch tabs; other clicks outside Profile dismiss it.
-				if HV.ActiveTab == "PROFILE" and not overFooterTabs then
+				-- If PROFILE tab is open, handle click-outside to close
+				if HV.ActiveTab == "PROFILE" then
 					if not IsMouseOverCentered(SCREEN_CENTER_X, SCREEN_CENTER_Y, overlayW, overlayH) then
 						MESSAGEMAN:Broadcast("SelectMusicTabChanged", {Tab = ""})
 						return true
 					end
 				end
-				-- Let footer clicks replace the active decoration tab; its panel owns other clicks.
-				if HV.ActiveTab ~= "" and HV.ActiveTab ~= "PROFILE" and not overFooterTabs then return false end
+
+				-- Keep Profile tab controls reachable; other decoration tabs own their input.
+				if HV.ActiveTab ~= "" and HV.ActiveTab ~= "PROFILE" then return false end
 
 				local virtualX = INPUTFILTER:GetMouseX()
 				local virtualY = INPUTFILTER:GetMouseY()
@@ -1070,6 +1069,7 @@ main_af[#main_af + 1] = Def.ActorFrame {
 				end
 
 				-- Check Footer Tab Buttons (Uses top-level 'tabs', 'tabW', 'footerH')
+				local footerY = SCREEN_HEIGHT - footerH
 				for i, tabName in ipairs(tabs) do
 					local tx = 10 + (i - 1) * tabW
 					if virtualX >= tx and virtualX <= tx + tabW and virtualY >= footerY and virtualY <= SCREEN_HEIGHT then
@@ -1095,20 +1095,18 @@ main_af[#main_af + 1] = Def.ActorFrame {
 
 						if target == "PROFILE" then target = "SOCIAL" end 
 
-						local activeTab = HV.ActiveTab or ""
-						local nextTab = tabName:upper()
-						if activeTab == nextTab then
-							-- Preserve the footer's same-tab dismiss behavior.
-							MESSAGEMAN:Broadcast("SelectMusicTabChanged", {Tab = ""})
-						elseif activeTab ~= "" then
-							-- Close the active panel before opening a different one.
-							MESSAGEMAN:Broadcast("SelectMusicTabChanged", {Tab = ""})
-							if footerOverlayTabs[nextTab] then PlayWhooshOverlayOpen() end
-							MESSAGEMAN:Broadcast("SelectMusicTabChanged", {Tab = nextTab})
+						local nextTab = ""
+						if HV.ActiveTab == tabName:upper() then
+							nextTab = ""
 						else
-							if footerOverlayTabs[nextTab] then PlayWhooshOverlayOpen() end
-							MESSAGEMAN:Broadcast("SelectMusicTabChanged", {Tab = nextTab})
+							nextTab = tabName:upper()
 						end
+
+						if nextTab ~= "" and footerOverlayTabs[nextTab] then
+							PlayWhooshOverlayOpen()
+						end
+
+						MESSAGEMAN:Broadcast("SelectMusicTabChanged", {Tab = nextTab})
 						return true
 					end
 				end
@@ -2091,12 +2089,7 @@ local profileOverlay = Def.ActorFrame {
 				},
 				LoadFont("Common Normal") .. {
 					Name = "Txt",
-					InitCommand = function(self) self:zoom(0.30):diffuse(brightText) end,
-					UpdateOverlayUIMessageCommand = function(self)
-						local p = profileOverlayActor
-						if not p then return end
-						self:settext(p.isRecentMode and "RECENT" or "TOP")
-					end
+					InitCommand = function(self) self:zoom(0.30):diffuse(brightText):settext("TOP / RECENT") end
 				},
 				SetUpdateFunction = function(af)
 					local parent = profileOverlayActor
@@ -2106,7 +2099,9 @@ local profileOverlay = Def.ActorFrame {
 						SCREEN_CENTER_Y - overlayH/2 + 18,
 						100, 22)
 					local bg = af:GetChild("Bg")
-					if over then
+					if parent.isRecentMode then
+						bg:diffusealpha(0.4)
+					elseif over then
 						bg:diffusealpha(0.3)
 					else
 						bg:diffusealpha(0.15)
