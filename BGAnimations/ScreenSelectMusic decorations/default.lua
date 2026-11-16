@@ -274,7 +274,7 @@ function IsMouseInSelectMusicInteractiveArea()
 	local mx = INPUTFILTER:GetMouseX() or SCREEN_CENTER_X
 	local my = INPUTFILTER:GetMouseY() or SCREEN_CENTER_Y
 	if HV.ActiveTab and HV.ActiveTab ~= "" then return true end
-	if mx <= panelX + panelW + 95 then return true end
+	if mx <= panelX + panelW + 150 then return true end
 	if my >= SCREEN_HEIGHT - footerH then return true end
 	if my <= headerH then return true end
 	return false
@@ -499,6 +499,8 @@ t[#t + 1] = Def.Actor {
 				for i = 1, 8 do
 					data.skillsetMSDs[i] = data.steps:GetMSD(data.rate, i) or 0
 				end
+				data.skillsetMSDChartKey = data.steps:GetChartKey()
+				data.skillsetMSDRate = data.rate
 				data.pbScore = GetDisplayScore()
 				if data.pbScore then
 					data.pbSSR = data.pbScore:GetSkillsetSSR("Overall")
@@ -507,6 +509,8 @@ t[#t + 1] = Def.Actor {
 				end
 			else
 				data.skillsetMSDs = {}
+				data.skillsetMSDChartKey = nil
+				data.skillsetMSDRate = nil
 				data.pbScore = nil
 				data.pbSSR = 0
 			end
@@ -518,6 +522,8 @@ t[#t + 1] = Def.Actor {
 			data.diffMeters = {}
 			data.diffMSDs = {}
 			data.skillsetMSDs = {}
+			data.skillsetMSDChartKey = nil
+			data.skillsetMSDRate = nil
 			data.pbScore = nil
 			data.pbSSR = 0
 
@@ -1102,144 +1108,146 @@ local skillsets = {"Overall", "Stream", "Jumpstream", "Handstream", "Stamina", "
 local msdTooltipMaxSSR = false
 
 local osuManiaStarCache = {}
+local isorEventCache = {}
 
--- Lua adaptation of Enissay's osu!mania rating rework. The theme's chart API
--- provides note rows instead of osu! hit objects, so the rework derives the
--- five strain skills from note timing, columns, and reconstructed hold spans.
-local function enissayReworkStars(events, keyCount)
-	if #events < 2 or keyCount < 1 then return nil end
-	local function clamp(v, lo, hi) return math.max(lo, math.min(hi, v)) end
-	local function smoothstep(v, lo, hi)
-		local t = clamp((v - lo) / (hi - lo), 0, 1)
-		return t * t * (3 - 2 * t)
+local chartRatingCachePath = "Save/Holographic Void_settings/ChartRatingCache.lua"
+local persistentChartRatingCache = {}
+do
+	if FILEMAN and FILEMAN.DoesFileExist and FILEMAN:DoesFileExist(chartRatingCachePath) then
+		local file = RageFileUtil.CreateRageFile()
+		if file:Open(chartRatingCachePath, 1) then
+			local source = file:Read()
+			local chunk = type(source) == "string" and loadstring(source) or nil
+			if chunk then
+				setfenv(chunk, {})
+				local ok, cache = pcall(chunk)
+				if ok and type(cache) == "table" then persistentChartRatingCache = cache end
+			end
+			file:Close()
+		end
+		file:destroy()
 	end
-	local function decay(base, delta) return base ^ (math.max(0, delta) / 1000) end
-	local rows, rowAt = {}, {}
-	for _, event in ipairs(events) do
-		local row = rows[#rows]
-		if not row or row.time ~= event.time then
-			row = {time = event.time, columns = {}}
-			rows[#rows + 1] = row
-			rowAt[event.time] = row
-		end
-		row.columns[#row.columns + 1] = event.column
+end
+
+local function serializeChartCacheValue(value)
+	local kind = type(value)
+	if kind == "string" then return string.format("%q", value) end
+	if kind == "number" and value == value and value ~= math.huge and value ~= -math.huge then
+		return string.format("%.12g", value)
 	end
-	local strain, skillValues = {0, 0, 0, 0, 0}, {{}, {}, {}, {}, {}}
-	local totalValues, tapValues, lastInColumn = {}, {}, {}
-	local previousColumn, previousPreviousColumn = nil, nil
-	local previousTime, previousDelta = events[1].time, nil
-	local holdCount, holdDuration = 0, 0
-	for _, event in ipairs(events) do
-		if event.endTime and event.endTime > event.time then
-			holdCount = holdCount + 1
-			holdDuration = holdDuration + event.endTime - event.time
+	if kind == "boolean" then return tostring(value) end
+	if kind ~= "table" then return "nil" end
+	local parts = {"{"}
+	for key, item in pairs(value) do
+		if type(key) == "string" then
+			parts[#parts + 1] = "[" .. string.format("%q", key) .. "]=" .. serializeChartCacheValue(item) .. ","
 		end
 	end
-	local meanHold = holdCount > 0 and holdDuration / holdCount or 0
-	for i = 2, #events do
-		local event = events[i]
-		local delta = event.time - previousTime
-		local previousColumnTime = lastInColumn[event.column]
-		local columnDelta = previousColumnTime and event.time - previousColumnTime or math.huge
-		local row = rowAt[event.time]
-		local chordDepth = 1
-		for _, column in ipairs(row.columns) do
-			if lastInColumn[column] and lastInColumn[column] >= event.time - 8 then chordDepth = chordDepth + 1 end
+	parts[#parts + 1] = "}"
+	return table.concat(parts)
+end
+
+local function saveChartRatingCache()
+	if FILEMAN and FILEMAN.CreateDir then FILEMAN:CreateDir("Save/Holographic Void_settings") end
+	local file = RageFileUtil.CreateRageFile()
+	if file:Open(chartRatingCachePath, 2) then
+		file:Write("return " .. serializeChartCacheValue(persistentChartRatingCache) .. "\n")
+		file:Close()
+	end
+	file:destroy()
+end
+
+local function chartRatingCacheKey(kind, chartKey, rate)
+	return kind .. "|" .. tostring(chartKey) .. "|" .. string.format("%.8f", tonumber(rate) or 1)
+end
+
+local function storeChartRatingCache(key, value)
+	persistentChartRatingCache[key] = value
+	local count = 0
+	for _ in pairs(persistentChartRatingCache) do count = count + 1 end
+	if count > 1024 then
+		for oldKey in pairs(persistentChartRatingCache) do
+			if oldKey ~= key then persistentChartRatingCache[oldKey] = nil; count = count - 1 end
+			if count <= 768 then break end
 		end
+	end
+	pcall(saveChartRatingCache)
+end
 
-		local sameColumn = previousColumn == event.column
-		local direction = previousColumn and event.column - previousColumn or 0
-		local trill = previousPreviousColumn == event.column and not sameColumn
-		local speedPattern = sameColumn and .49996 or (trill and .85 or 1)
-		local speedAdd = delta >= 8 and 1000 / (delta + 30) * speedPattern * 1.405 or 0
-		strain[1] = strain[1] * decay(.05007, delta) + speedAdd
-
-		local jackAdd = 0
-		if columnDelta <= 350 then
-			local tapRate = 1000 / (math.max(columnDelta, 1) + 60)
-			local chordBonus = math.max(.1, 1 + .1746 * clamp(140.625 / math.max(columnDelta, 1), .1, 2) * (chordDepth - 1))
-			local rowMultiplier = chordDepth >= 2 and .45397 or (trill and .85 or 1)
-			jackAdd = (tapRate * (1 + .7 / (1 + math.exp(-.5 * (tapRate - 5)))) * chordBonus)^1.29407 * rowMultiplier * .62159 * 1.19496
-		end
-		strain[2] = strain[2] * decay(.50497, delta) + jackAdd
-
-		local irregularity = 0
-		if previousDelta and previousDelta > 8 and delta > 0 then
-			irregularity = 1 - math.min(delta / previousDelta, previousDelta / delta)
-		end
-		local reversal = previousPreviousColumn and previousColumn and (previousColumn - previousPreviousColumn) * direction < 0 and .6 or 0
-		local complexity = math.max(irregularity + reversal, 1.55 * smoothstep(math.abs(direction), 2.5, 5.5))
-		local rhythmAmplifier = 1 + .9 * math.exp(-.5 * ((irregularity - .15) / .085)^2)
-		local technicalAdd = delta >= 8 and .6974 * complexity / (delta / 1000 + .05) * 1.49964 * rhythmAmplifier * 1.58087 or 0
-		strain[3] = strain[3] * decay(.06696, delta) + technicalAdd
-
-		local coordinationAdd = 0
-		for column = math.max(1, event.column - 1), math.min(keyCount, event.column + 1) do
-			if column ~= event.column and lastInColumn[column] then
-				local adjacentDelta = event.time - lastInColumn[column]
-				if adjacentDelta >= 8 then coordinationAdd = coordinationAdd + 1300 / (adjacentDelta + 35) * .18 end
+-- Native event extraction shared by the theme's star display and ISOR.
+local function getISORChartData(steps, rate)
+	if not steps or not steps.GetChartKey then return nil end
+	rate = tonumber(rate) or 1
+	if rate <= 0 or rate ~= rate or rate == math.huge then return nil end
+	local key = tostring(steps:GetChartKey()) .. "@" .. tostring(rate)
+	if isorEventCache[key] ~= nil then return isorEventCache[key] or nil end
+	local ok, data = pcall(steps.GetNonEmptyNoteData, steps)
+	if not ok or type(data) ~= "table" or type(data[1]) ~= "table" or #data < 3 then
+		isorEventCache[key] = false
+		return nil
+	end
+	local timing = steps.GetTimingData and steps:GetTimingData()
+	if not timing or type(timing.GetElapsedTimeFromNoteRowNoOffset) ~= "function" then
+		isorEventCache[key] = false
+		return nil
+	end
+	-- Note data is {rowIndices, column1, ..., columnN}.
+	local keyCount = #data - 1
+	local heads, baseEvents, events = {}, {}, {}
+	local firstTime, lastTime, firstRateTime, lastRateTime = nil, nil, nil, nil
+	for c = 1, keyCount do heads[c] = {} end
+	for i = 1, #data[1] do
+		local row = tonumber(data[1][i])
+		local timeOk, time
+		if row then timeOk, time = pcall(timing.GetElapsedTimeFromNoteRowNoOffset, timing, row) end
+		time = timeOk and tonumber(time) and tonumber(time) * 1000 or nil
+		if time then
+			-- The ISOR feature and choke stages consume the original parsed chart
+			-- timeline; Sunny consumes its explicitly rate-scaled timeline.
+			local baseTime = math.floor(time + 0.5)
+			-- Match Dan-Overlay's primary SR rate path: native HT/DT use the
+			-- Sunny engine's integer floor transform; other rates scale hit
+			-- times to integer milliseconds before running NM.
+			local rateTime
+			if math.abs(rate - 0.75) < 0.0005 then rateTime = math.floor(baseTime * 4 / 3)
+			elseif math.abs(rate - 1.5) < 0.0005 then rateTime = math.floor(baseTime * 2 / 3)
+			else rateTime = math.floor(baseTime / rate + 0.5) end
+			for c = 1, keyCount do
+				local noteType = tonumber(data[c + 1] and data[c + 1][i])
+				if noteType == 1 or noteType == 2 then
+					firstTime = firstTime and math.min(firstTime, baseTime) or baseTime
+					lastTime = lastTime and math.max(lastTime, baseTime) or baseTime
+					firstRateTime = firstRateTime and math.min(firstRateTime, rateTime) or rateTime
+					lastRateTime = lastRateTime and math.max(lastRateTime, rateTime) or rateTime
+					local baseEvent = {time = baseTime, column = c}
+					local event = {time = rateTime, column = c}
+					baseEvents[#baseEvents + 1], events[#events + 1] = baseEvent, event
+					if noteType == 2 then heads[c][#heads[c] + 1] = {base = baseEvent, rate = event} end
+				elseif noteType == 3 and #heads[c] > 0 then
+					local head = table.remove(heads[c], 1)
+					head.base.endTime, head.rate.endTime = baseTime, rateTime
+				end
 			end
 		end
-		if chordDepth >= 2 then
-			local chordSpeed = columnDelta == math.huge and 1 or clamp(140.625 / math.max(columnDelta, 1), .1, 2)
-			coordinationAdd = coordinationAdd + .9 * (chordDepth - 1) * chordSpeed
-		end
-		strain[4] = strain[4] * decay(.52909, delta) + coordinationAdd * 1.81659
+	end
+	table.sort(baseEvents, function(a, b) if a.time == b.time then return a.column < b.column end return a.time < b.time end)
+	table.sort(events, function(a, b) if a.time == b.time then return a.column < b.column end return a.time < b.time end)
+	local result = {events = events, baseEvents = baseEvents, keyCount = keyCount,
+		duration = firstRateTime and lastRateTime and math.max(0, lastRateTime - firstRateTime) / 1000 or 0,
+		baseDuration = firstTime and lastTime and math.max(0, lastTime - firstTime) / 1000 or 0, rate = rate}
+	isorEventCache[key] = result
+	return result
+end
 
-		local releaseAdd = 0
-		if event.endTime and event.endTime > event.time then
-			local duration = math.min(event.endTime - event.time, 1000)
-			local gate = 1 / (1 + math.exp(-.07 * (duration - 110.90068)))
-			releaseAdd = (.42 + .9 * duration / 1000 + 1.6 * smoothstep(duration, 500, 680) * duration / 1000) * gate * 2.83449
-		end
-		strain[5] = strain[5] * decay(.89647, delta) + releaseAdd
-		for skill = 1, 5 do skillValues[skill][#skillValues[skill] + 1] = strain[skill] end
-		local tapTotal = math.sqrt(strain[1]^2 + strain[2]^2 + strain[3]^2 + strain[4]^2)
-		totalValues[#totalValues + 1] = tapTotal + strain[5]
-		tapValues[#tapValues + 1] = tapTotal
-		previousPreviousColumn, previousColumn = previousColumn, event.column
-		previousTime, previousDelta = event.time, delta
-		lastInColumn[event.column] = event.time
-	end
-	local totalWeight = #events - 1
-	for i = 2, #events do
-		local event = events[i]
-		if event.endTime and event.endTime > event.time then totalWeight = totalWeight + .6 * math.min(event.endTime - event.time, 1000) / 200 end
-	end
-	local function difficulty(values, weight)
-		local positive = {}
-		for _, value in ipairs(values) do if value > 0 then positive[#positive + 1] = value end end
-		if #positive == 0 then return 0 end
-		table.sort(positive)
-		local function percentile(p) return positive[math.floor((#positive - 1) * p + .5) + 1] end
-		local high = (percentile(.945) + percentile(.935) + percentile(.925) + percentile(.915)) / 4
-		local mid = (percentile(.845) + percentile(.835) + percentile(.825) + percentile(.815)) / 4
-		local fifthPowerSum = 0
-		for _, value in ipairs(positive) do fifthPowerSum = fifthPowerSum + value^5 end
-		return (.25 * .88 * high + .20 * .94 * mid + .55 * (fifthPowerSum / #positive)^.2) * (weight / (weight + 34.64147)) * .90741
-	end
-	local fullDifficulty = difficulty(totalValues, totalWeight)
-	local tapDifficulty = difficulty(tapValues, #events - 1)
-	local coordinationDifficulty = difficulty(skillValues[4], totalWeight)
-	local star = fullDifficulty > 0 and .360643 * fullDifficulty^.52899 or 0
-	local lnRatio = holdCount / #events
-	local hybridLn = smoothstep(lnRatio, .15, .35) * (1 - smoothstep(lnRatio, .50, .75))
-	local lnDamper = (1 - .06263 * lnRatio^2) * (1 - .028 * hybridLn)
-	local lnAddedFraction = star > 0 and math.max(0, 1 - (.360643 * tapDifficulty^.52899) / star) or 0
-	star = star * (1 - math.min(1 - lnDamper, lnAddedFraction))
-	local shortness = (1 - clamp((#events / keyCount) / 197, 0, 1)) * (1 - smoothstep(meanHold, 250, 450))
-	local sortedTotal = {}
-	for _, value in ipairs(totalValues) do if value > 0 then sortedTotal[#sortedTotal + 1] = value end end
-	table.sort(sortedTotal)
-	local median = sortedTotal[math.floor((#sortedTotal - 1) * .5 + .5) + 1] or 0
-	local high = sortedTotal[math.floor((#sortedTotal - 1) * .9 + .5) + 1] or 0
-	local sustainRatio = high > 0 and median / high or 1
-	star = star * (1 - .195 * shortness) * (1 - .118 * (1 - smoothstep(sustainRatio, .24, .50)))
-	if star > 11.5 then
-		local coordinationStars = .360643 * coordinationDifficulty^.52899
-		star = 11.5 + (star - 11.5) * (1 - .5 * smoothstep(coordinationStars, 7.40522, 11.65637))
-	end
-	return star
+local function getISORBPM(song)
+	if not song or not song.GetDisplayBPM then return 0 end
+	local ok, value = pcall(song.GetDisplayBPM, song)
+	if not ok or value == nil then return 0 end
+	local numeric = tonumber(value)
+	if numeric then return numeric end
+	local a, b = tostring(value):match("([%d%.]+)%s*[%-%~]%s*([%d%.]+)")
+	if a and b then return (tonumber(a) + tonumber(b)) / 2 end
+	return tonumber(tostring(value):match("[%d%.]+")) or 0
 end
 
 local osuStarSpectrum = {
@@ -1289,12 +1297,18 @@ local function getOsuManiaStars(steps, rate)
 	local chartKey = steps and steps:GetChartKey()
 	if not chartKey then return nil end
 	local mode = ThemePrefs.Get("HV_OsuManiaStarRating") or "Classic"
-	if mode ~= "Enissay rework" then mode = (mode == "Off") and "Off" or "Classic" end
+	if mode ~= "Sunny Rework" then mode = (mode == "Off") and "Off" or "Classic" end
 	if mode == "Off" then return nil end
 	rate = tonumber(rate) or 1
 	if rate <= 0 then rate = 1 end
 	local cacheKey = chartKey .. "@" .. tostring(rate) .. (mode == "Classic" and "" or "@" .. mode)
 	if osuManiaStarCache[cacheKey] ~= nil then return osuManiaStarCache[cacheKey] or nil end
+	local diskKey = chartRatingCacheKey(mode == "Sunny Rework" and "sunny-sr-v1" or "classic-sr-v1", chartKey, rate)
+	local savedStars = tonumber(persistentChartRatingCache[diskKey])
+	if savedStars then
+		osuManiaStarCache[cacheKey] = savedStars
+		return savedStars
+	end
 
 	local ok, data = pcall(steps.GetNonEmptyNoteData, steps)
 	if not ok or type(data) ~= "table" or type(data[1]) ~= "table" then
@@ -1314,36 +1328,12 @@ local function getOsuManiaStars(steps, rate)
 		return nil
 	end
 
-	if mode == "Enissay rework" then
-		local keyCount = #data - 2
-		if keyCount < 1 then keyCount = #data - 1 end
-		local holdHeads, events = {}, {}
-		for column = 1, keyCount do holdHeads[column] = {} end
-		for i = 1, #times do
-			local row = tonumber(times[i])
-			if row then
-				local timeOk, time = pcall(timing.GetElapsedTimeFromNoteRowNoOffset, timing, row)
-				time = timeOk and tonumber(time) and tonumber(time) * 1000 / rate or nil
-				if time then
-					for column = 1, keyCount do
-						local noteType = tonumber(data[column + 1][i])
-						if noteType == 1 or noteType == 2 then
-							local event = {time = time, column = column}
-							events[#events + 1] = event
-							if noteType == 2 then holdHeads[column][#holdHeads[column] + 1] = event end
-						elseif noteType == 3 and #holdHeads[column] > 0 then
-							table.remove(holdHeads[column], 1).endTime = time
-						end
-					end
-				end
-			end
-		end
-		table.sort(events, function(a, b)
-			if a.time == b.time then return a.column < b.column end
-			return a.time < b.time
-		end)
-		local stars = enissayReworkStars(events, keyCount)
+	if mode == "Sunny Rework" then
+		local chartEvents = getISORChartData(steps, rate)
+		local result = chartEvents and HV.CalculateSunnySR and HV.CalculateSunnySR(chartEvents.events, chartEvents.keyCount)
+		local stars = type(result) == "table" and tonumber(result.sr) or tonumber(result)
 		osuManiaStarCache[cacheKey] = stars or false
+		if stars then storeChartRatingCache(diskKey, stars) end
 		return stars
 	end
 
@@ -1411,6 +1401,7 @@ local function getOsuManiaStars(steps, rate)
 	end
 	local stars = total * 0.018
 	osuManiaStarCache[cacheKey] = stars
+	storeChartRatingCache(diskKey, stars)
 	return stars
 end
 
@@ -1486,6 +1477,7 @@ t[#t + 1] = Def.ActorFrame {
 		InitCommand = function(self)
 			self:halign(0):valign(0):xy(0, 17):zoomto(25, 10):visible(false)
 		end,
+		OnCommand = function(self) self:sleep(0.30):queuecommand("Set") end,
 		SetCommand = function(self)
 			local data = HV.CurrentSongData
 			local stars = data.song and getOsuManiaStars(data.steps, getCurRateValue() or data.rate or 1)
@@ -1496,8 +1488,7 @@ t[#t + 1] = Def.ActorFrame {
 			end
 		end,
 		DelayedChartUpdateMessageCommand = function(self) self:playcommand("Set") end,
-		InstantChartUpdateMessageCommand = function(self) self:playcommand("Set") end,
-		CurrentRateChangedMessageCommand = function(self) self:playcommand("Set") end,
+		ThemePrefChangedMessageCommand = function(self) self:playcommand("Set") end,
 	},
 
 	LoadFont("Common Normal") .. {
@@ -1505,18 +1496,19 @@ t[#t + 1] = Def.ActorFrame {
 		InitCommand = function(self)
 			self:halign(0):valign(0):xy(3, 20):zoom(0.32):visible(false)
 		end,
+		OnCommand = function(self) self:sleep(0.30):queuecommand("Set") end,
 		SetCommand = function(self)
 			local data = HV.CurrentSongData
 			local stars = data.song and getOsuManiaStars(data.steps, getCurRateValue() or data.rate or 1)
 			if stars then
-				self:settext(string.format("%.2f★", stars)):diffuse(getOsuStarTextColor(stars)):visible(true)
+				local suffix = string.char(226, 152, 133)
+				self:settext(string.format("%.2f%s", stars, suffix)):diffuse(getOsuStarTextColor(stars)):visible(true)
 			else
 				self:settext(""):visible(false)
 			end
 		end,
 		DelayedChartUpdateMessageCommand = function(self) self:playcommand("Set") end,
-		InstantChartUpdateMessageCommand = function(self) self:playcommand("Set") end,
-		CurrentRateChangedMessageCommand = function(self) self:playcommand("Set") end,
+		ThemePrefChangedMessageCommand = function(self) self:playcommand("Set") end,
 	},
 	
 	-- Top 3 Skillsets Displays
@@ -1726,9 +1718,8 @@ t[#t + 1] = Def.ActorFrame {
 		if msdTooltipActor then
 			local selectedData = HV.CurrentSongData or {}
 			local isFolderSelected = selectedData.group and selectedData.group ~= "" and not selectedData.song
-			-- The label is at msdY and the number is at msdY + 18 with zoom ~0.45.
-			-- The text height is around 40px, so 18 + 40 = 58.
-			local isHovering = IsMouseOver(panelX + 10, msdY + 14, 120, 48)
+			-- The label is at msdY and the number is at msdY + 18 with zoom ~0.45 (height ~18px).
+			local isHovering = IsMouseOver(panelX + 10, msdY + 14, 120, 22)
 			if isHovering and HV.ShowMSD() and not isFolderSelected then
 				local mx, my = INPUTFILTER:GetMouseX(), INPUTFILTER:GetMouseY()
 				local wasHidden = not msdTooltipActor:GetVisible()
@@ -3094,5 +3085,330 @@ root[#root + 1] = Def.ActorFrame {
 }
 
 t[#t + 1] = LoadActor("netplay.lua")
+
+-- Native Reform estimate from the selected chart's Etterna skillset MSDs.
+local danGreekMap = {
+	alpha   = {letter = "α", step = 1},
+	beta    = {letter = "β", step = 2},
+	gamma   = {letter = "γ", step = 3},
+	delta   = {letter = "δ", step = 4},
+	epsilon = {letter = "ε", step = 5},
+	zeta    = {letter = "ζ", step = 6},
+	eta     = {letter = "η", step = 7},
+	theta   = {letter = "θ", darkRed = true},
+	iota    = {letter = "ι", darkRed = true},
+	kappa   = {letter = "κ", white = true},
+}
+
+local danGreekByNumber = {
+	[11] = "alpha", [12] = "beta", [13] = "gamma", [14] = "delta",
+	[15] = "epsilon", [16] = "zeta", [17] = "eta", [18] = "theta",
+	[19] = "iota", [20] = "kappa",
+}
+
+local function getDanDisplayData(estimate, currentAccent)
+	if not estimate or type(estimate.dan) ~= "string" then return nil end
+	local accent = currentAccent or HVColor.Accent or color("#5ABAFF")
+	local redColor = color("#FF3333")
+	local darkRedColor = color("#9E1B1B")
+	local whiteColor = color("1,1,1,1")
+
+	local danStr = tostring(estimate.dan)
+	if estimate.belowFirst or danStr == "0" then return "0", "", color("#808080") end
+	if estimate.aboveKappa or danStr == "∞" then return "∞", "", color("#404040") end
+	local num = tonumber(danStr:match("^(%d+)"))
+	local iconText = ""
+	local danColor = accent
+
+	if num then
+		if num >= 1 and num <= 10 then
+			iconText = tostring(num)
+			danColor = accent
+		elseif num >= 11 and danGreekByNumber[num] then
+			local key = danGreekByNumber[num]
+			local g = danGreekMap[key]
+			iconText = g and g.letter or tostring(num)
+			if g and g.white then
+				danColor = whiteColor
+			elseif g and g.darkRed then
+				danColor = darkRedColor
+			elseif g and g.step then
+				danColor = HV.LerpColor(g.step / 7, accent, redColor)
+			end
+		else
+			iconText = tostring(num)
+			danColor = accent
+		end
+	else
+		local key = string.lower(danStr):gsub("%s*dan$", ""):gsub("^%s+", ""):gsub("%s+$", "")
+		local g = danGreekMap[key]
+		if g then
+			iconText = g.letter
+			if g.white then
+				danColor = whiteColor
+			elseif g.darkRed then
+				danColor = darkRedColor
+			elseif g.step then
+				danColor = HV.LerpColor(g.step / 7, accent, redColor)
+			end
+		else
+			iconText = danStr
+			danColor = accent
+		end
+	end
+
+	local sublevelText = tostring(estimate.sublevel or "")
+	return iconText, sublevelText, danColor
+end
+
+local function applyDanColor(actor, c)
+	if not actor or not c then return end
+	if type(c) == "table" then
+		actor:diffuse(c[1] or c.r or 1, c[2] or c.g or 1, c[3] or c.b or 1, c[4] or c.a or 1)
+	else
+		actor:diffuse(c)
+	end
+end
+
+local danTooltipActor = nil
+local danTooltip = Def.ActorFrame {
+	Name = "DanTooltip",
+	InitCommand = function(self)
+		danTooltipActor = self
+		-- The tooltip is inserted before the Dan label in the decoration list;
+		-- force it to draw above later siblings when it becomes visible.
+		self:draworder(20000):visible(false)
+	end,
+	Def.Quad {
+		Name = "Bg",
+		InitCommand = function(self)
+			self:halign(0):valign(0):diffuse(color("0.05,0.05,0.05,0.95"))
+		end
+	},
+	Def.Quad {
+		Name = "Border",
+		InitCommand = function(self)
+			self:halign(0):valign(0):diffuse(accentColor):diffusealpha(0.5)
+		end
+	},
+	LoadFont("Common Normal") .. {
+		Name = "Text",
+		InitCommand = function(self)
+			self:xy(8, 8):halign(0):valign(0):zoom(0.28):diffuse(mainText)
+		end
+	}
+}
+
+t[#t + 1] = danTooltip
+
+t[#t + 1] = Def.ActorFrame {
+	Name = "DanTooltipHandler",
+	OnCommand = function(self)
+		self:queuecommand("Tick")
+	end,
+	TickCommand = function(self)
+		if danTooltipActor then
+			local selectedData = HV.CurrentSongData or {}
+			local isFolderSelected = selectedData.group and selectedData.group ~= "" and not selectedData.song
+			local danEnabled = ThemePrefs.Get("HV_EnableDanCalculator")
+			local showMSD = ThemePrefs.Get("HV_ShowMSD")
+			local isEnabled = (danEnabled == true or danEnabled == "true") and (showMSD == true or showMSD == "true")
+			
+			local isHovering = false
+			if isEnabled and not isFolderSelected and selectedData.steps then
+				local danCenterX = diffSelectorX + diffTabW + 34
+				local danTopY = diffSelectorTopY + 16
+				-- Cover the icon and its sublevel row with the hover hitbox.
+				isHovering = IsMouseOver(danCenterX - 32, danTopY - 4, 64, 56)
+			end
+
+			if isHovering and selectedData.steps then
+				local rate = tonumber(getCurRateValue()) or tonumber(selectedData.rate) or 1
+				local chartKey = selectedData.steps.GetChartKey and selectedData.steps:GetChartKey()
+				local diskKey = chartKey and chartRatingCacheKey("isor-dp-v5", chartKey, rate)
+				local estimate = selectedData.isorEstimate or (diskKey and persistentChartRatingCache[diskKey])
+				if estimate and type(estimate.dan) == "string" then
+					local mx, my = INPUTFILTER:GetMouseX(), INPUTFILTER:GetMouseY()
+					danTooltipActor:visible(true):xy(mx + 12, my + 12)
+					
+					local desc = string.format("DP %.2f", estimate.dp or 0)
+					
+					local txt = danTooltipActor:GetChild("Text")
+					local bg = danTooltipActor:GetChild("Bg")
+					local border = danTooltipActor:GetChild("Border")
+					txt:settext(desc)
+					local w = txt:GetZoomedWidth() + 16
+					local h = txt:GetZoomedHeight() + 16
+					bg:zoomto(w, h)
+					border:zoomto(w, 1)
+					local currentAccent = HVColor.Accent or accentColor
+					border:diffuse(currentAccent):diffusealpha(0.6)
+				else
+					danTooltipActor:visible(false)
+				end
+			else
+				danTooltipActor:visible(false)
+			end
+		end
+		self:sleep(0.04):queuecommand("Tick")
+	end
+}
+
+t[#t + 1] = Def.ActorFrame {
+	Name = "ISORDanEstimate",
+	InitCommand = function(self)
+		self:xy(diffSelectorX + diffTabW + 34, diffSelectorTopY + 16)
+	end,
+	OnCommand = function(self) self:sleep(0.30):queuecommand("Set") end,
+	SetCommand = function(self)
+		local data = HV.CurrentSongData or {}
+		local danEnabled = ThemePrefs.Get("HV_EnableDanCalculator")
+		local showMSD = ThemePrefs.Get("HV_ShowMSD")
+		local isEnabled = (danEnabled == true or danEnabled == "true") and (showMSD == true or showMSD == "true")
+		if not isEnabled then
+			data.isorInput = nil
+			data.isorEstimate = nil
+			self:visible(false)
+			local icon = self:GetChild("Icon")
+			local sublevel = self:GetChild("Sublevel")
+			if icon then icon:settext("") end
+			if sublevel then sublevel:settext("") end
+			return
+		end
+		local rate = tonumber(getCurRateValue()) or tonumber(data.rate) or 1
+		data.isorEstimate = nil
+		if rate <= 0 then rate = 1 end
+		local chartKey = data.steps and data.steps.GetChartKey and data.steps:GetChartKey()
+		local function calculateEstimateAtRate(targetRate)
+			local diskKey = chartKey and chartRatingCacheKey("isor-dp-v5", chartKey, targetRate)
+			local estimate = diskKey and persistentChartRatingCache[diskKey]
+			if type(estimate) ~= "table" or type(estimate.dp) ~= "number" or type(estimate.dan) ~= "string" then
+				estimate = nil
+			end
+			local chartEvents = not estimate and data.song and data.steps and getISORChartData(data.steps, targetRate)
+			if not estimate and chartEvents and HV.ISORChokeMetrics and HV.ISORStructuralFeatures then
+				local bpm = getISORBPM(data.song)
+				local choke = HV.ISORChokeMetrics(chartEvents.baseEvents, chartEvents.baseDuration)
+				local features = HV.ISORStructuralFeatures(chartEvents.baseEvents, chartEvents.keyCount, chartEvents.baseDuration, bpm)
+				local sunny = HV.CalculateSunnySR and HV.CalculateSunnySR(chartEvents.events, chartEvents.keyCount)
+				local ridgeBio = HV.ISORBioFeatures and HV.ISORBioFeatures(chartEvents.baseEvents)
+				if features then features.ridgeBio = ridgeBio end
+				local msdValues = {}
+				local cachedMSDMatches = chartKey == data.skillsetMSDChartKey
+					and math.abs((tonumber(data.skillsetMSDRate) or -1) - targetRate) < 0.0005
+					and math.abs((tonumber(data.rate) or -1) - targetRate) < 0.0005
+				if cachedMSDMatches then msdValues = data.skillsetMSDs or {} end
+				if not cachedMSDMatches then
+					for i = 1, 8 do
+						local ok, value = pcall(data.steps.GetMSD, data.steps, targetRate, i)
+						msdValues[i] = ok and (tonumber(value) or 0) or 0
+					end
+				end
+				local msds = {
+					overall = tonumber(msdValues[1]) or 0, stream = tonumber(msdValues[2]) or 0,
+					jumpstream = tonumber(msdValues[3]) or 0, handstream = tonumber(msdValues[4]) or 0,
+					stamina = tonumber(msdValues[5]) or 0, jackspeed = tonumber(msdValues[6]) or 0,
+					chordjack = tonumber(msdValues[7]) or 0, technical = tonumber(msdValues[8]) or 0,
+				}
+				local classification
+				if sunny and features then
+					if sunny.sr < 7 and HV.ISORClassifyParsedFamily then
+						classification = HV.ISORClassifyParsedFamily(chartEvents.baseEvents, bpm, chartEvents.baseDuration)
+					end
+					if not classification or (tonumber(classification.confidence) or 0) < 0.10 then
+						classification = HV.ISORClassifyFamily(sunny, features, #chartEvents.events)
+					end
+				end
+				local triang = sunny and features and choke and classification
+					and HV.ISORTriangulate(sunny.sr, sunny, choke, msds, classification.family, features)
+				local holdCount = 0
+				for _, event in ipairs(chartEvents.baseEvents) do if event.endTime and event.endTime > event.time then holdCount = holdCount + 1 end end
+				local subrank = triang and {
+					sk_key = triang.sk_key, dp_sr = triang.dp_sr, dp_choke = triang.dp_choke,
+					dp_msd = triang.dp_msd, mod_sr = triang.mod_sr, raw_sr = sunny.sr,
+					ti = features.timing_irregularity or 0, burst_ratio = choke.burst_ratio,
+					dur = chartEvents.baseDuration, quad = features.quad_ratio, hand = features.hand_ratio,
+					choke = choke.choke_10s_nps, msd_overall = msds.overall, bpm = bpm,
+				} or nil
+				estimate = triang and HV.ISORFinalizeDP(triang, features, msds, sunny,
+					features.stream_purity, subrank, holdCount / math.max(#chartEvents.baseEvents, 1),
+					classification.confidence)
+				if estimate and diskKey then
+					local saved = {dan = estimate.dan, sublevel = estimate.sublevel, dp = estimate.dp,
+						family = estimate.family, confidence = estimate.confidence}
+					storeChartRatingCache(diskKey, saved)
+				end
+			end
+			return estimate
+		end
+		local estimate = data.song and data.steps and calculateEstimateAtRate(rate)
+		-- Match Dan-Overlay's custom-rate monotonicity floor. Native rates remain
+		-- untouched; custom rates are bounded by the nearest native-rate result.
+		if estimate and math.abs(rate - 0.75) >= 0.0005 and math.abs(rate - 1.0) >= 0.0005
+			and math.abs(rate - 1.5) >= 0.0005 then
+			local anchorRate
+			if rate > 0.75 then anchorRate = rate >= 1.5 and 1.5 or (rate >= 1.0 and 1.0 or 0.75)
+			else anchorRate = 0.75 end
+			local anchor = calculateEstimateAtRate(anchorRate)
+			if anchor and type(anchor.dp) == "number" then
+				estimate.dp = rate > 0.75 and math.max(estimate.dp, anchor.dp) or math.min(estimate.dp, anchor.dp)
+				if estimate.dp < 1 then
+					estimate.dan, estimate.sublevel = "0", ""
+				elseif estimate.dp >= 21 then
+					estimate.dan, estimate.sublevel = "∞", ""
+				else
+					local tier = clamp(math.floor(estimate.dp) - 1, 0, 19)
+					local frac = math.floor((estimate.dp - math.floor(estimate.dp)) * 100 + 0.5) / 100
+					estimate.dan = ({"1st", "2nd", "3rd", "4th", "5th", "6th", "7th", "8th", "9th", "10th", "Alpha", "Beta", "Gamma", "Delta", "Epsilon", "Zeta", "Eta", "Theta", "Iota", "Kappa"})[tier + 1]
+					estimate.sublevel = frac < 0.20 and "Low" or frac < 0.40 and "Mid-Low" or frac < 0.60 and "Mid" or frac < 0.80 and "Mid-High" or "High"
+				end
+				local diskKey = chartKey and chartRatingCacheKey("isor-dp-v5", chartKey, rate)
+				if diskKey then storeChartRatingCache(diskKey, {dan = estimate.dan, sublevel = estimate.sublevel,
+					dp = estimate.dp, family = estimate.family, confidence = estimate.confidence}) end
+			end
+		end
+		estimate = data.song and data.steps and estimate or nil
+		data.isorEstimate = estimate
+		self:visible(estimate ~= nil)
+		local iconActor = self:GetChild("Icon")
+		local sublevelActor = self:GetChild("Sublevel")
+		if not estimate then
+			if iconActor then iconActor:settext("") end
+			if sublevelActor then sublevelActor:settext("") end
+			return
+		end
+
+		local currentAccent = HVColor.Accent or accentColor
+		local iconText, sublevelText, danColor = getDanDisplayData(estimate, currentAccent)
+
+		iconActor:settext(iconText)
+		applyDanColor(iconActor, danColor)
+
+		sublevelActor:settext(sublevelText)
+		applyDanColor(sublevelActor, danColor)
+
+		self:xy(diffSelectorX + diffTabW + 34, diffSelectorTopY + 16)
+	end,
+	DelayedChartUpdateMessageCommand = function(self) self:playcommand("Set") end,
+	MSDModeChangedMessageCommand = function(self) self:playcommand("Set") end,
+	ThemePrefChangedMessageCommand = function(self, params)
+		if not params or params.Name == "HV_ShowMSD" or params.Name == "HV_EnableDanCalculator" or params.Name == "HV_AccentColor" then
+			self:playcommand("Set")
+		end
+	end,
+
+	LoadFont("MSD 20px") .. {
+		Name = "Icon",
+		InitCommand = function(self)
+			self:halign(0.5):valign(0):xy(0, 0):zoom(0.95)
+		end
+	},
+	LoadFont("MSD 20px") .. {
+		Name = "Sublevel",
+		InitCommand = function(self)
+			self:halign(0.5):valign(0):xy(0, 39):zoom(0.26)
+		end
+	}
+}
 
 return root

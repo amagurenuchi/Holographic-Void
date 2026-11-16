@@ -321,20 +321,12 @@ local function scoreItem(i)
 			end
 		end,
 
-		-- The visible card spans the entire leaderboard width.  Keep the hitbox
-		-- on the row itself so clicking any part of a local card opens its stats.
+		-- The visible card spans the entire leaderboard width. Keep a hitbox
+		-- for the shared mouse-coordinate hit test used by the input callback.
 		Def.Quad {
 			Name = "ClickArea",
 			InitCommand = function(self)
 				self:halign(0):valign(0):zoomto(clickAreaWidth, clickAreaHeight):diffusealpha(0)
-			end,
-			MouseDownCommand = function(self)
-				-- Let the engine hit-test this row as well. Its IsOver() accounts
-				-- for the first row's transformed position more reliably than a
-				-- page-level mouse-coordinate calculation.
-				if not HV.EvaluationCompact and isLocal and self:IsOver() then
-					selectVisibleLocalScore(i)
-				end
 			end,
 		},
 
