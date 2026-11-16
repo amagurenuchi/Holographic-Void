@@ -10,7 +10,7 @@ if not HV.ShowNPS() then
 	return Def.ActorFrame {}
 end
 
--- Window sizes from ThemePrefs instead of hardcoded
+-- Window sizes from ThemePrefs
 local function getWindowSize()
 	return tonumber(ThemePrefs.Get("HV_NPSWindowSize")) or 1.5
 end
