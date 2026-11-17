@@ -1,7 +1,18 @@
 --- Holographic Void: ScreenColorTheme Overlay
--- Custom Lua UI for selecting the theme's accent color.
+-- Redesigned modern cyberpunk/holographic interface.
 -- Features clickable swatches with a live preview panel that updates in real time.
--- We use color presets for now. the proper color config screen will be here at some point.
+-- Preserves all original functions, behaviors, metrics, and navigation logic.
+
+local function getAccent()
+	return (HVColor and HVColor.Accent) or color("#5ABAFF")
+end
+
+local function transitionToScreen(screenName)
+	local screen = SCREENMAN:GetTopScreen()
+	if not screen then return end
+	screen:SetNextScreenName(screenName)
+	screen:StartTransitioningScreen("SM_GoToNextScreen")
+end
 
 local accentChoices = {
 	-- Cool Colors (Blues/Cyans/Greens)
@@ -13,8 +24,8 @@ local accentChoices = {
 	{ name = "Mint",            hex = "#80FFB0" },
 	{ name = "Emerald",         hex = "#00D050" },
 	{ name = "Forest Green",    hex = "#228B22" },
-	{ name = "Sky Blue",        hex = "#87CEEB" },      -- Extended cool color
-	
+	{ name = "Sky Blue",        hex = "#87CEEB" },
+
 	-- Warm Colors (Yellows/Oranges/Reds)
 	{ name = "Warm Gold",       hex = "#FFD080" },
 	{ name = "Golden",          hex = "#FFD700" },
@@ -23,62 +34,117 @@ local accentChoices = {
 	{ name = "Soft Red",        hex = "#FF8080" },
 	{ name = "Crimson",         hex = "#DC143C" },
 	{ name = "Rose",            hex = "#FF007F" },
-	{ name = "Amber",           hex = "#FFBF00" },      -- Extended warm color
-	
+	{ name = "Amber",           hex = "#FFBF00" },
+
 	-- Purple/Violet Spectrum
-	{ name = "Lavender",        hex = "#b6b6ff" },
+	{ name = "Lavender",        hex = "#B6B6FF" },
 	{ name = "Violet",          hex = "#B080FF" },
 	{ name = "Electric Indigo", hex = "#4B0082" },
 	{ name = "Cyber Purple",    hex = "#7000FF" },
 	{ name = "Magenta",         hex = "#FF00FF" },
-	{ name = "Orchid",          hex = "#DA70D6" },      -- Extended purple color
-	
+	{ name = "Orchid",          hex = "#DA70D6" },
+
 	-- Neutral/Grayscale
 	{ name = "Pure Gray",       hex = "#808080" },
 	{ name = "Silver",          hex = "#C0C0C0" },
 	{ name = "Platinum",        hex = "#E5E4E2" },
 	{ name = "White",           hex = "#FFFFFF" },
-	{ name = "Charcoal",        hex = "#333b40" },      -- Extended neutral color
-	
+	{ name = "Charcoal",        hex = "#333B40" },
+
 	-- Custom (opens color picker)
 	{ name = "Custom",          hex = "#5ABAFF", isCustom = true },
 }
 
--- Layout constants
-local cols = 7
-local rows = math.ceil(#accentChoices / cols)
-local swatchSize = 50
-local swatchGapX = 16
-local swatchGapY = 44
-local totalSwatchW = cols * (swatchSize + swatchGapX) - swatchGapX
-local swatchStartX = SCREEN_LEFT + 60 + swatchSize / 2
-local swatchStartY = SCREEN_CENTER_Y - 110
+-- =========================================================================
+-- GEOMETRY & LAYOUT CONSTANTS (Strictly bounded to prevent overflow)
+-- =========================================================================
+local marginX = 20
+local gap = 16
+local totalW = SCREEN_WIDTH - marginX * 2
+local listW = math.floor(totalW * 0.52)
+local panelW = totalW - gap - listW
+local listX = marginX + listW / 2
+local panelX = marginX + listW + gap + panelW / 2
 
--- Preview panel constants (right side chunks)
-local previewStartX = SCREEN_RIGHT - 180
-local previewStartY = 118
-local chunkW = 280
-local chunkH = 44
-local chunkGap = 6
-local function getChunkY(i) return previewStartY + (i-1) * (chunkH + chunkGap) end
+local headerTop = 14
+local headerLineY = 48
+
+local panelTop = 60
+local panelBottom = SCREEN_HEIGHT - 28
+local panelH = panelBottom - panelTop
+local panelCenterY = panelTop + panelH / 2
+
+-- Swatch grid layout inside Left Panel (7-column layout preserving original grouping)
+local cols = 7
+local swatchSize = WideScale(30, 36)
+local swatchGapX = WideScale(12, 18)
+local swatchRowPitch = WideScale(48, 52)
+local totalGridW = cols * swatchSize + (cols - 1) * swatchGapX
+local swatchStartX = listX - totalGridW / 2 + swatchSize / 2
+local swatchStartY = panelTop + 34 + swatchSize / 2
 
 local function getSwatchPos(i)
-	if accentChoices[i] and accentChoices[i].isCustom and i > 1 then
-		local prevR = math.ceil((i - 1) / cols) - 1
-		local prevC = ((i - 2) % cols) + 1
-		sx = swatchStartX + prevC * (swatchSize + swatchGapX)
-		sy = swatchStartY + prevR * (swatchSize + swatchGapY)
-		return sx, sy
-	end
-
-	local r = math.ceil(i / cols) - 1
+	local r = math.floor((i - 1) / cols)
 	local c = (i - 1) % cols
-	sx = swatchStartX + c * (swatchSize + swatchGapX)
-	sy = swatchStartY + r * (swatchSize + swatchGapY)
+	local sx = swatchStartX + c * (swatchSize + swatchGapX)
+	local sy = swatchStartY + r * swatchRowPitch
 	return sx, sy
 end
 
--- Interactivity for chunks
+-- Preview panel constants (Right side chunks)
+local chunkW = panelW - 24
+local chunkH = 44
+local chunkGap = 8
+local previewStartY = panelTop + 34 + chunkH / 2
+local function getChunkY(i) return previewStartY + (i - 1) * (chunkH + chunkGap) end
+
+-- Visual styling helpers
+local function makeCornerBrackets(w, h, size, thickness)
+	size = size or 8
+	thickness = thickness or 1.5
+	local halfW = w / 2
+	local halfH = h / 2
+	local function colorTick(self) self:diffuse(getAccent()):diffusealpha(0.85) end
+	return Def.ActorFrame {
+		Def.Quad { InitCommand = function(self) self:xy(-halfW + size / 2, -halfH + thickness / 2):zoomto(size, thickness); colorTick(self) end,
+			ColorThemeChangedMessageCommand = function(self) colorTick(self) end,
+			ThemePrefChangedMessageCommand = function(self) colorTick(self) end },
+		Def.Quad { InitCommand = function(self) self:xy(-halfW + thickness / 2, -halfH + size / 2):zoomto(thickness, size); colorTick(self) end,
+			ColorThemeChangedMessageCommand = function(self) colorTick(self) end,
+			ThemePrefChangedMessageCommand = function(self) colorTick(self) end },
+		Def.Quad { InitCommand = function(self) self:xy(halfW - size / 2, -halfH + thickness / 2):zoomto(size, thickness); colorTick(self) end,
+			ColorThemeChangedMessageCommand = function(self) colorTick(self) end,
+			ThemePrefChangedMessageCommand = function(self) colorTick(self) end },
+		Def.Quad { InitCommand = function(self) self:xy(halfW - thickness / 2, -halfH + size / 2):zoomto(thickness, size); colorTick(self) end,
+			ColorThemeChangedMessageCommand = function(self) colorTick(self) end,
+			ThemePrefChangedMessageCommand = function(self) colorTick(self) end },
+		Def.Quad { InitCommand = function(self) self:xy(-halfW + size / 2, halfH - thickness / 2):zoomto(size, thickness); colorTick(self) end,
+			ColorThemeChangedMessageCommand = function(self) colorTick(self) end,
+			ThemePrefChangedMessageCommand = function(self) colorTick(self) end },
+		Def.Quad { InitCommand = function(self) self:xy(-halfW + thickness / 2, halfH - size / 2):zoomto(thickness, size); colorTick(self) end,
+			ColorThemeChangedMessageCommand = function(self) colorTick(self) end,
+			ThemePrefChangedMessageCommand = function(self) colorTick(self) end },
+		Def.Quad { InitCommand = function(self) self:xy(halfW - size / 2, halfH - thickness / 2):zoomto(size, thickness); colorTick(self) end,
+			ColorThemeChangedMessageCommand = function(self) colorTick(self) end,
+			ThemePrefChangedMessageCommand = function(self) colorTick(self) end },
+		Def.Quad { InitCommand = function(self) self:xy(halfW - thickness / 2, halfH - size / 2):zoomto(thickness, size); colorTick(self) end,
+			ColorThemeChangedMessageCommand = function(self) colorTick(self) end,
+			ThemePrefChangedMessageCommand = function(self) colorTick(self) end },
+	}
+end
+
+local function makePanelBorder(w, h, borderColor)
+	return Def.ActorFrame {
+		Def.Quad { InitCommand = function(self) self:y(-h / 2):zoomto(w, 1):diffuse(borderColor) end },
+		Def.Quad { InitCommand = function(self) self:y(h / 2):zoomto(w, 1):diffuse(borderColor) end },
+		Def.Quad { InitCommand = function(self) self:x(-w / 2):zoomto(1, h):diffuse(borderColor) end },
+		Def.Quad { InitCommand = function(self) self:x(w / 2):zoomto(1, h):diffuse(borderColor) end },
+	}
+end
+
+-- =========================================================================
+-- STYLE PREFERENCE OPTIONS & CYCLING
+-- =========================================================================
 local gradeStyles = {"Holographic", "Classic", "Custom"}
 local msdScales = {"Holographic", "Classic", "None", "Monochrome", "Accent"}
 local judgeStyles = {"Holographic", "Classic", "Custom"}
@@ -139,15 +205,9 @@ local function cycleCTStyle()
 	MESSAGEMAN:Broadcast("CTStyleChanged")
 end
 
-local function getGTStyle() return "Custom" end
-local function cycleGTStyle()
-	ThemePrefs.Set("HV_GoalTrackerColorStyle", "Custom")
-	ThemePrefs.ForceSave()
-	if HVColor and HVColor.RefreshGoalTrackerColors then HVColor.RefreshGoalTrackerColors() end
-	MESSAGEMAN:Broadcast("GTStyleChanged")
-end
-
--- State
+-- =========================================================================
+-- STATE & DATA HELPERS
+-- =========================================================================
 local selectedIdx = 1
 local hoveredIdx = nil
 local previewColor = color("#5ABAFF")
@@ -178,9 +238,6 @@ end
 
 refreshCustomChoiceHex()
 
--- ============================================================
--- Helpers
--- ============================================================
 local function getActiveHex()
 	if ThemePrefs and ThemePrefs.Get then
 		local h = ThemePrefs.Get("HV_AccentColor")
@@ -226,7 +283,7 @@ local function applyColor(idx, openCustomPicker)
 
 		if openCustomPicker then
 			HV.SelectedCustomColor = {"accent", "Accent"}
-			SCREENMAN:AddNewScreenToTop("ScreenHVColorEdit")
+			transitionToScreen("ScreenHVColorEdit")
 		end
 		return
 	end
@@ -245,9 +302,9 @@ local function applyColor(idx, openCustomPicker)
 	MESSAGEMAN:Broadcast("ThemePrefChanged", { Name = "HV_AccentColor" })
 end
 
--- ============================================================
--- Root ActorFrame
--- ============================================================
+-- =========================================================================
+-- ROOT ACTORFRAME & INPUT
+-- =========================================================================
 local t = Def.ActorFrame {
 	Name = "ColorThemeRoot",
 	BeginCommand = function(self)
@@ -263,7 +320,7 @@ local t = Def.ActorFrame {
 			local btn = (event.DeviceInput or {}).button or ""
 			local gb = event.button or ""
 
-			-- Escape / Back
+			-- Escape / Back to exit
 			if gb == "Back" or btn == "DeviceButton_escape" then
 				screen:Cancel()
 				return true
@@ -288,25 +345,46 @@ local t = Def.ActorFrame {
 			end
 			if gb == "MenuDown" or btn == "DeviceButton_down" then
 				local ni = selectedIdx + cols
-				if ni <= #accentChoices then applyColor(ni) return true end
+				if ni <= #accentChoices then
+					applyColor(ni)
+					return true
+				elseif selectedIdx >= 22 and selectedIdx <= 28 then
+					-- Any item in Row 3 jumps down to Custom
+					applyColor(#accentChoices)
+					return true
+				end
 			end
 
-			-- Enter / Start to confirm and go back
+			-- Enter / Start: on custom open color edit; on preset confirm and exit
 			if gb == "Start" or btn == "DeviceButton_enter" then
-				screen:Cancel()
+				if not (accentChoices[selectedIdx] and accentChoices[selectedIdx].isCustom) then
+					screen:Cancel()
+				end
 				return true
 			end
 
-			-- Mouse click
+			-- Scheme preview hotkeys
+			if btn == "DeviceButton_g" or btn == "DeviceButton_G" then cycleGradeStyle() return true end
+			if btn == "DeviceButton_m" or btn == "DeviceButton_M" then cycleMSDScale() return true end
+			if btn == "DeviceButton_j" or btn == "DeviceButton_J" then cycleJudgeStyle() return true end
+			if btn == "DeviceButton_d" or btn == "DeviceButton_D" then cycleDiffStyle() return true end
+			if btn == "DeviceButton_c" or btn == "DeviceButton_C" then cycleCTStyle() return true end
+			if btn == "DeviceButton_e" or btn == "DeviceButton_E" then
+				HV.SelectedCustomColor = {"grades", "AAAAA"}
+				transitionToScreen("ScreenHVCustomColors")
+				return true
+			end
+
+			-- Mouse click handling
 			if btn == "DeviceButton_left mouse button" then
 				local mx = INPUTFILTER:GetMouseX()
 				local my = INPUTFILTER:GetMouseY()
-				
-				-- Swatches
+
+				-- Swatches click
 				for i = 1, #accentChoices do
 					local sx, sy = getSwatchPos(i)
-					if mx >= sx - swatchSize/2 and mx <= sx + swatchSize/2
-					   and my >= sy - swatchSize/2 and my <= sy + swatchSize/2 then
+					if mx >= sx - swatchSize / 2 and mx <= sx + swatchSize / 2
+					   and my >= sy - swatchSize / 2 and my <= sy + swatchSize / 2 then
 						if accentChoices[i].isCustom then
 							local now = (GetTimeSinceStart and GetTimeSinceStart()) or os.clock()
 							local doubleClicked = (lastCustomClickTime > 0) and ((now - lastCustomClickTime) <= 0.30)
@@ -319,12 +397,10 @@ local t = Def.ActorFrame {
 					end
 				end
 
-				-- Interactive Chunks
-				local function isOverChunk(yOff)
-					local cx = previewStartX
-					local cy = yOff
-					return mx >= cx - chunkW/2 and mx <= cx + chunkW/2
-					   and my >= cy - chunkH/2 and my <= cy + chunkH/2
+				-- Interactive Chunks click
+				local function isOverChunk(cy)
+					return mx >= panelX - chunkW / 2 and mx <= panelX + chunkW / 2
+					   and my >= cy - chunkH / 2 and my <= cy + chunkH / 2
 				end
 
 				if isOverChunk(getChunkY(1)) then cycleGradeStyle() return true end
@@ -334,10 +410,11 @@ local t = Def.ActorFrame {
 				if isOverChunk(getChunkY(5)) then cycleCTStyle() return true end
 				if isOverChunk(getChunkY(6)) then
 					HV.SelectedCustomColor = {"grades", "AAAAA"}
-					SCREENMAN:AddNewScreenToTop("ScreenHVCustomColors")
+					transitionToScreen("ScreenHVCustomColors")
 					return true
 				end
 			end
+			return false
 		end)
 	end,
 	GainFocusCommand = function(self)
@@ -350,16 +427,15 @@ local t = Def.ActorFrame {
 	end,
 	InitCommand = function(self)
 		self:SetUpdateFunction(function(af)
-			-- Mouse hover detection
 			local mx = INPUTFILTER:GetMouseX()
 			local my = INPUTFILTER:GetMouseY()
-			
-			-- Swatches
+
+			-- Swatches hover detection
 			local newHover = nil
 			for i = 1, #accentChoices do
 				local sx, sy = getSwatchPos(i)
-				if mx >= sx - swatchSize/2 and mx <= sx + swatchSize/2
-				   and my >= sy - swatchSize/2 and my <= sy + swatchSize/2 then
+				if mx >= sx - swatchSize / 2 and mx <= sx + swatchSize / 2
+				   and my >= sy - swatchSize / 2 and my <= sy + swatchSize / 2 then
 					newHover = i
 					break
 				end
@@ -369,21 +445,19 @@ local t = Def.ActorFrame {
 				MESSAGEMAN:Broadcast("SwatchHoverChanged")
 			end
 
-			-- Chunk hovers
-			local function isOverChunk(yOff)
-				local cx = previewStartX
-				local cy = yOff
-				return mx >= cx - chunkW/2 and mx <= cx + chunkW/2
-				   and my >= cy - chunkH/2 and my <= cy + chunkH/2
+			-- Chunks hover detection
+			local function isOverChunk(cy)
+				return mx >= panelX - chunkW / 2 and mx <= panelX + chunkW / 2
+				   and my >= cy - chunkH / 2 and my <= cy + chunkH / 2
 			end
-			
+
 			local overG = isOverChunk(getChunkY(1))
 			local overM = isOverChunk(getChunkY(2))
 			local overJ = isOverChunk(getChunkY(3))
 			local overD = isOverChunk(getChunkY(4))
 			local overC = isOverChunk(getChunkY(5))
 			local overCustom = isOverChunk(getChunkY(6))
-			
+
 			if overG ~= self.HG then self.HG = overG MESSAGEMAN:Broadcast("GradeHoverChanged", { Hovering = overG }) end
 			if overM ~= self.HM then self.HM = overM MESSAGEMAN:Broadcast("MSDHoverChanged", { Hovering = overM }) end
 			if overJ ~= self.HJ then self.HJ = overJ MESSAGEMAN:Broadcast("JudgeHoverChanged", { Hovering = overJ }) end
@@ -394,38 +468,124 @@ local t = Def.ActorFrame {
 	end
 }
 
--- ============================================================
--- HEADER
--- ============================================================
+-- =========================================================================
+-- 1. TOP HEADER & BREADCRUMB BAR (Matching Theme Options)
+-- =========================================================================
 t[#t + 1] = Def.ActorFrame {
-	InitCommand = function(self) self:xy(SCREEN_CENTER_X, SCREEN_TOP + 30) end,
-
-	LoadFont("Common Large") .. {
-		InitCommand = function(self)
-			self:zoom(0.55):diffuse(color("1,1,1,1"))
-			self:settext("COLOR THEME")
-		end
-	},
+	Name = "Header",
+	-- Brand / Kicker
 	LoadFont("Common Normal") .. {
 		InitCommand = function(self)
-			self:y(24):zoom(0.28):diffuse(color("0.45,0.45,0.45,1"))
-			self:settext("Select an accent color for the Holographic Void experience")
-		end
-	},
-	Def.Quad {
-		InitCommand = function(self)
-			self:y(38):zoomto(SCREEN_WIDTH * 0.4, 1)
-				:diffuse(HVColor.Accent):diffusealpha(0.3)
+			self:xy(marginX, headerTop):halign(0):zoom(0.28)
+				:diffuse(getAccent()):diffusealpha(0.85)
+			self:settext("HOLOGRAPHIC VOID  //  COLOR CONFIGURATION")
 		end,
 		ColorThemeChangedMessageCommand = function(self)
-			self:stoptweening():linear(0.15):diffuse(previewColor):diffusealpha(0.5)
-		end
-	}
+			self:stoptweening():linear(0.12):diffuse(previewColor):diffusealpha(0.85)
+		end,
+	},
+	-- Screen Title
+	LoadFont("Common Normal") .. {
+		InitCommand = function(self)
+			self:xy(marginX, headerTop + 14):halign(0):zoom(0.62):diffuse(color("1,1,1,1"))
+			self:settext("COLOR THEME")
+		end,
+	},
+	-- Screen Subtitle
+	LoadFont("Common Normal") .. {
+		InitCommand = function(self)
+			self:xy(marginX + 190, headerTop + 17):halign(0):zoom(0.32)
+				:diffuse(color("0.65,0.68,0.74,0.85"))
+			self:settext("Select a color to match your mood.")
+		end,
+	},
+	-- Glow line behind header divider
+	Def.Quad {
+		InitCommand = function(self)
+			self:xy(SCREEN_CENTER_X, headerLineY):zoomto(totalW, 3)
+				:diffuse(getAccent()):diffusealpha(0.18)
+		end,
+		ColorThemeChangedMessageCommand = function(self)
+			self:stoptweening():linear(0.12):diffuse(previewColor):diffusealpha(0.18)
+		end,
+	},
+	-- Header Divider Line
+	Def.Quad {
+		InitCommand = function(self)
+			self:xy(SCREEN_CENTER_X, headerLineY):zoomto(totalW, 1)
+				:diffuse(getAccent()):diffusealpha(0.65)
+		end,
+		ColorThemeChangedMessageCommand = function(self)
+			self:stoptweening():linear(0.12):diffuse(previewColor):diffusealpha(0.65)
+		end,
+	},
 }
 
--- ============================================================
--- COLOR SWATCHES
--- ============================================================
+-- =========================================================================
+-- 2. LEFT PANEL: ACCENT PALETTE & SWATCHES
+-- =========================================================================
+t[#t + 1] = Def.ActorFrame {
+	Name = "LeftPanel",
+	InitCommand = function(self) self:xy(listX, panelCenterY) end,
+	-- Glass Backing
+	Def.Quad {
+		InitCommand = function(self)
+			self:zoomto(listW, panelH):diffuse(color("0.04,0.04,0.05,0.92"))
+		end,
+	},
+	-- Border Outline
+	Def.ActorFrame {
+		makePanelBorder(listW, panelH, color("0.16,0.18,0.22,0.8")),
+	},
+	-- Corner Accent Brackets
+	Def.ActorFrame {
+		makeCornerBrackets(listW, panelH, 8, 1.5),
+	},
+}
+
+-- Left Panel Header Banner
+t[#t + 1] = Def.ActorFrame {
+	Name = "LeftPanelHeader",
+	InitCommand = function(self) self:xy(listX, panelTop + 12) end,
+	-- Backing
+	Def.Quad {
+		InitCommand = function(self)
+			self:zoomto(listW - 4, 24):diffuse(color("0.07,0.07,0.09,0.95"))
+		end,
+	},
+	-- Divider Line
+	Def.Quad {
+		InitCommand = function(self)
+			self:y(12):zoomto(listW - 4, 1):diffuse(color("0.18,0.20,0.24,0.8"))
+		end,
+	},
+	-- Kicker
+	LoadFont("Common Normal") .. {
+		InitCommand = function(self)
+			self:x(-listW / 2 + 16):halign(0):zoom(0.28)
+				:diffuse(getAccent()):diffusealpha(0.85)
+			self:settext("// PRESET PALETTE")
+		end,
+		ColorThemeChangedMessageCommand = function(self)
+			self:stoptweening():linear(0.12):diffuse(previewColor):diffusealpha(0.85)
+		end,
+	},
+	-- Active Name Counter
+	LoadFont("Common Normal") .. {
+		Name = "ActiveLabelInHeader",
+		InitCommand = function(self)
+			self:x(listW / 2 - 16):halign(1):zoom(0.26):diffuse(color("0.85,0.88,0.92,1"))
+		end,
+		BeginCommand = function(self) self:playcommand("Set") end,
+		ColorThemeChangedMessageCommand = function(self) self:playcommand("Set") end,
+		SetCommand = function(self)
+			local name = accentChoices[selectedIdx] and accentChoices[selectedIdx].name or "Custom"
+			self:settext("ACTIVE: " .. name:upper())
+		end,
+	},
+}
+
+-- Swatches inside Left Panel
 for i, choice in ipairs(accentChoices) do
 	t[#t + 1] = Def.ActorFrame {
 		Name = "Swatch_" .. i,
@@ -434,7 +594,33 @@ for i, choice in ipairs(accentChoices) do
 			self:xy(sx, sy)
 		end,
 
-		-- Swatch background (color fill)
+		-- Outer Tile Border
+		Def.Quad {
+			Name = "SwatchBorder",
+			InitCommand = function(self)
+				self:zoomto(swatchSize + 4, swatchSize + 4):diffuse(color("0.16,0.18,0.22,0.8"))
+			end,
+			ColorThemeChangedMessageCommand = function(self)
+				if selectedIdx == i then
+					self:stoptweening():linear(0.1):diffuse(color(choice.hex)):diffusealpha(0.95)
+				elseif hoveredIdx == i then
+					self:stoptweening():linear(0.1):diffuse(color("0.5,0.55,0.65,0.9"))
+				else
+					self:stoptweening():linear(0.1):diffuse(color("0.16,0.18,0.22,0.8"))
+				end
+			end,
+			SwatchHoverChangedMessageCommand = function(self)
+				if selectedIdx == i then
+					self:diffuse(color(choice.hex)):diffusealpha(0.95)
+				elseif hoveredIdx == i then
+					self:stoptweening():linear(0.08):diffuse(color("0.5,0.55,0.65,0.9"))
+				else
+					self:stoptweening():linear(0.08):diffuse(color("0.16,0.18,0.22,0.8"))
+				end
+			end,
+		},
+
+		-- Main Color Fill Quad
 		Def.Quad {
 			Name = "SwatchBg",
 			InitCommand = function(self)
@@ -448,14 +634,14 @@ for i, choice in ipairs(accentChoices) do
 			end,
 			SwatchHoverChangedMessageCommand = function(self)
 				if hoveredIdx == i then
-					self:stoptweening():decelerate(0.1):zoomto(swatchSize + 6, swatchSize + 6)
+					self:stoptweening():decelerate(0.1):zoomto(swatchSize + 2, swatchSize + 2)
 				else
 					self:stoptweening():decelerate(0.1):zoomto(swatchSize, swatchSize)
 				end
-			end
+			end,
 		},
 
-		-- Selection ring
+		-- Selection Glow Ring
 		Def.Quad {
 			Name = "Ring",
 			InitCommand = function(self)
@@ -464,32 +650,31 @@ for i, choice in ipairs(accentChoices) do
 			end,
 			ColorThemeChangedMessageCommand = function(self)
 				if selectedIdx == i then
-					self:stoptweening():linear(0.12)
-						:diffuse(color(choice.hex)):diffusealpha(0.7)
+					self:stoptweening():linear(0.12):diffuse(color(choice.hex)):diffusealpha(0.65)
 				else
 					self:stoptweening():linear(0.12):diffusealpha(0)
 				end
 			end,
 			BeginCommand = function(self)
 				if selectedIdx == i then
-					self:diffuse(color(choice.hex)):diffusealpha(0.7)
+					self:diffuse(color(choice.hex)):diffusealpha(0.65)
 				end
 			end,
 			CustomColorChangedMessageCommand = function(self, params)
 				if choice.isCustom and params and params.Color and params.Category == "accent" and params.Element == "Accent" then
 					choice.hex = params.Color
 					if selectedIdx == i then
-						self:stoptweening():linear(0.12):diffuse(color(choice.hex)):diffusealpha(0.7)
+						self:stoptweening():linear(0.12):diffuse(color(choice.hex)):diffusealpha(0.65)
 					end
 				end
-			end
+			end,
 		},
 
-		-- Selected checkmark indicator
+		-- Selected Radio Dot Indicator
 		LoadFont("Common Normal") .. {
 			Name = "Check",
 			InitCommand = function(self)
-				self:y(swatchSize/2 + 2):zoom(0.45):diffuse(color("1,1,1,0"))
+				self:y(swatchSize / 2 + 1):zoom(0.35):diffuse(color("1,1,1,0"))
 				self:settext("●")
 			end,
 			ColorThemeChangedMessageCommand = function(self)
@@ -504,96 +689,247 @@ for i, choice in ipairs(accentChoices) do
 					self:diffuse(color(choice.hex)):diffusealpha(1)
 				end
 			end,
-			CustomColorChangedMessageCommand = function(self, params)
-				if choice.isCustom and params and params.Color and params.Category == "accent" and params.Element == "Accent" then
-					choice.hex = params.Color
-					if selectedIdx == i then
-						self:stoptweening():linear(0.1):diffuse(color(choice.hex)):diffusealpha(1)
-					end
-				end
-			end
 		},
 
-		-- Custom indicator (only for Custom swatch)
+		-- Custom Indicator Badge (only for Custom swatch)
 		choice.isCustom and LoadFont("Common Normal") .. {
 			Name = "CustomIndicator",
 			InitCommand = function(self)
-				self:zoom(0.5):diffuse(color("1,1,1,0.8")):settext("C")
-			end
+				self:zoom(0.42):diffuse(color("1,1,1,0.95")):settext("C")
+			end,
 		} or nil,
 
-		-- Label
+		-- Swatch Label below
 		LoadFont("Common Normal") .. {
 			InitCommand = function(self)
-				self:y(swatchSize/2 + 14):zoom(0.28)
-					:diffuse(color("0.65,0.65,0.65,1"))
+				self:y(swatchSize / 2 + 9):zoom(0.20)
+					:diffuse(color("0.65,0.68,0.74,1")):maxwidth((swatchSize + 14) / 0.20)
 				self:settext(choice.name)
 			end,
 			SwatchHoverChangedMessageCommand = function(self)
-				if hoveredIdx == i then
-					self:stoptweening():linear(0.1):diffuse(color("1,1,1,1"))
+				if hoveredIdx == i or selectedIdx == i then
+					self:stoptweening():linear(0.08):diffuse(color("1,1,1,1"))
 				else
-					self:stoptweening():linear(0.1):diffuse(color("0.65,0.65,0.65,1"))
+					self:stoptweening():linear(0.08):diffuse(color("0.65,0.68,0.74,1"))
 				end
-			end
-		}
+			end,
+			ColorThemeChangedMessageCommand = function(self)
+				if selectedIdx == i then
+					self:diffuse(color("1,1,1,1"))
+				else
+					self:diffuse(color("0.65,0.68,0.74,1"))
+				end
+			end,
+		},
 	}
 end
 
--- ============================================================
--- FEATURE PREVIEW CHUNKS (Right Side)
--- ============================================================
 
 
+-- Active Color Status Card (Bottom of Left Panel - strictly within bounds)
+local activeCardW = listW - 20
+local activeCardH = 38
+local activeCardY = panelBottom - 24
 
+t[#t + 1] = Def.ActorFrame {
+	Name = "ActiveColorCard",
+	InitCommand = function(self) self:xy(listX, activeCardY) end,
 
-
--- ============================================================
--- INTERACTIVE GRADE PREVIEW
--- ============================================================
-t[#t+1] = Def.ActorFrame {
-	Name = "Chunk_Grade",
-	InitCommand = function(self) self:xy(previewStartX, getChunkY(1)) end,
-	
+	-- Card Backing
 	Def.Quad {
-		InitCommand = function(self) self:zoomto(chunkW, chunkH):diffuse(color("0.06,0.06,0.06,0.9")) end,
-		GradeHoverChangedMessageCommand = function(self, params)
-			self:stoptweening():linear(0.1):diffuse(params.Hovering and color("0.1,0.1,0.1,0.9") or color("0.06,0.06,0.06,0.9"))
-		end
+		InitCommand = function(self)
+			self:zoomto(activeCardW, activeCardH):diffuse(color("0.06,0.07,0.09,0.95"))
+		end,
 	},
-	
+	-- Card Border
+	Def.ActorFrame {
+		makePanelBorder(activeCardW, activeCardH, color("0.18,0.20,0.24,0.8")),
+	},
+	-- Corner Accent Brackets
+	Def.ActorFrame {
+		makeCornerBrackets(activeCardW, activeCardH, 6, 1.2),
+	},
+	-- Left Accent Glow Bar
+	Def.Quad {
+		InitCommand = function(self)
+			self:x(-activeCardW / 2 + 1.5):zoomto(3, activeCardH)
+				:diffuse(getAccent()):diffusealpha(0.85)
+		end,
+		ColorThemeChangedMessageCommand = function(self)
+			self:stoptweening():linear(0.12):diffuse(previewColor):diffusealpha(0.85)
+		end,
+	},
+
+	-- Live Color Chip
+	Def.Quad {
+		Name = "ActiveChipBorder",
+		InitCommand = function(self)
+			self:x(-activeCardW / 2 + 20):zoomto(24, 24):diffuse(color("0.18,0.20,0.24,0.9"))
+		end,
+	},
+	Def.Quad {
+		Name = "ActiveChipFill",
+		InitCommand = function(self)
+			self:x(-activeCardW / 2 + 20):zoomto(20, 20):diffuse(color(getActiveHex()))
+		end,
+		ColorThemeChangedMessageCommand = function(self)
+			self:stoptweening():linear(0.12):diffuse(previewColor)
+		end,
+	},
+
+	-- Active Color Name & Title
+	LoadFont("Common Normal") .. {
+		Name = "ActiveTitle",
+		InitCommand = function(self)
+			self:xy(-activeCardW / 2 + 40, -6):halign(0):zoom(0.32):diffuse(color("1,1,1,1"))
+		end,
+		BeginCommand = function(self) self:playcommand("Set") end,
+		ColorThemeChangedMessageCommand = function(self) self:playcommand("Set") end,
+		SetCommand = function(self)
+			local choice = accentChoices[selectedIdx]
+			local name = choice and choice.name or "Accent"
+			self:settext(name:upper())
+		end,
+	},
+
+	-- Active Color Subtitle / Hex / Hint
+	LoadFont("Common Normal") .. {
+		Name = "ActiveSubtitle",
+		InitCommand = function(self)
+			self:xy(-activeCardW / 2 + 40, 7):halign(0):zoom(0.24):diffuse(color("0.65,0.68,0.74,1"))
+		end,
+		BeginCommand = function(self) self:playcommand("Set") end,
+		ColorThemeChangedMessageCommand = function(self) self:playcommand("Set") end,
+		SetCommand = function(self)
+			local choice = accentChoices[selectedIdx]
+			if choice and choice.isCustom then
+				self:settext("CUSTOM COLOR (" .. choice.hex:upper() .. ")  ·  DOUBLE-CLICK TO EDIT HSV")
+			else
+				local hex = choice and choice.hex:upper() or "#5ABAFF"
+				self:settext("HEX: " .. hex)
+			end
+		end,
+	},
+
+	-- "ACTIVE" pill badge on right
+	Def.ActorFrame {
+		InitCommand = function(self) self:x(activeCardW / 2 - 42) end,
+		Def.Quad {
+			InitCommand = function(self)
+				self:zoomto(62, 18):diffuse(color("0.10,0.12,0.16,0.85"))
+			end,
+		},
+		LoadFont("Common Normal") .. {
+			InitCommand = function(self)
+				self:zoom(0.24):diffuse(getAccent()):settext("ACTIVE")
+			end,
+			ColorThemeChangedMessageCommand = function(self)
+				self:stoptweening():linear(0.12):diffuse(previewColor)
+			end,
+		},
+	},
+}
+
+-- =========================================================================
+-- 3. RIGHT PANEL: SYSTEM SCHEMES & STYLE PREVIEWS
+-- =========================================================================
+t[#t + 1] = Def.ActorFrame {
+	Name = "RightPanel",
+	InitCommand = function(self) self:xy(panelX, panelCenterY) end,
+	-- Glass Backing
+	Def.Quad {
+		InitCommand = function(self)
+			self:zoomto(panelW, panelH):diffuse(color("0.04,0.04,0.05,0.92"))
+		end,
+	},
+	-- Border Outline
+	Def.ActorFrame {
+		makePanelBorder(panelW, panelH, color("0.16,0.18,0.22,0.8")),
+	},
+	-- Corner Accent Brackets
+	Def.ActorFrame {
+		makeCornerBrackets(panelW, panelH, 8, 1.5),
+	},
+}
+
+-- Right Panel Header Banner
+t[#t + 1] = Def.ActorFrame {
+	Name = "RightPanelHeader",
+	InitCommand = function(self) self:xy(panelX, panelTop + 12) end,
+	-- Backing
+	Def.Quad {
+		InitCommand = function(self)
+			self:zoomto(panelW - 4, 24):diffuse(color("0.07,0.07,0.09,0.95"))
+		end,
+	},
+	-- Divider Line
+	Def.Quad {
+		InitCommand = function(self)
+			self:y(12):zoomto(panelW - 4, 1):diffuse(color("0.18,0.20,0.24,0.8"))
+		end,
+	},
+	-- Breadcrumb Kicker
+	LoadFont("Common Normal") .. {
+		InitCommand = function(self)
+			self:x(-panelW / 2 + 16):halign(0):zoom(0.28)
+				:diffuse(getAccent()):diffusealpha(0.85)
+			self:settext("// COMPONENTS COLORS")
+		end,
+		ColorThemeChangedMessageCommand = function(self)
+			self:stoptweening():linear(0.12):diffuse(previewColor):diffusealpha(0.85)
+		end,
+	},
+}
+
+-- =========================================================================
+-- CHUNK 1: GRADE COLORING PREVIEW
+-- =========================================================================
+t[#t + 1] = Def.ActorFrame {
+	Name = "Chunk_Grade",
+	InitCommand = function(self) self:xy(panelX, getChunkY(1)) end,
+
+	Def.Quad {
+		Name = "ChunkBg",
+		InitCommand = function(self) self:zoomto(chunkW, chunkH):diffuse(color("0.06,0.07,0.09,0.8")) end,
+		GradeHoverChangedMessageCommand = function(self, params)
+			self:stoptweening():linear(0.1):diffuse(params.Hovering and color("0.10,0.12,0.16,0.95") or color("0.06,0.07,0.09,0.8"))
+		end,
+	},
+	Def.ActorFrame {
+		makePanelBorder(chunkW, chunkH, color("0.16,0.18,0.22,0.75")),
+	},
 	Def.Quad {
 		Name = "ChunkAccentBar",
 		InitCommand = function(self)
-			self:halign(0):x(-chunkW/2):zoomto(3, chunkH):diffuse(color(getActiveHex())):diffusealpha(0.8)
+			self:halign(0):x(-chunkW / 2):zoomto(3, chunkH):diffuse(getAccent()):diffusealpha(0.85)
 		end,
-		ColorThemeChangedMessageCommand = function(self) self:stoptweening():linear(0.15):diffuse(previewColor):diffusealpha(0.8) end
+		ColorThemeChangedMessageCommand = function(self) self:stoptweening():linear(0.15):diffuse(previewColor):diffusealpha(0.85) end,
 	},
-	
+
+	-- Icon Badge
 	LoadFont("Common Normal") .. {
-		InitCommand = function(self) self:xy(-chunkW/2 + 18, 0):zoom(0.4):diffuse(color(getActiveHex())):settext("G") end,
-		ColorThemeChangedMessageCommand = function(self) self:stoptweening():linear(0.15):diffuse(previewColor) end
+		InitCommand = function(self) self:xy(-chunkW / 2 + 16, -9):zoom(0.34):diffuse(getAccent()):settext("[G]") end,
+		ColorThemeChangedMessageCommand = function(self) self:stoptweening():linear(0.15):diffuse(previewColor) end,
 	},
-	
+	-- Title & Current Value
 	LoadFont("Common Normal") .. {
-		InitCommand = function(self) self:xy(-chunkW/2 + 38, -9):halign(0):zoom(0.34):diffuse(color("1,1,1,1")) end,
+		InitCommand = function(self) self:xy(-chunkW / 2 + 34, -9):halign(0):zoom(0.32):diffuse(color("1,1,1,1")) end,
 		BeginCommand = function(self) self:playcommand("Set") end,
 		GradeStyleChangedMessageCommand = function(self) self:playcommand("Set") end,
-		SetCommand = function(self) self:settext("Grade Style: " .. getGradeStyle()) end
+		SetCommand = function(self) self:settext("Grade Style: " .. getGradeStyle()) end,
 	},
-	
-	-- Grade Examples
+	-- Grade Samples Row
 	Def.ActorFrame {
-		InitCommand = function(self) self:xy(-chunkW/2 + 38, 9) end,
+		InitCommand = function(self) self:xy(-chunkW / 2 + 34, 9) end,
 		(function()
 			local grades = {"AAAAA", "AAAA", "AAA", "AA", "A", "B", "C", "D", "F"}
 			local am = Def.ActorFrame {}
 			for i, g in ipairs(grades) do
-				am[#am+1] = LoadFont("Common Normal") .. {
-					InitCommand = function(self) self:x((i-1)*26):zoom(0.24):halign(0) end,
+				am[#am + 1] = LoadFont("Common Normal") .. {
+					InitCommand = function(self) self:x((i - 1) * 28):zoom(0.24):halign(0) end,
 					BeginCommand = function(self) self:playcommand("Set") end,
 					GradeStyleChangedMessageCommand = function(self) self:playcommand("Set") end,
-					SetCommand = function(self) self:settext(g):diffuse(HVColor.GetGradeColor(g)) end
+					SetCommand = function(self) self:settext(g):diffuse(HVColor.GetGradeColor(g)) end,
 				}
 			end
 			return am
@@ -601,50 +937,55 @@ t[#t+1] = Def.ActorFrame {
 	}
 }
 
--- ============================================================
--- INTERACTIVE MSD SCALE PREVIEW
--- ============================================================
-t[#t+1] = Def.ActorFrame {
+-- =========================================================================
+-- CHUNK 2: MSD RATING SCALE PREVIEW
+-- =========================================================================
+t[#t + 1] = Def.ActorFrame {
 	Name = "Chunk_MSD",
-	InitCommand = function(self) self:xy(previewStartX, getChunkY(2)) end,
-	
+	InitCommand = function(self) self:xy(panelX, getChunkY(2)) end,
+
 	Def.Quad {
-		InitCommand = function(self) self:zoomto(chunkW, chunkH):diffuse(color("0.06,0.06,0.06,0.9")) end,
+		InitCommand = function(self) self:zoomto(chunkW, chunkH):diffuse(color("0.06,0.07,0.09,0.8")) end,
 		MSDHoverChangedMessageCommand = function(self, params)
-			self:stoptweening():linear(0.1):diffuse(params.Hovering and color("0.1,0.1,0.1,0.9") or color("0.06,0.06,0.06,0.9"))
-		end
+			self:stoptweening():linear(0.1):diffuse(params.Hovering and color("0.10,0.12,0.16,0.95") or color("0.06,0.07,0.09,0.8"))
+		end,
 	},
-	
+	Def.ActorFrame {
+		makePanelBorder(chunkW, chunkH, color("0.16,0.18,0.22,0.75")),
+	},
 	Def.Quad {
-		InitCommand = function(self) self:halign(0):x(-chunkW/2):zoomto(3, chunkH):diffuse(color(getActiveHex())):diffusealpha(0.8) end,
-		ColorThemeChangedMessageCommand = function(self) self:stoptweening():linear(0.15):diffuse(previewColor):diffusealpha(0.8) end
+		InitCommand = function(self)
+			self:halign(0):x(-chunkW / 2):zoomto(3, chunkH):diffuse(getAccent()):diffusealpha(0.85)
+		end,
+		ColorThemeChangedMessageCommand = function(self) self:stoptweening():linear(0.15):diffuse(previewColor):diffusealpha(0.85) end,
 	},
-	
+
+	-- Icon Badge
 	LoadFont("Common Normal") .. {
-		InitCommand = function(self) self:xy(-chunkW/2 + 18, 0):zoom(0.4):diffuse(color(getActiveHex())):settext("M") end,
-		ColorThemeChangedMessageCommand = function(self) self:stoptweening():linear(0.15):diffuse(previewColor) end
+		InitCommand = function(self) self:xy(-chunkW / 2 + 16, -9):zoom(0.34):diffuse(getAccent()):settext("[M]") end,
+		ColorThemeChangedMessageCommand = function(self) self:stoptweening():linear(0.15):diffuse(previewColor) end,
 	},
-	
+	-- Title & Current Value
 	LoadFont("Common Normal") .. {
-		InitCommand = function(self) self:xy(-chunkW/2 + 38, -9):halign(0):zoom(0.34):diffuse(color("1,1,1,1")) end,
+		InitCommand = function(self) self:xy(-chunkW / 2 + 34, -9):halign(0):zoom(0.32):diffuse(color("1,1,1,1")) end,
 		BeginCommand = function(self) self:playcommand("Set") end,
 		MSDScaleChangedMessageCommand = function(self) self:playcommand("Set") end,
-		SetCommand = function(self) self:settext("MSD Scale: " .. getMSDScale()) end
+		SetCommand = function(self) self:settext("MSD Rating Scale: " .. getMSDScale()) end,
 	},
-	
 	-- MSD Scale Bar (0-40)
 	Def.ActorFrame {
-		InitCommand = function(self) self:xy(-chunkW/2 + 38, 9) end,
+		InitCommand = function(self) self:xy(-chunkW / 2 + 34, 9) end,
 		(function()
 			local am = Def.ActorFrame {}
 			local segments = 40
-			local segW = 200 / segments
+			local barTotalW = chunkW - 68
+			local segW = barTotalW / segments
 			for i = 0, segments do
-				am[#am+1] = Def.Quad {
-					InitCommand = function(self) self:x(i * segW):halign(0):zoomto(segW, 4) end,
+				am[#am + 1] = Def.Quad {
+					InitCommand = function(self) self:x(i * segW):halign(0):zoomto(math.max(1, segW), 5) end,
 					BeginCommand = function(self) self:playcommand("Set") end,
 					MSDScaleChangedMessageCommand = function(self) self:playcommand("Set") end,
-					SetCommand = function(self) self:diffuse(HVColor.GetMSDRatingColor(i)) end
+					SetCommand = function(self) self:diffuse(HVColor.GetMSDRatingColor(i)) end,
 				}
 			end
 			return am
@@ -652,49 +993,54 @@ t[#t+1] = Def.ActorFrame {
 	}
 }
 
--- ============================================================
--- INTERACTIVE JUDGMENT PREVIEW
--- ============================================================
-t[#t+1] = Def.ActorFrame {
+-- =========================================================================
+-- CHUNK 3: JUDGMENT COLORING PREVIEW
+-- =========================================================================
+t[#t + 1] = Def.ActorFrame {
 	Name = "Chunk_Judge",
-	InitCommand = function(self) self:xy(previewStartX, getChunkY(3)) end,
-	
+	InitCommand = function(self) self:xy(panelX, getChunkY(3)) end,
+
 	Def.Quad {
-		InitCommand = function(self) self:zoomto(chunkW, chunkH):diffuse(color("0.06,0.06,0.06,0.9")) end,
+		InitCommand = function(self) self:zoomto(chunkW, chunkH):diffuse(color("0.06,0.07,0.09,0.8")) end,
 		JudgeHoverChangedMessageCommand = function(self, params)
-			self:stoptweening():linear(0.1):diffuse(params.Hovering and color("0.1,0.1,0.1,0.9") or color("0.06,0.06,0.06,0.9"))
-		end
+			self:stoptweening():linear(0.1):diffuse(params.Hovering and color("0.10,0.12,0.16,0.95") or color("0.06,0.07,0.09,0.8"))
+		end,
 	},
-	
+	Def.ActorFrame {
+		makePanelBorder(chunkW, chunkH, color("0.16,0.18,0.22,0.75")),
+	},
 	Def.Quad {
-		InitCommand = function(self) self:halign(0):x(-chunkW/2):zoomto(3, chunkH):diffuse(color(getActiveHex())):diffusealpha(0.8) end,
-		ColorThemeChangedMessageCommand = function(self) self:stoptweening():linear(0.15):diffuse(previewColor):diffusealpha(0.8) end
+		InitCommand = function(self)
+			self:halign(0):x(-chunkW / 2):zoomto(3, chunkH):diffuse(getAccent()):diffusealpha(0.85)
+		end,
+		ColorThemeChangedMessageCommand = function(self) self:stoptweening():linear(0.15):diffuse(previewColor):diffusealpha(0.85) end,
 	},
-	
+
+	-- Icon Badge
 	LoadFont("Common Normal") .. {
-		InitCommand = function(self) self:xy(-chunkW/2 + 18, 0):zoom(0.4):diffuse(color(getActiveHex())):settext("J") end,
-		ColorThemeChangedMessageCommand = function(self) self:stoptweening():linear(0.15):diffuse(previewColor) end
+		InitCommand = function(self) self:xy(-chunkW / 2 + 16, -9):zoom(0.34):diffuse(getAccent()):settext("[J]") end,
+		ColorThemeChangedMessageCommand = function(self) self:stoptweening():linear(0.15):diffuse(previewColor) end,
 	},
-	
+	-- Title & Current Value
 	LoadFont("Common Normal") .. {
-		InitCommand = function(self) self:xy(-chunkW/2 + 38, -9):halign(0):zoom(0.34):diffuse(color("1,1,1,1")) end,
+		InitCommand = function(self) self:xy(-chunkW / 2 + 34, -9):halign(0):zoom(0.32):diffuse(color("1,1,1,1")) end,
 		BeginCommand = function(self) self:playcommand("Set") end,
 		JudgeStyleChangedMessageCommand = function(self) self:playcommand("Set") end,
-		SetCommand = function(self) self:settext("Judgment Style: " .. getJudgeStyle()) end
+		SetCommand = function(self) self:settext("Judgment Style: " .. getJudgeStyle()) end,
 	},
-	
+	-- Judgment Samples Row
 	Def.ActorFrame {
-		InitCommand = function(self) self:xy(-chunkW/2 + 38, 9) end,
+		InitCommand = function(self) self:xy(-chunkW / 2 + 34, 9) end,
 		(function()
 			local judges = {"W1", "W2", "W3", "W4", "W5", "Miss", "Held", "LetGo"}
 			local labels = {"MARV", "PERF", "GREAT", "GOOD", "BAD", "MISS", "OK", "NG"}
 			local am = Def.ActorFrame {}
 			for i, j in ipairs(judges) do
-				am[#am+1] = LoadFont("Common Normal") .. {
-					InitCommand = function(self) self:x((i-1)*32):zoom(0.24):halign(0) end,
+				am[#am + 1] = LoadFont("Common Normal") .. {
+					InitCommand = function(self) self:x((i - 1) * 32):zoom(0.24):halign(0) end,
 					BeginCommand = function(self) self:playcommand("Set") end,
 					JudgeStyleChangedMessageCommand = function(self) self:playcommand("Set") end,
-					SetCommand = function(self) self:settext(labels[i]):diffuse(HVColor.GetJudgmentColor(j)) end
+					SetCommand = function(self) self:settext(labels[i]):diffuse(HVColor.GetJudgmentColor(j)) end,
 				}
 			end
 			return am
@@ -702,49 +1048,54 @@ t[#t+1] = Def.ActorFrame {
 	}
 }
 
--- ============================================================
--- INTERACTIVE DIFFICULTY PREVIEW
--- ============================================================
-t[#t+1] = Def.ActorFrame {
+-- =========================================================================
+-- CHUNK 4: DIFFICULTY COLORING PREVIEW
+-- =========================================================================
+t[#t + 1] = Def.ActorFrame {
 	Name = "Chunk_Diff",
-	InitCommand = function(self) self:xy(previewStartX, getChunkY(4)) end,
-	
+	InitCommand = function(self) self:xy(panelX, getChunkY(4)) end,
+
 	Def.Quad {
-		InitCommand = function(self) self:zoomto(chunkW, chunkH):diffuse(color("0.06,0.06,0.06,0.9")) end,
+		InitCommand = function(self) self:zoomto(chunkW, chunkH):diffuse(color("0.06,0.07,0.09,0.8")) end,
 		DiffHoverChangedMessageCommand = function(self, params)
-			self:stoptweening():linear(0.1):diffuse(params.Hovering and color("0.1,0.1,0.1,0.9") or color("0.06,0.06,0.06,0.9"))
-		end
+			self:stoptweening():linear(0.1):diffuse(params.Hovering and color("0.10,0.12,0.16,0.95") or color("0.06,0.07,0.09,0.8"))
+		end,
 	},
-	
+	Def.ActorFrame {
+		makePanelBorder(chunkW, chunkH, color("0.16,0.18,0.22,0.75")),
+	},
 	Def.Quad {
-		InitCommand = function(self) self:halign(0):x(-chunkW/2):zoomto(3, chunkH):diffuse(color(getActiveHex())):diffusealpha(0.8) end,
-		ColorThemeChangedMessageCommand = function(self) self:stoptweening():linear(0.15):diffuse(previewColor):diffusealpha(0.8) end
+		InitCommand = function(self)
+			self:halign(0):x(-chunkW / 2):zoomto(3, chunkH):diffuse(getAccent()):diffusealpha(0.85)
+		end,
+		ColorThemeChangedMessageCommand = function(self) self:stoptweening():linear(0.15):diffuse(previewColor):diffusealpha(0.85) end,
 	},
-	
+
+	-- Icon Badge
 	LoadFont("Common Normal") .. {
-		InitCommand = function(self) self:xy(-chunkW/2 + 18, 0):zoom(0.4):diffuse(color(getActiveHex())):settext("D") end,
-		ColorThemeChangedMessageCommand = function(self) self:stoptweening():linear(0.15):diffuse(previewColor) end
+		InitCommand = function(self) self:xy(-chunkW / 2 + 16, -9):zoom(0.34):diffuse(getAccent()):settext("[D]") end,
+		ColorThemeChangedMessageCommand = function(self) self:stoptweening():linear(0.15):diffuse(previewColor) end,
 	},
-	
+	-- Title & Current Value
 	LoadFont("Common Normal") .. {
-		InitCommand = function(self) self:xy(-chunkW/2 + 38, -9):halign(0):zoom(0.34):diffuse(color("1,1,1,1")) end,
+		InitCommand = function(self) self:xy(-chunkW / 2 + 34, -9):halign(0):zoom(0.32):diffuse(color("1,1,1,1")) end,
 		BeginCommand = function(self) self:playcommand("Set") end,
 		DiffStyleChangedMessageCommand = function(self) self:playcommand("Set") end,
-		SetCommand = function(self) self:settext("Difficulty Style: " .. getDiffStyle()) end
+		SetCommand = function(self) self:settext("Difficulty Style: " .. getDiffStyle()) end,
 	},
-	
+	-- Difficulty Samples Row
 	Def.ActorFrame {
-		InitCommand = function(self) self:xy(-chunkW/2 + 38, 9) end,
+		InitCommand = function(self) self:xy(-chunkW / 2 + 34, 9) end,
 		(function()
 			local diffs = {"Beginner", "Easy", "Medium", "Hard", "Challenge", "Edit"}
 			local labels = {"BEG", "EASY", "MED", "HARD", "CHAL", "EDIT"}
 			local am = Def.ActorFrame {}
 			for i, d in ipairs(diffs) do
-				am[#am+1] = LoadFont("Common Normal") .. {
-					InitCommand = function(self) self:x((i-1)*40):zoom(0.24):halign(0) end,
+				am[#am + 1] = LoadFont("Common Normal") .. {
+					InitCommand = function(self) self:x((i - 1) * 40):zoom(0.24):halign(0) end,
 					BeginCommand = function(self) self:playcommand("Set") end,
 					DiffStyleChangedMessageCommand = function(self) self:playcommand("Set") end,
-					SetCommand = function(self) self:settext(labels[i]):diffuse(HVColor.GetDifficultyColor(d)) end
+					SetCommand = function(self) self:settext(labels[i]):diffuse(HVColor.GetDifficultyColor(d)) end,
 				}
 			end
 			return am
@@ -752,49 +1103,54 @@ t[#t+1] = Def.ActorFrame {
 	}
 }
 
--- ============================================================
--- INTERACTIVE CLEAR TYPE PREVIEW
--- ============================================================
-t[#t+1] = Def.ActorFrame {
+-- =========================================================================
+-- CHUNK 5: CLEAR TYPE COLORING PREVIEW
+-- =========================================================================
+t[#t + 1] = Def.ActorFrame {
 	Name = "Chunk_CT",
-	InitCommand = function(self) self:xy(previewStartX, getChunkY(5)) end,
-	
+	InitCommand = function(self) self:xy(panelX, getChunkY(5)) end,
+
 	Def.Quad {
-		InitCommand = function(self) self:zoomto(chunkW, chunkH):diffuse(color("0.06,0.06,0.06,0.9")) end,
+		InitCommand = function(self) self:zoomto(chunkW, chunkH):diffuse(color("0.06,0.07,0.09,0.8")) end,
 		CTHoverChangedMessageCommand = function(self, params)
-			self:stoptweening():linear(0.1):diffuse(params.Hovering and color("0.1,0.1,0.1,0.9") or color("0.06,0.06,0.06,0.9"))
-		end
+			self:stoptweening():linear(0.1):diffuse(params.Hovering and color("0.10,0.12,0.16,0.95") or color("0.06,0.07,0.09,0.8"))
+		end,
 	},
-	
+	Def.ActorFrame {
+		makePanelBorder(chunkW, chunkH, color("0.16,0.18,0.22,0.75")),
+	},
 	Def.Quad {
-		InitCommand = function(self) self:halign(0):x(-chunkW/2):zoomto(3, chunkH):diffuse(color(getActiveHex())):diffusealpha(0.8) end,
-		ColorThemeChangedMessageCommand = function(self) self:stoptweening():linear(0.15):diffuse(previewColor):diffusealpha(0.8) end
+		InitCommand = function(self)
+			self:halign(0):x(-chunkW / 2):zoomto(3, chunkH):diffuse(getAccent()):diffusealpha(0.85)
+		end,
+		ColorThemeChangedMessageCommand = function(self) self:stoptweening():linear(0.15):diffuse(previewColor):diffusealpha(0.85) end,
 	},
-	
+
+	-- Icon Badge
 	LoadFont("Common Normal") .. {
-		InitCommand = function(self) self:xy(-chunkW/2 + 18, 0):zoom(0.4):diffuse(color(getActiveHex())):settext("C") end,
-		ColorThemeChangedMessageCommand = function(self) self:stoptweening():linear(0.15):diffuse(previewColor) end
+		InitCommand = function(self) self:xy(-chunkW / 2 + 16, -9):zoom(0.34):diffuse(getAccent()):settext("[C]") end,
+		ColorThemeChangedMessageCommand = function(self) self:stoptweening():linear(0.15):diffuse(previewColor) end,
 	},
-	
+	-- Title & Current Value
 	LoadFont("Common Normal") .. {
-		InitCommand = function(self) self:xy(-chunkW/2 + 38, -9):halign(0):zoom(0.34):diffuse(color("1,1,1,1")) end,
+		InitCommand = function(self) self:xy(-chunkW / 2 + 34, -9):halign(0):zoom(0.32):diffuse(color("1,1,1,1")) end,
 		BeginCommand = function(self) self:playcommand("Set") end,
 		CTStyleChangedMessageCommand = function(self) self:playcommand("Set") end,
-		SetCommand = function(self) self:settext("Clear Type Style: " .. getCTStyle()) end
+		SetCommand = function(self) self:settext("Clear Type Style: " .. getCTStyle()) end,
 	},
-	
+	-- Clear Type Samples Row
 	Def.ActorFrame {
-		InitCommand = function(self) self:xy(-chunkW/2 + 38, 9) end,
+		InitCommand = function(self) self:xy(-chunkW / 2 + 34, 9) end,
 		(function()
 			local cts = {"MFC", "WF", "SDP", "PFC", "BF", "SDG", "FC", "NGFC", "MF", "SDCB", "Clear", "Failed", "NoPlay"}
 			local labels = {"MFC", "WF", "SDP", "PFC", "BF", "SDG", "FC", "NGFC", "MF", "SDCB", "CLR", "FAIL", "NOP"}
 			local am = Def.ActorFrame {}
 			for i, ct in ipairs(cts) do
-				am[#am+1] = LoadFont("Common Normal") .. {
-					InitCommand = function(self) self:x((i-1)*18):zoom(0.18):halign(0) end,
+				am[#am + 1] = LoadFont("Common Normal") .. {
+					InitCommand = function(self) self:x((i - 1) * 19):zoom(0.19):halign(0) end,
 					BeginCommand = function(self) self:playcommand("Set") end,
 					CTStyleChangedMessageCommand = function(self) self:playcommand("Set") end,
-					SetCommand = function(self) self:settext(labels[i]):diffuse(HVColor.GetClearTypeColor(ct)) end
+					SetCommand = function(self) self:settext(labels[i]):diffuse(HVColor.GetClearTypeColor(ct)) end,
 				}
 			end
 			return am
@@ -802,93 +1158,99 @@ t[#t+1] = Def.ActorFrame {
 	}
 }
 
--- ============================================================
--- CUSTOM ELEMENT COLORING BUTTON (replaces Goal Tracker chunk)
--- ============================================================
-t[#t+1] = Def.ActorFrame {
+-- =========================================================================
+-- CHUNK 6: CUSTOM ELEMENT COLORING CTA BUTTON
+-- =========================================================================
+t[#t + 1] = Def.ActorFrame {
 	Name = "Chunk_CustomElement",
-	InitCommand = function(self) 
-		self:xy(previewStartX, getChunkY(6))
-	end,
-	
+	InitCommand = function(self) self:xy(panelX, getChunkY(6)) end,
+
+	-- Button Backing
 	Def.Quad {
 		Name = "ButtonBg",
-		InitCommand = function(self) self:zoomto(chunkW, chunkH):diffuse(color("0.06,0.06,0.06,0.9")) end,
+		InitCommand = function(self)
+			self:zoomto(chunkW, chunkH):diffuse(color("0.08,0.09,0.12,0.95"))
+		end,
 		CustomElementHoverChangedMessageCommand = function(self, params)
-			self:stoptweening():linear(0.1):diffuse(params.Hovering and color("0.1,0.1,0.1,0.95") or color("0.06,0.06,0.06,0.9"))
-		end
+			if params.Hovering then
+				self:stoptweening():linear(0.1):diffuse(getAccent()):diffusealpha(0.22)
+			else
+				self:stoptweening():linear(0.1):diffuse(color("0.08,0.09,0.12,0.95"))
+			end
+		end,
 	},
-	
+	-- Border Outline
+	Def.ActorFrame {
+		makePanelBorder(chunkW, chunkH, color("0.22,0.25,0.32,0.85")),
+	},
+	-- Corner Accent Brackets
+	Def.ActorFrame {
+		makeCornerBrackets(chunkW, chunkH, 6, 1.2),
+	},
+	-- Left Accent Glow Bar
 	Def.Quad {
-		InitCommand = function(self) self:halign(0):x(-chunkW/2):zoomto(3, chunkH):diffuse(HVColor.Accent):diffusealpha(0.8) end,
-		ColorThemeChangedMessageCommand = function(self) self:stoptweening():linear(0.15):diffuse(previewColor):diffusealpha(0.8) end
+		InitCommand = function(self)
+			self:halign(0):x(-chunkW / 2):zoomto(3, chunkH)
+				:diffuse(getAccent()):diffusealpha(0.9)
+		end,
+		ColorThemeChangedMessageCommand = function(self)
+			self:stoptweening():linear(0.15):diffuse(previewColor):diffusealpha(0.9)
+		end,
 	},
-	
+
+	-- Plus Badge
 	LoadFont("Common Normal") .. {
-		InitCommand = function(self) self:xy(-chunkW/2 + 18, 0):zoom(0.4):diffuse(HVColor.Accent):settext("+") end,
-		ColorThemeChangedMessageCommand = function(self) self:stoptweening():linear(0.15):diffuse(previewColor) end
+		InitCommand = function(self)
+			self:xy(-chunkW / 2 + 16, -6):zoom(0.38):diffuse(getAccent()):settext("[+]")
+		end,
+		ColorThemeChangedMessageCommand = function(self) self:stoptweening():linear(0.15):diffuse(previewColor) end,
 	},
-	
+	-- Button Title
 	LoadFont("Common Normal") .. {
-		InitCommand = function(self) self:xy(-chunkW/2 + 38, 0):halign(0):zoom(0.34):diffuse(color("1,1,1,1")) end,
-		BeginCommand = function(self) self:settext("Custom Element Coloring") end
-	}
+		InitCommand = function(self)
+			self:xy(-chunkW / 2 + 34, -6):halign(0):zoom(0.36):diffuse(color("1,1,1,1"))
+			self:settext("CUSTOM ELEMENT COLORING →")
+		end,
+	},
+	-- Subtitle
+	LoadFont("Common Normal") .. {
+		InitCommand = function(self)
+			self:xy(-chunkW / 2 + 34, 9):halign(0):zoom(0.24):diffuse(color("0.65,0.68,0.74,1"))
+			self:settext("Configure individual HUD, judgment, clear type & grade colors")
+		end,
+	},
+	-- Right Indicator Badge
+	LoadFont("Common Normal") .. {
+		InitCommand = function(self)
+			self:xy(chunkW / 2 - 14, 0):halign(1):zoom(0.30):diffuse(getAccent()):settext("→")
+		end,
+		ColorThemeChangedMessageCommand = function(self) self:stoptweening():linear(0.15):diffuse(previewColor) end,
+	},
 }
 
--- ============================================================
--- CURRENT SELECTION DISPLAY
--- ============================================================
-t[#t + 1] = LoadFont("Common Normal") .. {
-	Name = "CurrentLabel",
-	InitCommand = function(self)
-		self:xy(swatchStartX + totalSwatchW/2 - swatchSize/2, swatchStartY + 4 * (swatchSize + swatchGapY) + 20):zoom(0.32)
-			:diffuse(color("0.65,0.65,0.65,1"))
-	end,
-	ColorThemeChangedMessageCommand = function(self)
-		local name = accentChoices[selectedIdx] and accentChoices[selectedIdx].name or "?"
-		self:settext("Active: " .. name)
-	end,
-	BeginCommand = function(self)
-		local name = accentChoices[selectedIdx] and accentChoices[selectedIdx].name or "?"
-		self:settext("Active: " .. name)
-	end
-}
-
--- ============================================================
--- FOOTER
--- ============================================================
-t[#t + 1] = LoadFont("Common Normal") .. {
-	InitCommand = function(self)
-		self:xy(SCREEN_CENTER_X, SCREEN_BOTTOM - 20):zoom(0.28)
-			:diffuse(color("0.45,0.45,0.45,1"))
-		self:settext("Click a swatch or use Left/Right · Enter to confirm · Escape to go back")
-	end
-}
-
--- ============================================================
--- DECORATIVE BRACKETS
--- ============================================================
+-- =========================================================================
+-- 4. NAVIGATION FOOTER BAR (Matching Theme Options)
+-- =========================================================================
 t[#t + 1] = Def.ActorFrame {
-	InitCommand = function(self) self:diffusealpha(0.2) end,
-	Def.ActorFrame {
-		InitCommand = function(self) self:xy(SCREEN_LEFT + 20, SCREEN_TOP + 20) end,
-		Def.Quad { InitCommand = function(self) self:halign(0):valign(0):zoomto(40, 1):diffuse(color(getActiveHex())) end,
-			ColorThemeChangedMessageCommand = function(self) self:stoptweening():linear(0.15):diffuse(previewColor) end },
-		Def.Quad { InitCommand = function(self) self:halign(0):valign(0):zoomto(1, 40):diffuse(color(getActiveHex())) end,
-			ColorThemeChangedMessageCommand = function(self) self:stoptweening():linear(0.15):diffuse(previewColor) end }
+	Name = "FooterBar",
+	InitCommand = function(self) self:xy(SCREEN_CENTER_X, SCREEN_BOTTOM - 13) end,
+	-- Backing
+	Def.Quad {
+		InitCommand = function(self)
+			self:zoomto(SCREEN_WIDTH, 22):diffuse(color("0.03,0.03,0.04,0.95"))
+		end,
 	},
-	Def.ActorFrame {
-		InitCommand = function(self) self:xy(SCREEN_RIGHT - 20, SCREEN_BOTTOM - 20) end,
-		Def.Quad { InitCommand = function(self) self:halign(1):valign(1):zoomto(40, 1):diffuse(color(getActiveHex())) end,
-			ColorThemeChangedMessageCommand = function(self) self:stoptweening():linear(0.15):diffuse(previewColor) end },
-		Def.Quad { InitCommand = function(self) self:halign(1):valign(1):zoomto(1, 40):diffuse(color(getActiveHex())) end,
-			ColorThemeChangedMessageCommand = function(self) self:stoptweening():linear(0.15):diffuse(previewColor) end }
-	}
+	-- Top Divider Line
+	Def.Quad {
+		InitCommand = function(self)
+			self:y(-11):zoomto(SCREEN_WIDTH, 1):diffuse(color("0.16,0.18,0.22,0.8"))
+		end,
+	},
 }
 
--- ============================================================
--- MOUSE CURSOR
--- ============================================================
+-- =========================================================================
+-- 5. MOUSE CURSOR
+-- =========================================================================
 t[#t + 1] = LoadActor("../_cursor")
 
 return t

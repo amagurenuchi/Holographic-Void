@@ -237,17 +237,6 @@ t[#t + 1] = Def.ActorFrame {
 }
 
 -- ============================================================
--- FOOTER
--- ============================================================
-t[#t + 1] = LoadFont("Common Normal") .. {
-	InitCommand = function(self)
-		self:xy(SCREEN_CENTER_X, SCREEN_BOTTOM - 16)
-			:zoom(0.28):diffuse(dimText)
-		self:settext(THEME:GetString("ScreenHVOptions", "Hint"))
-	end
-}
-
--- ============================================================
 -- LISTEN FOR PREF CHANGES (refresh accent in real-time)
 -- ============================================================
 t[#t + 1] = Def.Actor {
