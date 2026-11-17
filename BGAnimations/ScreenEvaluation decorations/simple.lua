@@ -13,6 +13,12 @@ local rightX = SCREEN_CENTER_X + 10
 local rightW = SCREEN_CENTER_X - 20
 local barWidth = rightW - pad * 2
 
+local function formatDanName(dan)
+	if dan == "0" then return "Below 1st" end
+	if dan == "∞" or dan == "Infinity" then return "Infinity" end
+	return dan
+end
+
 local accentColor = (HVColor and HVColor.Accent) or color("#5ABAFF")
 local brightText = color("1,1,1,1")
 local dimText = (HVColor and HVColor.TextDim) or color("0.4,0.4,0.4,1")
@@ -34,8 +40,7 @@ local function getOnlinePlayerName()
 end
 
 local function getLocalPlayerName()
-	local pn = GAMESTATE:GetMasterPlayerNumber()
-	local profile = pn and PROFILEMAN:GetProfile(pn)
+	local profile = GAMESTATE:GetMasterPlayerNumber() and PROFILEMAN:GetProfile(GAMESTATE:GetMasterPlayerNumber())
 	local name = profile and profile:GetDisplayName()
 	return name and name ~= "" and name or nil
 end
@@ -239,7 +244,8 @@ local t = Def.ActorFrame {
 			local diffLabel, difficultyColor = data.getDifficulty()
 			local meterText, meterColor = data.getMeterText()
 			diffActor:GetChild("Difficulty"):settext(diffLabel):diffuse(difficultyColor or accentColor)
-			diffActor:GetChild("MSD"):settext(meterText):diffuse(meterColor or subText)
+			local ratingActor = diffActor:GetChild("MSD")
+			if ratingActor then ratingActor:playcommand("SetRatingPages", {meterText = meterText, meterColor = meterColor}) end
 			diffActor:GetChild("Rate"):settext(data.getRateText())
 			diffActor:GetChild("Judge"):settext(data.getJudgeText())
 			local offsetStatus = diffActor:GetChild("OffsetPriorityStatus")
@@ -576,7 +582,66 @@ local t = Def.ActorFrame {
 			},
 			LoadFont("MSD 20px") .. {
 				Name = "MSD",
-				InitCommand = function(self) self:halign(1):valign(0):xy(0, -2):zoom(0.6):diffuse(subText) end
+				InitCommand = function(self) self:halign(1):valign(0):xy(0, -2):zoom(0.6):maxwidth((frameW - pad * 2) / 0.6):diffuse(subText); self.transitionDuration = 0.25 end,
+				SetRatingPagesCommand = function(self, params)
+					self:stoptweening()
+					self.hvRatingPages = {}
+					self.hvRatingPage = 1
+					if params and params.meterText and params.meterText ~= "" then
+						self.hvRatingPages[1] = {text = params.meterText, color = params.meterColor or subText}
+					end
+					if HV.EnableDanCalculator and HV.EnableDanCalculator() and steps then
+						local rate = tonumber(getCurRateValue()) or 1
+						local chartKey = steps.GetChartKey and tostring(steps:GetChartKey())
+						local estimate
+						if chartKey and FILEMAN and FILEMAN.DoesFileExist then
+							local path = "Save/Holographic Void_settings/ChartRatingCache.lua"
+							if FILEMAN:DoesFileExist(path) then
+								local file = RageFileUtil.CreateRageFile()
+								if file:Open(path, 1) then
+									local source = file:Read()
+									local chunk = type(source) == "string" and loadstring(source) or nil
+									if chunk then
+										setfenv(chunk, {})
+										local ok, cache = pcall(chunk)
+										if ok and type(cache) == "table" then
+											local key = chartKey .. "|" .. string.format("%.8f", rate)
+											estimate = cache["isor-dp-v5|" .. key] or cache["isor-dp-v2|" .. key] or cache["isor-dp-v1|" .. key]
+										end
+									end
+									file:Close()
+								end
+								file:destroy()
+							end
+						end
+						if type(estimate) ~= "table" and data and data.steps then
+							local dataKey = data.steps.GetChartKey and tostring(data.steps:GetChartKey())
+							if dataKey == chartKey and math.abs((tonumber(data.rate) or rate) - rate) < 0.0005 then estimate = data.isorEstimate end
+						end
+						if type(estimate) == "table" and type(estimate.dan) == "string" then
+							local text = formatDanName(estimate.dan) .. (type(estimate.sublevel) == "string" and (" " .. estimate.sublevel) or "")
+							self.hvRatingPages[#self.hvRatingPages + 1] = {text = text, color = (HV.GetReformDanColor and HV.GetReformDanColor(estimate)) or HVColor.GetMSDRatingColor(tonumber(estimate.dp) or 1)}
+						end
+					end
+					if #self.hvRatingPages > 0 then
+						local page = self.hvRatingPages[1]
+						self:settext(page.text):diffuse(page.color):diffusealpha(1)
+						if #self.hvRatingPages > 1 then self:sleep(3):queuecommand("FadeRatingOut") end
+					else
+						self:settext("")
+					end
+				end,
+				FadeRatingOutCommand = function(self)
+					if not self.hvRatingPages or #self.hvRatingPages < 2 then return end
+					self:stoptweening():linear(self.transitionDuration * 0.5):diffusealpha(0):queuecommand("CycleRating")
+				end,
+				CycleRatingCommand = function(self)
+					if not self.hvRatingPages or #self.hvRatingPages < 2 then return end
+					self.hvRatingPage = self.hvRatingPage % #self.hvRatingPages + 1
+					local page = self.hvRatingPages[self.hvRatingPage]
+					self:settext(page.text):diffuse(page.color)
+					self:stoptweening():linear(self.transitionDuration * 0.5):diffusealpha(1):sleep(3):queuecommand("FadeRatingOut")
+				end
 			},
 			LoadFont("Common Normal") .. {
 				Name = "Rate",

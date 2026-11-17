@@ -1727,7 +1727,7 @@ local function scoreBoard(pn)
 										setfenv(chunk, {})
 										local ok, cache = pcall(chunk)
 										if ok and type(cache) == "table" then
-											estimate = cache["isor-dp-v2|" .. key] or cache["isor-dp-v1|" .. key]
+											estimate = cache["isor-dp-v5|" .. key] or cache["isor-dp-v2|" .. key] or cache["isor-dp-v1|" .. key]
 										end
 									end
 									file:Close()
@@ -3330,7 +3330,7 @@ HV.GetSimpleEvaluationData = function()
 								local ok, cache = pcall(chunk)
 								if ok and type(cache) == "table" then
 									local key = tostring(steps:GetChartKey()) .. "|" .. string.format("%.8f", getCurRateValue())
-									local estimate = cache["isor-dp-v2|" .. key] or cache["isor-dp-v1|" .. key]
+									local estimate = cache["isor-dp-v5|" .. key] or cache["isor-dp-v2|" .. key] or cache["isor-dp-v1|" .. key]
 									if type(estimate) == "table" and type(estimate.dan) == "string" then
 										rating = formatDanName(estimate.dan) .. (estimate.sublevel and (" " .. estimate.sublevel) or "")
 										ratingColor = (HV.GetReformDanColor and HV.GetReformDanColor(estimate)) or HVColor.GetMSDRatingColor(tonumber(estimate.dp) or msd)

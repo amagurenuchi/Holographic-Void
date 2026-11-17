@@ -51,7 +51,8 @@ local function getCachedChartEstimate(steps, rate)
 	if not steps or not steps.GetChartKey then return nil end
 	local chartKey = tostring(steps:GetChartKey())
 	local rateKey = string.format("%.8f", tonumber(rate) or 1)
-	local entry = chartRatingCache["isor-dp-v2|" .. chartKey .. "|" .. rateKey]
+	local entry = chartRatingCache["isor-dp-v5|" .. chartKey .. "|" .. rateKey]
+	if type(entry) ~= "table" then entry = chartRatingCache["isor-dp-v2|" .. chartKey .. "|" .. rateKey] end
 	if type(entry) ~= "table" then
 		entry = chartRatingCache["isor-dp-v1|" .. chartKey .. "|" .. rateKey]
 	end
