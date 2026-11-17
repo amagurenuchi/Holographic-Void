@@ -468,9 +468,9 @@ contentAF[#contentAF + 1] = Def.Quad {
 }
 
 -- ------------------------------------------------------------
--- DIFFICULTY LABEL (NO METER) & OVERALL MSD
+-- DIFFICULTY LABEL  & OVERALL MSD
 -- ------------------------------------------------------------
--- Difficulty Label (Placed directly ABOVE the MSD rating, without meter)
+-- Difficulty Label
 contentAF[#contentAF + 1] = LoadFont("Common Normal") .. {
 	Name = "DifficultyLabel",
 	InitCommand = function(self)
@@ -484,7 +484,7 @@ contentAF[#contentAF + 1] = LoadFont("Common Normal") .. {
 	end
 }
 
--- Large Overall MSD Rating (No 'Overall MSD' label, no skillsets)
+-- Large Overall MSD Rating
 contentAF[#contentAF + 1] = LoadFont("MSD 20px") .. {
 	Name = "OverallMSDValue",
 	InitCommand = function(self)
@@ -511,7 +511,7 @@ contentAF[#contentAF + 1] = LoadFont("MSD 20px") .. {
 }
 
 -- ------------------------------------------------------------
--- PRESS START FOR OPTIONS (BIGGER, FARTHER FROM CORNER, NO BG)
+-- PRESS START FOR OPTIONS
 -- ------------------------------------------------------------
 contentAF[#contentAF + 1] = Def.ActorFrame {
 	Name = "OptionsPrompt",
@@ -519,7 +519,7 @@ contentAF[#contentAF + 1] = Def.ActorFrame {
 		self:xy(rightMargin, SCREEN_BOTTOM - 42):diffusealpha(1)
 	end,
 
-	-- Floating text (NO background quad or box)
+	-- Floating text
 	LoadFont("Common Normal") .. {
 		Name = "PressStartText",
 		InitCommand = function(self)
