@@ -448,9 +448,9 @@ contentAF[#contentAF + 1] = LoadFont("Common Normal") .. {
 		local song = getSelectedSong()
 		local group = (HV and HV.CurrentSongData and HV.CurrentSongData.group)
 		if song then
-			self:settext("PACK: " .. song:GetGroupName())
+			self:settext(song:GetGroupName())
 		elseif group then
-			self:settext("PACK: " .. group)
+			self:settext(group)
 		else
 			self:settext("")
 		end
