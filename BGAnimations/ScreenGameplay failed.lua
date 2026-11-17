@@ -11,8 +11,7 @@ t[#t+1] = Def.Quad{
 		self:FullScreen():diffuse(color("0,0,0,0.9")):x(-SCREEN_WIDTH)
 	end,
 	OffCommand = function(self)
-		-- Keep gameplay visible for three seconds before showing the result.
-		self:sleep(3):linear(0.3):x(SCREEN_CENTER_X)
+		self:linear(0.3):x(SCREEN_CENTER_X)
 	end
 }
 
@@ -24,8 +23,7 @@ t[#t+1] = LoadFont("Common Normal")..{
 		self:Center():zoom(0.6):diffusealpha(0):x(-SCREEN_WIDTH)
 	end,
 	OffCommand = function(self)
-		-- Keep gameplay visible for three seconds before showing the result.
-		self:sleep(3):linear(0.3):x(SCREEN_CENTER_X):diffusealpha(0.8)
+		self:linear(0.3):x(SCREEN_CENTER_X):diffusealpha(0.8)
 		self:diffuseshift()
 		self:effectcolor1(color("#FFFFFF")):effectcolor2(HVColor.Negative or color("#FF0000"))
 		
