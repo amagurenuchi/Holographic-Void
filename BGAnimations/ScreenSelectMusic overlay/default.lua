@@ -508,9 +508,18 @@ local function isProfileScoreInvalid(score)
 	return IsScoreInvalid(score)
 end
 
-local function getLocalProfileScores(endIndex, isRecent, skillset)
+local function getLocalProfileScores(endIndex, isRecent, skillset, isSession)
 	local scores = {}
 	local profileName = getActiveLocalProfileName()
+	if isSession and type(HV.SessionRecentScores) == "table" then
+		for _, score in ipairs(HV.SessionRecentScores) do
+			if type(score) == "table" and score.chartkey and score.songName then
+				scores[#scores + 1] = score
+				if #scores >= endIndex then break end
+			end
+		end
+		return scores
+	end
 
 	local rawIndex = 0
 	while #scores < endIndex and rawIndex < 10000 do
@@ -1238,19 +1247,27 @@ main_af[#main_af + 1] = Def.ActorFrame {
 
 					-- 1. Dedicated profile stats screen
 					if IsMouseOverCentered(gradeSidebarCX, gradeSidebarTop + 25, gradeSidebarW - 12, 22) then
+						MESSAGEMAN:Broadcast("StatsScreenEntering")
 						SCREENMAN:SetNewScreen("ScreenHVStats")
 						return true
 					end
 
 					-- 2. Mode Toggle (TOP / RECENT)
 					if IsMouseOverCentered(scoreAreaX + mainPartW - 250, headerY, 100, 24) then
-						profileOverlayActor.isRecentMode = not profileOverlayActor.isRecentMode
-						profileOverlayActor.topPage = 1; profileOverlayActor.recentPage = 1
+						if profileOverlayActor.isSessionMode then
+							profileOverlayActor.isSessionMode = false
+						elseif profileOverlayActor.isRecentMode then
+							profileOverlayActor.isRecentMode = false
+							profileOverlayActor.isSessionMode = true
+						else
+							profileOverlayActor.isRecentMode = true
+						end
+						profileOverlayActor.topPage = 1; profileOverlayActor.recentPage = 1; profileOverlayActor.sessionPage = 1
 						MESSAGEMAN:Broadcast("UpdateOverlayUI"); return true
 					end
 					-- 3. Source Toggle (ONLINE / LOCAL)
 					if IsMouseOverCentered(scoreAreaX + mainPartW - 140, headerY, 100, 24) then
-						if not profileOverlayActor.isRecentMode then
+						if not profileOverlayActor.isRecentMode and not profileOverlayActor.isSessionMode then
 							profileOverlayActor.isOnlineMode = not profileOverlayActor.isOnlineMode
 							profileOverlayActor.topPage = 1
 							MESSAGEMAN:Broadcast("UpdateOverlayUI")
@@ -1675,8 +1692,10 @@ local profileOverlay = Def.ActorFrame {
 		profileOverlayActor = self
 		self.topPage = 1
 		self.recentPage = 1
+		self.sessionPage = 1
 		self.currentSkillset = "Overall"
 		self.isRecentMode = false
+		self.isSessionMode = false
 		self.isAchievementMode = false
 		self.achievementTab = "PROGRESSIVE"
 		self.achievementPage = 1
@@ -1982,7 +2001,7 @@ local profileOverlay = Def.ActorFrame {
 						UpdateOverlayUIActionCommand = function(self)
 							local parent = profileOverlayActor
 							if not parent then return end
-							self:visible(parent.currentSkillset == ss and not parent.isRecentMode)
+							self:visible(parent.currentSkillset == ss and not parent.isRecentMode and not parent.isSessionMode)
 						end,
 						UpdateOverlayUIMessageCommand = function(self) self:playcommand("UpdateOverlayUIAction") end
 					},
@@ -2039,7 +2058,7 @@ local profileOverlay = Def.ActorFrame {
 						         and ry >= (140 + (i-1)*skillsetTabH - skillsetTabH/2) 
 								 and ry <= (140 + (i-1)*skillsetTabH + skillsetTabH/2)
 						
-						local active = (parent.currentSkillset == ss) and not parent.isRecentMode
+						local active = (parent.currentSkillset == ss) and not parent.isRecentMode and not parent.isSessionMode
 						if active then
 							bg:diffuse(accentColor):diffusealpha(0.25)
 						elseif over then
@@ -2072,6 +2091,8 @@ local profileOverlay = Def.ActorFrame {
 						self:settext("ACHIEVEMENTS"):zoom(0.46):x(-mainPartW/2 + 20):y(0)
 					elseif p.isRecentMode then
 						self:settext("RECENT SCORES (LOCAL)"):zoom(0.48):x(-mainPartW/2 + 20):y(0)
+					elseif p.isSessionMode then
+						self:settext("CURRENT SESSION SCORES"):zoom(0.48):x(-mainPartW/2 + 20):y(0)
 					else
 						local src = (p.isOnlineMode and DLMAN:IsLoggedIn()) and "ONLINE" or "LOCAL"
 						self:settext("TOP SCORES (" .. p.currentSkillset:upper() .. " · " .. src .. ")"):zoom(0.48):x(-mainPartW/2 + 20):y(0)
@@ -2095,7 +2116,7 @@ local profileOverlay = Def.ActorFrame {
 					UpdateOverlayUIMessageCommand = function(self)
 						local p = profileOverlayActor
 						if not p then return end
-						self:settext(p.isRecentMode and "RECENT" or "TOP")
+						self:settext(p.isSessionMode and "SESSION" or (p.isRecentMode and "RECENT" or "TOP"))
 					end
 				},
 				SetUpdateFunction = function(af)
@@ -2129,7 +2150,7 @@ local profileOverlay = Def.ActorFrame {
 					InitCommand = function(self) self:zoom(0.30) end,
 					UpdateOverlayUIMessageCommand = function(self)
 						local p = profileOverlayActor
-						if p.isRecentMode then
+						if p.isRecentMode or p.isSessionMode then
 							self:settext("ONLINE/LOCAL"):diffuse(dimText)
 						else
 							local active = p.isOnlineMode and DLMAN:IsLoggedIn()
@@ -2145,7 +2166,7 @@ local profileOverlay = Def.ActorFrame {
 						SCREEN_CENTER_Y - overlayH/2 + 18,
 						100, 22)
 					local bg = af:GetChild("Bg")
-					if parent.isRecentMode then
+					if parent.isRecentMode or parent.isSessionMode then
 						bg:diffuse(dimText):diffusealpha(0.1)
 					elseif (parent.isOnlineMode and DLMAN:IsLoggedIn()) or over then
 						bg:diffuse(accentColor):diffusealpha(0.4)
@@ -2682,7 +2703,7 @@ local profileOverlay = Def.ActorFrame {
 				local p = profileOverlayActor
 				if not p then return end
 				self:visible(not p.isAchievementMode)
-				local cur = p.isRecentMode and p.recentPage or p.topPage
+				local cur = p.isSessionMode and p.sessionPage or (p.isRecentMode and p.recentPage or p.topPage)
 				self:settext("PAGE " .. cur .. " · CLICK TO FIND SONG · RIGHT-CLICK TO VALIDATE (LOCAL)")
 			end
 		},
@@ -2776,24 +2797,27 @@ local profileOverlay = Def.ActorFrame {
 
 	UpdateAllScoresCommand = function(self)
 		local rows = self:GetChild("MainArea"):GetChild("ScoreListRows")
-		local start = ((self.isRecentMode and self.recentPage or self.topPage) - 1) * scorePageSize
+		local activePage = self.isSessionMode and self.sessionPage or (self.isRecentMode and self.recentPage or self.topPage)
+		local start = (activePage - 1) * scorePageSize
 
 		-- Safe Pagination: Instead of checking totals (which might not exist in all versions),
 		-- we'll just allow scrolling up to a reasonble limit or until we hit empty rows.
 		local maxPage = 100 -- Large enough safety net
 		
 		local maxPage = 100 -- Logic clamping below will handle real end
-		local useLocalScores = self.isRecentMode or not (self.isOnlineMode and DLMAN:IsLoggedIn())
+		local useLocalScores = self.isRecentMode or self.isSessionMode or not (self.isOnlineMode and DLMAN:IsLoggedIn())
 		
 		if self.isRecentMode then
 			SCOREMAN:SortRecentScoresForGame()
+		elseif self.isSessionMode then
+			-- Session mode reads the snapshots captured from completed plays.
 		elseif useLocalScores then
 			SCOREMAN:SortSSRsForGame(self.currentSkillset)
 		end
 
 		local localScores = nil
 		if useLocalScores then
-			localScores = getLocalProfileScores(start + scorePageSize, self.isRecentMode, self.currentSkillset)
+			localScores = getLocalProfileScores(start + scorePageSize, self.isRecentMode, self.currentSkillset, self.isSessionMode)
 		end
 		
 		local foundAnyOnPage = false
@@ -2802,7 +2826,7 @@ local profileOverlay = Def.ActorFrame {
 			local pageIndex = start + i
 			local score = nil
 			
-			if self.isRecentMode then
+			if self.isRecentMode or self.isSessionMode then
 				score = localScores and localScores[pageIndex] or nil
 			else
 				if self.isOnlineMode and DLMAN:IsLoggedIn() then
@@ -2821,7 +2845,7 @@ local profileOverlay = Def.ActorFrame {
 				local title, diff, rate, date, wife, ssr, metadata
 				if type(score) == "table" then
 					title = score.songName or "???"
-					diff = ToEnumShortString(score.difficulty or "Beginner")
+					diff = type(score.difficulty) == "string" and score.difficulty or ToEnumShortString(score.difficulty or "Beginner")
 					rate = score.rate or 1.0
 					date = score.date or "N/A"
 					wife = score.wife or 0
@@ -2913,8 +2937,9 @@ local profileOverlay = Def.ActorFrame {
 		end
 
 		-- Dynamic Clamping: If page is empty and not page 1, go back
-		if not foundAnyOnPage and (self.isRecentMode and self.recentPage > 1 or self.topPage > 1) then
-			if self.isRecentMode then self.recentPage = self.recentPage - 1
+		if not foundAnyOnPage and activePage > 1 then
+			if self.isSessionMode then self.sessionPage = self.sessionPage - 1
+			elseif self.isRecentMode then self.recentPage = self.recentPage - 1
 			else self.topPage = self.topPage - 1 end
 			self:playcommand("UpdateAllScores")
 			return
@@ -2975,7 +3000,8 @@ local profileOverlay = Def.ActorFrame {
 			end
 			return
 		end
-		if self.isRecentMode then self.recentPage = self.recentPage + 1
+		if self.isSessionMode then self.sessionPage = self.sessionPage + 1
+		elseif self.isRecentMode then self.recentPage = self.recentPage + 1
 		else self.topPage = self.topPage + 1 end
 		self:playcommand("UpdateAllScores")
 	end,
@@ -2988,7 +3014,8 @@ local profileOverlay = Def.ActorFrame {
 			end
 			return
 		end
-		if self.isRecentMode then self.recentPage = math.max(1, self.recentPage - 1)
+		if self.isSessionMode then self.sessionPage = math.max(1, self.sessionPage - 1)
+		elseif self.isRecentMode then self.recentPage = math.max(1, self.recentPage - 1)
 		else self.topPage = math.max(1, self.topPage - 1) end
 		self:playcommand("UpdateAllScores")
 	end

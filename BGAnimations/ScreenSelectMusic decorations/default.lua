@@ -1939,6 +1939,7 @@ local diffSelectorTopY = panelY + 8
 
 t[#t + 1] = Def.ActorFrame {
 	Name = "DifficultySelector",
+	StatsScreenEnteringMessageCommand = function(self) self:visible(false) end,
 	InitCommand = function(self)
 		self:xy(diffSelectorX, diffSelectorTopY)
 	end,
@@ -3076,6 +3077,7 @@ t[#t + 1] = Def.ActorFrame {
 -- ============================================================
 t[#t + 1] = Def.ActorFrame {
 	Name = "RateDisplay",
+	StatsScreenEnteringMessageCommand = function(self) self:visible(false) end,
 	InitCommand = function(self) 
 		self:xy(panelX + panelW - 40, panelY + 4) 
 	end,

@@ -101,6 +101,60 @@ end
 
 -- State variables (declared early for function visibility)
 local curScore = scoringVoided and nil or pss:GetHighScore()
+-- Keep a value snapshot for the Profile tab's Session mode. HighScore userdata
+-- can become stale after leaving evaluation, so don't retain the object itself.
+if curScore and HV.GameplaySessionValid == true
+	and HV.ViewingHistoricalEvaluationScore ~= true
+	and HV.OnlineReplayActive ~= true and HV.OnlineEvaluationActive ~= true then
+	HV.SessionRecentScores = HV.SessionRecentScores or {}
+	local function scoreValue(method, fallback, ...)
+		local args = {...}
+		local ok, value = pcall(function() return curScore[method](curScore, unpack(args)) end)
+		return ok and value ~= nil and value or fallback
+	end
+	local chartKey = scoreValue("GetChartKey", "")
+	local highScoreHasChartKey = chartKey and chartKey ~= ""
+	if (not chartKey or chartKey == "") and steps and steps.GetChartKey then
+		local ok, value = pcall(function() return steps:GetChartKey() end)
+		if ok and value then chartKey = value end
+	end
+	local chartSong = chartKey ~= "" and SONGMAN:GetSongByChartKey(chartKey) or song
+	local chartSteps = chartKey ~= "" and SONGMAN:GetStepsByChartKey(chartKey) or steps
+	local snapshotWife = tonumber(scoreValue("GetWifeScore", nil))
+	if (not highScoreHasChartKey or snapshotWife == nil) and pss and pss.GetWifeScore then
+		local ok, value = pcall(function() return pss:GetWifeScore() end)
+		if ok then snapshotWife = tonumber(value) end
+	end
+	local snapshotDate = tostring(scoreValue("GetDate", "") or "")
+	if snapshotDate == "" then snapshotDate = os.date("%Y-%m-%d %H:%M:%S") end
+	local snapshot = {
+		songName = chartSong and chartSong:GetDisplayMainTitle() or "???",
+		difficulty = chartSteps and ToEnumShortString(chartSteps:GetDifficulty()) or "Beginner",
+		chartKey = chartKey,
+		chartkey = chartKey,
+		rate = tonumber(scoreValue("GetMusicRate", 1)) or 1,
+		date = snapshotDate,
+		wife = snapshotWife or 0,
+		ssr = tonumber(scoreValue("GetSkillsetSSR", 0, "Overall")) or 0,
+	}
+	-- Snapshot the judgment counts separately because GetTapNoteScore takes an
+	-- enum argument. Keep the field names compatible with the table score rows.
+	for _, pair in ipairs({
+		{"w1", "TapNoteScore_W1"}, {"w2", "TapNoteScore_W2"},
+		{"w3", "TapNoteScore_W3"}, {"w4", "TapNoteScore_W4"},
+		{"w5", "TapNoteScore_W5"}, {"miss", "TapNoteScore_Miss"}
+	}) do
+		local ok, value = pcall(function() return curScore:GetTapNoteScore(pair[2]) end)
+		if (not highScoreHasChartKey or not ok or value == nil) and pss and pss.GetTapNoteScores then
+			local pssName = pair[2]
+			ok, value = pcall(function() return pss:GetTapNoteScores(pssName) end)
+		end
+		snapshot[pair[1]] = ok and tonumber(value) or 0
+	end
+	if chartKey and chartKey ~= "" then
+		table.insert(HV.SessionRecentScores, 1, snapshot)
+	end
+end
 local judge = 4
 -- The judge used for the play is the fixed baseline for PB comparisons.
 -- `judge` may be changed while inspecting the replay.
