@@ -250,9 +250,15 @@ t[#t + 1] = LoadFont("Common Normal") .. {
 	InitCommand = function(self)
 		-- Position left of the MSD value 
 		self:halign(1):x(wheelItemW/2 - 35):y(-6)
-			:zoom(0.35):diffuse(color("#FF6666")):settext("(MR)")
+			:zoom(0.35):diffuse(color("#FF6666")):settext("(MR)"):visible(false)
 	end,
 	SetMessageCommand = function(self, params)
+		local topScreen = SCREENMAN:GetTopScreen()
+		local screenName = topScreen and topScreen:GetName() or ""
+		if screenName ~= "ScreenSelectMusic" and screenName ~= "ScreenNetSelectMusic" then
+			self:visible(false)
+			return
+		end
 		local song = (params and params.Song) or self.hv_lastSong
 		self.hv_lastSong = song
 		local curSteps = GAMESTATE:GetCurrentSteps()

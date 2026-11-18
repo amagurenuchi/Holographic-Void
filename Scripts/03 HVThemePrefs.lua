@@ -260,6 +260,13 @@ local HVPrefs = {
 		Values = {false, true}
 	},
 
+	-- Music wheel input repeat interval in milliseconds.
+	HV_MusicWheelSpeed = {
+		Default = 1,
+		Choices = {"Normal", "Fast", "Very Fast", "Ridiculous", "Ludicrous", "Plaid"},
+		Values = {1, 2, 3, 4, 5, 6}
+	},
+
 	-- Gameplay: Show MSD ratings on music wheel
 	HV_ShowMSD = {
 		Default = true,
@@ -267,7 +274,7 @@ local HVPrefs = {
 		Values = {false, true}
 	},
 	HV_EnableDanCalculator = {
-		Default = true,
+		Default = false,
 		Choices = {"Off", "On"},
 		Values = {false, true}
 	},
@@ -351,7 +358,7 @@ local HVPrefs = {
 		Values = {false, true},
 	},
 	HV_OsuManiaStarRating = {
-		Default = "Classic",
+		Default = "Off",
 		Choices = {"Off", "Classic", "Sunny Rework"},
 		Values = {"Off", "Classic", "Sunny Rework"},
 	},
@@ -609,7 +616,7 @@ local HVPrefs = {
 		Values = {false, true}
 	},
 	HV_EvaluationScreenToggle = {
-		Default = "Classic",
+		Default = "Simple",
 		Choices = {"Simple", "Classic"},
 		Values = {"Simple", "Classic"}
 	},
@@ -760,8 +767,15 @@ local HVPrefs = {
 	},
 }
 
--- bLoadFromDisk = true on the first call to read existing prefs from file.
 ThemePrefs.Init(HVPrefs, true)
+
+HV = HV or {}
+function HV.GetMusicWheelScrollInterval()
+	local values = {0.08, 0.06, 0.05, 0.03, 0.02, 0.01}
+	local speed = tonumber(ThemePrefs.Get("HV_MusicWheelSpeed")) or 1
+	speed = math.max(1, math.min(#values, math.floor(speed)))
+	return values[speed]
+end
 ThemePrefs.ForceSave() -- Ensure new defaults are written to disk
 
 -- After loading, refresh accent colors and style palettes

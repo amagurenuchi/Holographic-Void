@@ -300,10 +300,13 @@ local currentAccent = accentColor
 
 t[#t + 1] = Def.ActorFrame {
 	Name = "CurrentScoreRow",
+	InitCommand = function(self)
+		self:visible(not isNetMultiplayer)
+	end,
 	RefreshScoresCommand = function(self)
 		local y = #highScores * (cardH + cardGap) + 6
 		self:stoptweening():linear(0.2):y(y)
-		self:visible(true)
+		self:visible(not isNetMultiplayer)
 	end,
 
 	-- Card Background

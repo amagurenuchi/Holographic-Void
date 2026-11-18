@@ -12,8 +12,17 @@ local boxHeight = SCREEN_HEIGHT / 3
 return Def.ActorFrame {
 	Name = "TextEntryUnderlay",
 	InitCommand = function(self) self:diffusealpha(0) end,
-	OffCommand = function(self) self:stoptweening():smooth(0.1):diffusealpha(0) end,
+	OffCommand = function(self)
+		if HV then HV.TextEntryActive = false end
+		self:stoptweening():smooth(0.1):diffusealpha(0)
+	end,
 	OnCommand = function(self)
+		if HV then
+			HV.TextEntryActive = true
+			HV.ChatTyping = false
+		end
+		SCREENMAN:set_input_redirected(PLAYER_1, false)
+		MESSAGEMAN:Broadcast("HVTextEntryOpened")
 		self:smooth(0.1):diffusealpha(1)
 		
 		local screen = SCREENMAN:GetTopScreen()

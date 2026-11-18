@@ -552,9 +552,19 @@ end
 HV.SetMusicSearchQuery = SetMusicSearchQuery
 HV.GetMusicSearchQuery = function() return searchString end
 
--- Mouse wheel locking to prevent double-moves
-local lastWheelMove = 0
-local wheelLockTime = 0.05
+-- Shared throttle for keyboard and controller wheel navigation.
+local heldWheelNavigation = nil
+local function GetWheelScrollInterval()
+	return HV.GetMusicWheelScrollInterval and HV.GetMusicWheelScrollInterval() or 0.14
+end
+local function IsWheelNavigationButton(btn, logicalBtn)
+	return btn == "DeviceButton_mousewheel up" or btn == "DeviceButton_mousewheel down"
+		or btn == "DeviceButton_left" or btn == "DeviceButton_right"
+		or btn == "DeviceButton_up" or btn == "DeviceButton_down"
+		or logicalBtn == "MenuLeft" or logicalBtn == "MenuRight"
+		or logicalBtn == "MenuUp" or logicalBtn == "MenuDown"
+		or logicalBtn == "Left" or logicalBtn == "Right"
+end
 
 -- Bottom Footer Config (Top-level for scope)
 local tabs = {"PROFILE", "SCORES", "PLAYLISTS", "FILTERS", "TAGS", "GOALS", "RANDOM"}
@@ -1390,21 +1400,29 @@ main_af[#main_af + 1] = Def.ActorFrame {
 					return true 
 				end
 				
-				if HV.ActiveTab ~= "SEARCH" and (evType == "InputEventType_FirstPress" or evType == "InputEventType_Repeat") then
-					if btn == "DeviceButton_mousewheel up" or btn == "DeviceButton_mousewheel down" then
-						local now = (GetTimeSinceStart and GetTimeSinceStart()) or os.clock()
-						if now - lastWheelMove < wheelLockTime then return true end
-						
+				if HV.ActiveTab == "" and IsWheelNavigationButton(btn, logicalBtn) then
+					local buttonKey = logicalBtn ~= "" and logicalBtn or btn
+					local interval = GetWheelScrollInterval()
+					if evType == "InputEventType_FirstPress" then
 						local mw = screen:GetMusicWheel()
 						if mw then
 							mw:Move(dir)
 							mw:Move(0)
-							lastWheelMove = now
 						end
-						return true
+						-- Mouse wheel events are discrete and may not have a matching
+						-- release, so only keyboard/controller input enters hold-repeat.
+						if btn ~= "DeviceButton_mousewheel up" and btn ~= "DeviceButton_mousewheel down" then
+							heldWheelNavigation = {button = buttonKey, dir = dir, nextAt = 0}
+							heldWheelNavigation.nextAt = ((GetTimeSinceStart and GetTimeSinceStart()) or os.clock()) + interval
+						end
+					elseif evType == "InputEventType_Release" and heldWheelNavigation and heldWheelNavigation.button == buttonKey then
+						heldWheelNavigation = nil
+					elseif evType == "InputEventType_Repeat" then
+						-- Consume engine repeats; the update timer below drives repeats at the selected rate.
 					end
-					-- Let other nav keys (left/right/up/down) fall through to the engine if no tab is open
+					return true
 				end
+
 			end
 
 			
@@ -1588,6 +1606,27 @@ main_af[#main_af + 1] = Def.ActorFrame {
 			return false
 		end -- end of HV.OverlayInputCallback
 		screen:AddInputCallback(HV.OverlayInputCallback)
+		local wheelRepeatDriver = Def.ActorFrame {
+			Name = "MusicWheelInputRepeatDriver",
+			OnCommand = function(self)
+				self:SetUpdateFunction(function()
+					local held = heldWheelNavigation
+					if not held or HV.ActiveTab ~= "" then return end
+					local interval = GetWheelScrollInterval()
+					if not interval then return end
+					local now = (GetTimeSinceStart and GetTimeSinceStart()) or os.clock()
+					if now >= held.nextAt then
+						local mw = screen:GetMusicWheel()
+						if mw then
+							mw:Move(held.dir)
+							mw:Move(0)
+						end
+						held.nextAt = now + interval
+					end
+				end)
+			end,
+		}
+		self:AddChild(wheelRepeatDriver)
 	end
 }
 

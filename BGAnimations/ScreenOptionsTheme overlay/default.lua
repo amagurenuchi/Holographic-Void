@@ -62,7 +62,7 @@ local choiceX2 = choiceX1 + choiceColW + choiceGapX
 -- THEME PREFERENCE DATA & OPTION ROWS
 -- =========================================================================
 local categoryOptions = {
-	{"GlobalTheme", "HV_BGAnimIntensity", "HV_Parallax", "HV_BackgroundEffect", "HV_Particles", "HV_EnableGlow", "HV_QuotesMode"},
+	{"GlobalTheme", "HV_BGAnimIntensity", "HV_Parallax", "HV_MusicWheelSpeed", "HV_BackgroundEffect", "HV_Particles", "HV_EnableGlow", "HV_QuotesMode"},
 	{"HV_SongPreview", "HV_SongSelectBGM", "HV_InstantSearch", "HV_ShowMSD", "HV_OsuManiaStarRating", "HV_ShowProfileStats"},
 	{
 		"HV_MinimalisticMode", "HV_EvaluationScreenToggle", "HV_ShowJudgment", "HV_JudgmentAnimation", "HV_RecentJudgmentDisplay",

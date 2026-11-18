@@ -40,6 +40,11 @@ local HVPrefRows = {
 		Choices = {"Off", "On"},
 		Values = {false, true},
 	},
+	HV_MusicWheelSpeed = {
+		Default = 1,
+		Choices = {"Normal", "Fast", "Very Fast", "Ridiculous", "Ludicrous", "Plaid"},
+		Values = {1, 2, 3, 4, 5, 6},
+	},
 
 	-- Song Preview Mode
 	HV_SongPreview = {
@@ -596,6 +601,9 @@ local function HVThemePrefRow(name, title)
 		end
 		ThemePrefs.Set(name, val)
 		ThemePrefs.ForceSave() -- Bypass NeedsSaved check to be certain
+		if name == "HV_MusicWheelSpeed" then
+			MESSAGEMAN:Broadcast("HVMusicWheelSpeedChanged")
+		end
 		if (name == "HV_LaneCoverSudden" or name == "HV_LaneCoverHidden")
 			and HV and HV.ApplyLaneCoverModifiers then
 			HV.ApplyLaneCoverModifiers()

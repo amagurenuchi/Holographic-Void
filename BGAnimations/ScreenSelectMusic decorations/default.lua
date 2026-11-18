@@ -2153,13 +2153,13 @@ t[#t + 1] = Def.ActorFrame {
 			end
 
 			-- Scroll Handling (Mouse Wheel)
-			if btn == "DeviceButton_mouse wheel up" then
+			if btn == "DeviceButton_mousewheel up" then
 				if data.chartOffset > 0 then
 					data.chartOffset = data.chartOffset - 1
 					MESSAGEMAN:Broadcast("DelayedChartUpdate")
 					return true
 				end
-			elseif btn == "DeviceButton_mouse wheel down" then
+			elseif btn == "DeviceButton_mousewheel down" then
 				if data.chartOffset < (#data.displayCharts - maxVisibleCharts) then
 					data.chartOffset = data.chartOffset + 1
 					MESSAGEMAN:Broadcast("DelayedChartUpdate")

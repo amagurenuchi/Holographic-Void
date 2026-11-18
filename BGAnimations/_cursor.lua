@@ -116,6 +116,11 @@ local function registerInputCallback()
 	topScreen = SCREENMAN:GetTopScreen()
 	if topScreen then
 		topScreen:AddInputCallback(function(event)
+			local deviceButton = event.DeviceInput and event.DeviceInput.button or ""
+			local mouseInput = deviceButton:find("mouse", 1, true) or deviceButton:find("wheel", 1, true)
+			if HV and HV.ChatTyping and not mouseInput then
+				return false
+			end
 			if BUTTON and type(BUTTON.InputCallback) == "function" then
 				BUTTON.InputCallback(event)
 			end
