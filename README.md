@@ -1,77 +1,56 @@
-# Holographic Void ~voided reality~
-<img width="800" height="450" alt="image" src="https://github.com/user-attachments/assets/11a3e748-4982-40b0-b892-6ced49438b42" />
+# Holographic Void ~ voided reality ~
+<img width="1600*2/3" height="600" alt="image" src="https://github.com/user-attachments/assets/4f693611-af7d-4e44-bb43-0f2f75eb4356" />
+
 
 
 Note: This theme has some parts automated by AI (for screen building). No AI-generated assets (images/audio) are used.
 ---
 
 An Etterna theme built from scratch, focusing on functionality with a minimalistic look.
----
+
 
 ## Key Features
 
 * **Built to bridge the gap between osu!mania and Etterna players**: a score converter, a Dan rating display, and osu!mania SR display is included (disabled by default).
 * **Built for perfectionists and players pushing their limits**: Detailed metrics in the judge counter, a judge emulation option, autofail, Ridiculous Emulation and LA/RA ratio display all included in the theme.
-* 
+* **Built for aesthestics**: Tons of customization available to the end user. Customize to match your mood for today, all week, or all month.
 ---
 
 ## Screenshots
 
 | Title Screen | Song Selection |
 | :---: | :---: |
-| <img width="400" alt="Title" src="https://github.com/user-attachments/assets/dc650ff8-c05d-4eeb-92b4-20fa51b631b0" /> | <img width="400" alt="Song Select" src="https://github.com/user-attachments/assets/639ddab9-ae63-44ab-98ad-0aa1d6faf9cf" /> |
+| <img width="400" alt="Title" src="https://github.com/user-attachments/assets/e221be3e-b664-4622-b015-c4f37c78e479" /> | <img width="400" alt="Song Select" src="https://github.com/user-attachments/assets/248814cb-99fe-41ed-8e10-c0a033c3a279" /> |
 
 | Gameplay | Evaluation Screen |
 | :---: | :---: |
-|  <img width="400" alt="Gameplay" src="https://github.com/user-attachments/assets/5696b3ab-3c99-4f81-a133-1dd6888fcd47" />| <img width="400" alt="Eval" src="https://github.com/user-attachments/assets/f57d1fec-8374-4fa3-b60c-12df8fcaff5b" /> |
+|  <img width="400" alt="Gameplay" src="https://github.com/user-attachments/assets/1aac59a1-0ed5-4e50-a2d2-1a564a561d04" /> | <img width="400" alt="Eval" src="https://github.com/user-attachments/assets/06a6c2b6-4be4-4add-b940-f597c36748f7" /> |
 
 <details>
 <summary>View All Screenshots</summary>
-<img width="1599" height="896" alt="image" src="https://github.com/user-attachments/assets/cbb407f1-8652-4083-96e0-d555e421815b" />
-<img width="1599" height="896" alt="image" src="https://github.com/user-attachments/assets/abd0845c-d528-439a-91bf-46223e738efd" />
-<img width="1599" height="896" alt="image" src="https://github.com/user-attachments/assets/16703a8d-8996-44f2-b19b-2e399d650527" />
-<img width="1599" height="896" alt="image" src="https://github.com/user-attachments/assets/4e01b345-e267-485d-b64c-8ba5810c4d08" />
-<img width="1599" height="896" alt="image" src="https://github.com/user-attachments/assets/3fb77040-62c8-4ae9-b5be-8a8cc1a5668d" />
-<img width="1599" height="896" alt="image" src="https://github.com/user-attachments/assets/683cd979-1b70-4742-b27a-a7e57924fc7e" />
-<img width="1599" height="896" alt="image" src="https://github.com/user-attachments/assets/8428e811-a3ea-4c33-a13e-d193f981084f" />
-<img width="1599" height="896" alt="image" src="https://github.com/user-attachments/assets/2ab8dac1-d8f0-4324-bb13-5b4fd103dbad" />
-<img width="1599" height="896" alt="image" src="https://github.com/user-attachments/assets/863f2e12-08d0-46a2-b9aa-bc039bbb0816" />
-<img width="1599" height="896" alt="image" src="https://github.com/user-attachments/assets/eff9c918-604a-4d62-aba6-6f5b94646f57" />
-<img width="1599" height="896" alt="image" src="https://github.com/user-attachments/assets/ba77db7a-0d56-4bbb-8751-e7edd87521b5" />
-<img width="1599" height="896" alt="image" src="https://github.com/user-attachments/assets/be692f13-5af0-4396-9c89-96d174e44bbf" />
-<img width="1599" height="896" alt="image" src="https://github.com/user-attachments/assets/a6d11077-4dee-4f00-82f7-60f1525d9ba3" />
-<img width="1599" height="896" alt="image" src="https://github.com/user-attachments/assets/510d4458-c54a-4cf5-b2ff-efc3d23ea540" />
-<img width="1599" height="896" alt="image" src="https://github.com/user-attachments/assets/826d80ad-9354-46c2-85b6-5fe7658afd68" />
-<img width="1599" height="896" alt="image" src="https://github.com/user-attachments/assets/d162fbd3-af08-436d-8b9c-da716632eb90" />
-<img width="1599" height="896" alt="image" src="https://github.com/user-attachments/assets/3807025d-cf79-47b8-9ca2-35ea3cca18e4" />
-
+<img width="1600" height="900" alt="image" src="https://github.com/user-attachments/assets/616f72a9-46ea-4dcc-a3a0-ad22169262e0" />
+<img width="1600" height="900" alt="image" src="https://github.com/user-attachments/assets/1e81d918-54cb-48c3-a7f3-1a9cad0d893d" />
+<img width="1600" height="900" alt="image" src="https://github.com/user-attachments/assets/5421c6df-f69e-4276-a402-02b49bd1f2a9" />
+<img width="1600" height="900" alt="image" src="https://github.com/user-attachments/assets/e8123b1d-db56-4c49-9c7c-a942c2e72fa0" />
+<img width="1600" height="900" alt="image" src="https://github.com/user-attachments/assets/e8999741-aff9-41f1-a9bb-ac4187a1fc09" />
+<img width="1600" height="900" alt="image" src="https://github.com/user-attachments/assets/484f837b-c349-4f02-84ed-32ee90131d92" />
 </details>
 
 ---
 
 ## Installation
 
-1.  Download the repository.
+1.  Download the repository or grab a release.
 2.  Extract the folder into your Etterna `Themes` directory.
-3.  In-game, navigate to **Options > Appearance Option > Theme** and select **Holographic Void**.
+3.  In-game, navigate to **Options > Appearance Options > Themes** and select **Holographic Void**.
 
 ---
 
 ## Bugs
-~~1. There is an unfixed input callback error. I do not know how to fix this.~~ fixed ig?
-~~2. The search bar can be a bit buggy, pressing Enter starts the highlighted song instead.~~ fixed
-~~3. The J4 scoring might or might not be accurate at times.~~ Edge cases are scores with a lot of mines hit
-~~4. The preview music might not play in a few circumstances.~~ much more controlled, only one instance
-
+1. not yet
+   
 ---
 
-## TODO
-~~1. Add the proper Customize Gameplay mechanic from other themes~~ done
-~~2. Also add the full-fledged color configuration screen~~ done
-~~3. Add the song background to other screens~~ done
-~~1. Clean up the very scuffed ThemePref saving~~
-
----
 
 ## Credits
 * Everyone in the EtternaOnline Discord
@@ -87,5 +66,5 @@ An Etterna theme built from scratch, focusing on functionality with a minimalist
 * Etienne for Etienne
 * nonyu for being bald
 * mainebow for being the living rainbow
-* the Fatigue theme for inspo for theme creation, this is basically what Fatigue could have been
+* the Fatigue theme for inspo for theme creation, this is basically what Fatigue could have been (yes i made it)
 * ilysia for being a frequent theme maintainer
