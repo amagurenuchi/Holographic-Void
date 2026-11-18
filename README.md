@@ -1,30 +1,18 @@
-# Holographic Void
+# Holographic Void ~voided reality~
+<img width="800" height="450" alt="image" src="https://github.com/user-attachments/assets/11a3e748-4982-40b0-b892-6ced49438b42" />
+
 
 Note: This theme has some parts automated by AI (for screen building). No AI-generated assets (images/audio) are used.
 ---
 
-A futuristic, high-performance Etterna theme built for technical players who demand both aesthetics and precision. **Holographic Void** blends a minimalist "Void" backdrop with vibrant "Holographic" neon accents, creating a high-contrast environment optimized for focus and detailed metrics.
-
+An Etterna theme built from scratch, focusing on functionality with a minimalistic look.
 ---
 
 ## Key Features
 
-### OLED-Optimized Visuals
-*   **True Black Backgrounds:** Designed specifically for OLED displays to provide infinite contrast and eliminate "IPS glow" distractions.
-*   **Desat Color Palette:** A sophisticated, muted neon color system for Difficulties, Judgments, and Clear Types that maintains high legibility without being garish. The classic color systems from Rebith/'Til Death are available, or custom colors if you prefer.
-*   **25+ Dynamic Preset Accent Colors with Custom Color support:** Instantly swap the entire UI's highlight color (Lavender, Cyan, Crimson, etc.) from the **Color Theme** menu, with options to use custom colors!
-
-### Technical Stuff
-*   **MSD, but cleaner:** A revamped radar graph in the Song Select screen that visualizes MSD breakdowns (Stream, Jumpstream, Handstream, etc.) on hover, saving space for other important features.
-*   **Advanced Evaluation:** Built on and extended from what is available from other themes, the themes features **RA/LA judgement/ratio display**, **Stacked Combo Graph bars** for different judgements and judge windows, and **Online/Local leaderboards**, visible at a glance.
-*   **Real-time metrics:** More than just a jduge counter, it also includes a live Judge 4 rescoring display, as well as a live MA/PA ratio display, along with offset metrics.
-*   **Celebratory Display:** Visual indicators for specialized clears like MFC, WF (White Flag), SDP (Single Digit Perfects), and more at the end of a chart.
-*   **Cutting-edge for Accuracy Extremeists:** Included options for people who crave absolute perfection, with proper visual feedbacks
-
-### Performance & UX:
-*   **Optimized Music Wheel:** The wheel also displays the MSD of the selected difficulty of each and every song, at the cost of some performance bottleneck.
-*   **Custom Overlays:** Sophisticated modal windows for the Pack Download and Player Options that extends to the aesthestic of the theme.
-
+* **Built to bridge the gap between osu!mania and Etterna players**: a score converter, a Dan rating display, and osu!mania SR display is included (disabled by default).
+* **Built for perfectionists and players pushing their limits**: Detailed metrics in the judge counter, a judge emulation option, autofail, Ridiculous Emulation and LA/RA ratio display all included in the theme.
+* 
 ---
 
 ## Screenshots
