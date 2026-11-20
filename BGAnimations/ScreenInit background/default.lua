@@ -11,6 +11,7 @@ local accent = (HVColor and HVColor.Accent) or color("#00E5FF")
 local themeVersion = "Unknown"
 local themeDescription = nil
 local themeCommitDate = nil
+local themeCodename = nil
 local themeName = THEME:GetCurThemeName()
 local paths = {
 	"Themes/" .. themeName .. "/ThemeInfo.ini",
@@ -33,7 +34,10 @@ for _, path in ipairs(paths) do
 		if info["ThemeInfo"]["CommitDate"] and info["ThemeInfo"]["CommitDate"] ~= "" then
 			themeCommitDate = info["ThemeInfo"]["CommitDate"]
 		end
-		if themeVersion ~= "Unknown" or themeDescription or themeCommitDate then
+		if info["ThemeInfo"]["Codename"] and info["ThemeInfo"]["Codename"] ~= "" then
+			themeCodename = info["ThemeInfo"]["Codename"]
+		end
+		if themeVersion ~= "Unknown" or themeDescription or themeCommitDate or themeCodename then
 			break
 		end
 	end
@@ -266,7 +270,7 @@ textGroup[#textGroup + 1] = Def.Quad {
 
 heroGroup[#heroGroup + 1] = textGroup
 
--- 5. Version Subtitle, Commit Date, Divider Lines & Description
+-- 5. Version Subtitle, Codename, Commit Date, Divider Lines & Description
 local versionLabel = "v" .. themeVersion
 if themeCommitDate and themeCommitDate ~= "" then
 	versionLabel = versionLabel .. "  (" .. themeCommitDate .. ")"
@@ -284,6 +288,7 @@ local subMetaGroup = Def.ActorFrame {
 
 -- Version / Commit Date text badge
 subMetaGroup[#subMetaGroup + 1] = LoadFont("Common Normal") .. {
+	Name = "VersionBadge",
 	Text = versionLabel,
 	InitCommand = function(self)
 		self:zoom(0.4):diffuse(color("#A0AAB5"))
@@ -299,6 +304,14 @@ subMetaGroup[#subMetaGroup + 1] = Def.Quad {
 		self:x(-lineOffset):zoomto(0, 1):diffuse(accent):diffusealpha(0.5)
 	end,
 	OnCommand = function(self)
+		local parent = self:GetParent()
+		local badge = parent and parent:GetChild("VersionBadge")
+		if badge and badge.GetZoomedWidth then
+			local w = badge:GetZoomedWidth()
+			if w and w > 0 then
+				self:x(-(w / 2 + 18))
+			end
+		end
 		self:sleep(0.75):decelerate(0.4):zoomto(50, 1)
 	end
 }
@@ -309,19 +322,48 @@ subMetaGroup[#subMetaGroup + 1] = Def.Quad {
 		self:x(lineOffset):zoomto(0, 1):diffuse(accent):diffusealpha(0.5)
 	end,
 	OnCommand = function(self)
+		local parent = self:GetParent()
+		local badge = parent and parent:GetChild("VersionBadge")
+		if badge and badge.GetZoomedWidth then
+			local w = badge:GetZoomedWidth()
+			if w and w > 0 then
+				self:x(w / 2 + 18)
+			end
+		end
 		self:sleep(0.75):decelerate(0.4):zoomto(50, 1)
 	end
 }
 
--- Optional Theme Description below version badge
-if themeDescription and themeDescription ~= "" then
+-- Optional Theme Codename below version badge
+if themeCodename and themeCodename ~= "" then
+	local codenameText = themeCodename
+	if not codenameText:match('^".*"$') then
+		codenameText = '"' .. codenameText .. '"'
+	end
 	subMetaGroup[#subMetaGroup + 1] = LoadFont("Common Normal") .. {
-		Text = themeDescription,
+		Name = "CodenameLabel",
+		Text = codenameText,
 		InitCommand = function(self)
-			self:y(14):zoom(0.33):diffuse(color("#6B7A8D")):diffusealpha(0)
+			self:y(13):zoom(0.33):diffuse(accent):diffusealpha(0)
 		end,
 		OnCommand = function(self)
-			self:sleep(0.85):decelerate(0.45):diffusealpha(0.75)
+			self:sleep(0.8)
+				:decelerate(0.45):diffusealpha(0.85)
+		end
+	}
+end
+
+-- Optional Theme Description below version badge (or codename)
+if themeDescription and themeDescription ~= "" then
+	local descY = (themeCodename and themeCodename ~= "") and 25 or 14
+	subMetaGroup[#subMetaGroup + 1] = LoadFont("Common Normal") .. {
+		Name = "DescriptionLabel",
+		Text = themeDescription,
+		InitCommand = function(self)
+			self:y(descY):zoom(0.33):diffuse(color("#6B7A8D")):diffusealpha(0)
+		end,
+		OnCommand = function(self)
+			self:sleep(0.9):decelerate(0.45):diffusealpha(0.75)
 		end
 	}
 end

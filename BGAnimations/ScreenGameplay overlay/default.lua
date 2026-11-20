@@ -72,6 +72,15 @@ local function gameplaySize(name)
 	return (MovableValues and MovableValues[name]) or getDefaultGameplaySize(name) or 1
 end
 
+local function centeredScoreDecimals(scorePercent)
+	local decimals = tonumber(ThemePrefs.Get("HV_CenteredScoreDecimals"))
+	if not decimals then
+		-- Match the dynamic wife% precision used by other screens.
+		decimals = scorePercent < 99.7 and 2 or (scorePercent > 99.9 and 4 or 3)
+	end
+	return math.max(2, math.min(6, math.floor(decimals)))
+end
+
 local function minimalisticHUDVisible(baseVisible, enabled)
 	if enabled == nil then enabled = HV.MinimalisticMode() end
 	return baseVisible and not enabled
@@ -779,11 +788,8 @@ t[#t + 1] = Def.ActorFrame {
 			self.replayWifePoints = 0
 			self.replayMaxPoints = 0
 			local scoreMode = ThemePrefs.Get("HV_ScoreDisplayMode") or "Normal"
-			if scoreMode == "Subtractive" then
-				self:settext("100.0000%")
-			else
-				self:settext("0.0000%")
-			end
+			local initialPercent = scoreMode == "Subtractive" and 100 or 0
+			self:settext(string.format("%." .. centeredScoreDecimals(initialPercent) .. "f%%", initialPercent))
 		end,
 		OnCommand = function(self)
 			self:queuecommand("UpdateAutoplay")
@@ -928,7 +934,8 @@ t[#t + 1] = Def.ActorFrame {
 				end
 			end			
 			if not wifePct then return end
-			self:settext(string.format("%.4f%%", wifePct))
+			local decimals = centeredScoreDecimals(wifePct)
+			self:settext(string.format("%." .. decimals .. "f%%", wifePct))
 			
 			-- Use standard Etterna grade tiers and theme colors
 			local tier = getEtternaGrade(wifePct)

@@ -683,6 +683,12 @@ local HVPrefs = {
 		Choices = {"Normal", "Subtractive"},
 		Values = {"Normal", "Subtractive"}
 	},
+	-- Gameplay: Centered score decimal places (Dynamic follows other screens)
+	HV_CenteredScoreDecimals = {
+		Default = 2,
+		Choices = {"Dynamic", "2", "3", "4", "5", "6"},
+		Values = {"Dynamic", 2, 3, 4, 5, 6}
+	},
 
 	-- Gameplay: Auto-Fail Action Mode
 	HV_AutoFailMode = {

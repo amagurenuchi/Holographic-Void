@@ -373,6 +373,11 @@ local HVPrefRows = {
 		Choices = {"Normal", "Subtractive"},
 		Values = {"Normal", "Subtractive"},
 	},
+	HV_CenteredScoreDecimals = {
+		Default = 2,
+		Choices = {"Dynamic", "2", "3", "4", "5", "6"},
+		Values = {"Dynamic", 2, 3, 4, 5, 6},
+	},
 
 	-- Auto-Fail Action Mode
 	HV_AutoFailMode = {
@@ -533,7 +538,7 @@ function HVThemeOptionsLines()
 		-- Gameplay Tools
 		"HV_ShowNPS", "HV_NPSWindowSize", "HV_ShowNPSGraph", "HV_ErrorBarMode",
 		"HV_ErrorBarColoringMode", "HV_ShowMean", "HV_ShowMeasureLines",
-		"HV_ComboBreakHighlight", "HV_ScoreDisplayMode",
+		"HV_ComboBreakHighlight", "HV_ScoreDisplayMode", "HV_CenteredScoreDecimals",
 		
 		-- Grades
 		"HV_UseCustomGrades"
@@ -612,6 +617,11 @@ local function HVThemePrefRow(name, title)
 	
 	return row
 end
+
+function OptionRowCenteredScoreDecimals()
+	return HVThemePrefRow("HV_CenteredScoreDecimals", "Centered Score Decimals")
+end
+_G["OptionRowCenteredScoreDecimals"] = OptionRowCenteredScoreDecimals
 function OptionRowSongPreview()
 	return HVThemePrefRow("HV_SongPreview", "Song Preview Mode")
 end
