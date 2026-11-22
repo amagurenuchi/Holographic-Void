@@ -6,18 +6,141 @@
 
 HV = HV or {}
 
-function HV.GetReformDanColor(estimate)
-	if type(estimate) == "table" then
-		if estimate.belowFirst or estimate.dan == "0" then return color("#808080") end
-		if estimate.aboveKappa or estimate.dan == "∞" then return color("#404040") end
+-- Official Dan chart keys shared by song select achievements and Dan rating overrides.
+HV.DanChartRanks = {
+	{"1st Dan", {"X5e0e976dbdaab2f5069442aea7fda6c36a04d762"}},
+	{"2nd Dan", {"X8ab233319206a935ead8b2c7a0e1152f9b9f5b87"}},
+	{"3rd Dan", {"X80a4f4287fa3d8fcf3b641ad8acb8c4488ca201c"}},
+	{"4th Dan", {"Xc53ee08d09d27f898c7ef3d98333e518c669d6db"}},
+	{"5th Dan", {"Xedd50d654858a1ccc7cfbbb3ef36c7ab25d8a2d6"}},
+	{"6th Dan", {"Xeef4999a0ff9e1f63d01dd7ad73d95c369352e88"}},
+	{"7th Dan", {"X210aeea71e81bafb1c802308418f82423c053e58"}},
+	{"8th Dan", {"Xeedf0fdef274f0039729a941fe12c0fbb5ccdf37"}},
+	{"9th Dan", {"X50b734f0149077c01f9f95ad9544c63d630b2153"}},
+	{"10th Dan", {"X6bff4ed380fe33ab39f6f11315312c0a780474cb"}},
+	{"Alpha Dan", {"X4da1deb690aaa50aceabefb94460f2f77f739371"}},
+	{"Beta Dan", {"X6e0fa4c42667d269bbcf29b9abe5a00246c4e4fe"}},
+	{"Gamma Dan", {"X54c8d0da555ad4bd1840d12c5c90d4be1afd3f8c"}},
+	{"Delta Dan", {"X2ff45475a0c724c00515684d6afe7fed21ac9df8"}},
+	{"Epsilon Dan", {"X2e0bef9f4b606f6b3ab84a666ccf623fafa859d5"}},
+	{"Zeta Dan", {"X9a08688242bc7eb9f795bd8e59cfee1f68d683de"}},
+	{"Eta Dan", {"X7ed0e5b112e7b04014e2d8e7b1b84fbda9188f76"}},
+	{"Theta Dan", {"X699ccc27ee235efa68c9658c8aeb43d44b715b27"}},
+	{"Iota Dan", {"Xa0c2e2db3da42a2c3a66af4944cc36832b1620e3"}},
+	{"Kappa Dan", {"Xd7076808f71a74891b610bdbe6164f299ff64986"}},
+}
+
+local function normalizeDanChartKey(chartKey)
+	return string.lower(tostring(chartKey or "")):gsub("^x", "")
+end
+
+function HV.GetFixedDanChartEstimate(estimate, chartKey, rate)
+	if type(estimate) ~= "table" or math.abs((tonumber(rate) or 1) - 1) >= 0.0005 then return estimate end
+	local normalizedKey = normalizeDanChartKey(chartKey)
+	if normalizedKey == "" then return estimate end
+	for _, rank in ipairs(HV.DanChartRanks) do
+		for _, key in ipairs(rank[2]) do
+			if normalizeDanChartKey(key) == normalizedKey then
+				local dan = rank[1]:gsub(" Dan$", "")
+				return {
+					dan = dan, danLabel = rank[1], sublevel = "", dp = estimate.dp,
+					position = 0.5, fixedDanChart = true,
+				}
+			end
+		end
 	end
-	return nil
+	return estimate
 end
 
 local danOrder = {
 	"1st", "2nd", "3rd", "4th", "5th", "6th", "7th", "8th", "9th", "10th",
 	"Alpha", "Beta", "Gamma", "Delta", "Epsilon", "Zeta", "Eta", "Theta", "Iota", "Kappa"
 }
+
+-- Dan tier gradients, keyed by the display names used by Reform and ISOR.
+-- Some tiers have a middle stop as well as their endpoints.
+local danGradients = {
+	["1st"] = {"#76C7FF", "#E7F4FF"}, ["2nd"] = {"#71B4FF", "#C4ECFF"},
+	["3rd"] = {"#73A6FF", "#B4E0FF"}, ["4th"] = {"#789BFF", "#A8CDFF"},
+	["5th"] = {"#8B98FF", "#D3E0FF"}, ["6th"] = {"#A692FF", "#EEDDFF"},
+	["7th"] = {"#C48FFF", "#FFE2EF"}, ["8th"] = {"#EBA072", "#FFE0A3"},
+	["9th"] = {"#FFAF63", "#FFEBAA"}, ["10th"] = {"#FFC76C", "#FFF8C8"},
+	Alpha = {"#463CB4", "#DC4150", "#F5E12D"}, Beta = {"#FFF5B4", "#FFA500"},
+	Gamma = {"#FF0000", "#003CFF", "#00FF5A"}, Delta = {"#5F3C7D", "#D78232"},
+	Epsilon = {"#D72D5F", "#1E5096", "#F5F0D7"}, Zeta = {"#F08269", "#82BEE1"},
+	Eta = {"#912800", "#C85046"}, Theta = {"#69370A", "#AA4137"},
+	Iota = {"#4B0A0A", "#913232"}, Kappa = {"#7D7D7D", "#BEBEC8"},
+}
+
+local function getDanGradient(estimate)
+	if type(estimate) ~= "table" then return nil end
+	if estimate.celestial and HV.GetCelestialDanGradient then
+		return HV.GetCelestialDanGradient(estimate.tier or estimate.group)
+	end
+	if estimate.belowFirst or estimate.dan == "0" then return {color("#808080"), color("#808080")} end
+	if estimate.aboveKappa or estimate.dan == "∞" then return {color("#404040"), color("#404040")} end
+	local dan = tostring(estimate.dan or "")
+	local index = tonumber(dan:match("^(%d+)"))
+	local name = index and danOrder[index] or dan:match("^%a+")
+	local stops = name and danGradients[name]
+	if not stops then return nil end
+	local gradient = {}
+	for _, stop in ipairs(stops) do gradient[#gradient + 1] = color(stop) end
+	return gradient
+end
+
+function HV.GetReformDanGradient(estimate)
+	return getDanGradient(estimate)
+end
+
+function HV.GetReformDanColor(estimate)
+	local gradient = getDanGradient(estimate)
+	if not gradient then return nil end
+	if estimate.celestial then
+		local position = math.max(0, math.min(1, tonumber(estimate.position) or 0.5))
+		return HV.LerpColor(position, gradient[1], gradient[2])
+	end
+	if estimate.belowFirst or estimate.dan == "0" or estimate.aboveKappa or estimate.dan == "∞" then
+		return gradient[1]
+	end
+	local dan = tostring(estimate.dan or "")
+	local index = tonumber(dan:match("^(%d+)"))
+	local name = index and danOrder[index] or dan:match("^%a+")
+	local stops = name and danGradients[name]
+	local p = math.max(0, math.min(1, tonumber(estimate.position) or 0.5))
+	local scaled = p * (#stops - 1)
+	local stop = math.min(#stops - 1, math.floor(scaled) + 1)
+	local amount = scaled - (stop - 1)
+	return HV.LerpColor(amount, color(stops[stop]), color(stops[stop + 1]))
+end
+
+function HV.SetDanRatingText(actor, text, estimate, fallbackColor)
+	if not actor then return end
+	actor:settext(text or "")
+	local stops = estimate and HV.GetReformDanGradient(estimate)
+	if stops and #stops >= 2 then
+		actor:ClearAttributes():diffuse(color("#FFFFFF"))
+		local value = tostring(text or "")
+		local glyphCount = 0
+		for i = 1, #value do
+			local byte = value:byte(i)
+			if byte < 128 or byte >= 192 then glyphCount = glyphCount + 1 end
+		end
+		for glyph = 0, glyphCount - 1 do
+			local glyphColor
+			if #stops >= 3 then
+				local band = math.min(#stops, math.floor(((glyph + 0.5) / glyphCount) * #stops) + 1)
+				glyphColor = stops[band]
+			else
+				local position = glyphCount == 1 and 0.5 or glyph / (glyphCount - 1)
+				glyphColor = HV.LerpColor(position, stops[1], stops[2])
+			end
+			actor:AddAttribute(glyph, {Length = 1, Diffuse = glyphColor})
+		end
+		return
+	end
+	actor:ClearAttributes():diffuse(fallbackColor or color("#FFFFFF"))
+end
 
 -- Each band is {lower, center, upper, sample count, dispersion, weak-anchor}.
 local thresholds = {

@@ -1781,7 +1781,7 @@ local function scoreBoard(pn)
 										setfenv(chunk, {})
 										local ok, cache = pcall(chunk)
 										if ok and type(cache) == "table" then
-											estimate = cache["isor-dp-v5|" .. key] or cache["isor-dp-v2|" .. key] or cache["isor-dp-v1|" .. key]
+							estimate = cache["isor-dp-v6|" .. key] or cache["isor-dp-v5|" .. key] or cache["isor-dp-v2|" .. key] or cache["isor-dp-v1|" .. key]
 										end
 									end
 									file:Close()
@@ -1804,13 +1804,16 @@ local function scoreBoard(pn)
 						end
 						local estimate = resolveCachedDan()
 						if estimate then
-							local text = formatDanName(estimate.dan) .. (type(estimate.sublevel) == "string" and (" " .. estimate.sublevel) or "")
-							pages[#pages + 1] = {text = text, color = (HV.GetReformDanColor and HV.GetReformDanColor(estimate)) or HVColor.GetMSDRatingColor(tonumber(estimate.dp) or msd)}
+							estimate = HV.GetDanCalculatorEstimate and HV.GetDanCalculatorEstimate(estimate) or estimate
+							local chartKey = steps.GetChartKey and tostring(steps:GetChartKey())
+							estimate = HV.GetFixedDanChartEstimate and HV.GetFixedDanChartEstimate(estimate, chartKey, rate) or estimate
+							local text = (HV.GetDanCalculatorText and HV.GetDanCalculatorText(estimate)) or (formatDanName(estimate.dan) .. (type(estimate.sublevel) == "string" and (" " .. estimate.sublevel) or ""))
+							pages[#pages + 1] = {text = text, estimate = estimate, color = (HV.GetReformDanColor and HV.GetReformDanColor(estimate)) or HVColor.GetMSDRatingColor(tonumber(estimate.dp) or msd)}
 						end
 						self.hvRatingPages = pages
 						self.hvRatingPage = 1
 						if #pages > 0 then
-							self:settext(pages[1].text):diffuse(pages[1].color)
+							HV.SetDanRatingText(self, pages[1].text, pages[1].estimate, pages[1].color)
 							self:diffusealpha(1)
 							if #pages > 1 then self:sleep(3):queuecommand("FadeRatingOut") end
 						else
@@ -1826,7 +1829,7 @@ local function scoreBoard(pn)
 					if not self.hvRatingPages or #self.hvRatingPages < 2 then return end
 					self.hvRatingPage = self.hvRatingPage % #self.hvRatingPages + 1
 					local page = self.hvRatingPages[self.hvRatingPage]
-					self:settext(page.text):diffuse(page.color)
+					HV.SetDanRatingText(self, page.text, page.estimate, page.color)
 					self:stoptweening():linear(self.transitionDuration * 0.5):diffusealpha(1):sleep(3):queuecommand("FadeRatingOut")
 				end
 			}
@@ -3384,9 +3387,10 @@ HV.GetSimpleEvaluationData = function()
 								local ok, cache = pcall(chunk)
 								if ok and type(cache) == "table" then
 									local key = tostring(steps:GetChartKey()) .. "|" .. string.format("%.8f", getCurRateValue())
-									local estimate = cache["isor-dp-v5|" .. key] or cache["isor-dp-v2|" .. key] or cache["isor-dp-v1|" .. key]
+									local estimate = cache["isor-dp-v6|" .. key] or cache["isor-dp-v5|" .. key] or cache["isor-dp-v2|" .. key] or cache["isor-dp-v1|" .. key]
 									if type(estimate) == "table" and type(estimate.dan) == "string" then
-										rating = formatDanName(estimate.dan) .. (estimate.sublevel and (" " .. estimate.sublevel) or "")
+										estimate = HV.GetDanCalculatorEstimate and HV.GetDanCalculatorEstimate(estimate) or estimate
+										rating = (HV.GetDanCalculatorText and HV.GetDanCalculatorText(estimate)) or (formatDanName(estimate.dan) .. (estimate.sublevel and (" " .. estimate.sublevel) or ""))
 										ratingColor = (HV.GetReformDanColor and HV.GetReformDanColor(estimate)) or HVColor.GetMSDRatingColor(tonumber(estimate.dp) or msd)
 									end
 								end

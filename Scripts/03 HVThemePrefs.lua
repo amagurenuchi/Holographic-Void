@@ -278,6 +278,11 @@ local HVPrefs = {
 		Choices = {"Off", "On"},
 		Values = {false, true}
 	},
+	HV_DanCalculatorMode = {
+		Default = "Reform",
+		Choices = {"Reform", "Celestial"},
+		Values = {"Reform", "Celestial"}
+	},
 
 
 	-- Gameplay: Show player profile stats on select music

@@ -72,6 +72,11 @@ local HVPrefRows = {
 		Choices = {"Off", "On"},
 		Values = {false, true},
 	},
+	HV_DanCalculatorMode = {
+		Default = "Reform",
+		Choices = {"Reform", "Celestial"},
+		Values = {"Reform", "Celestial"},
+	},
 	HV_OsuManiaStarRating = {
 		Default = "Classic",
 		Choices = {"Off", "Classic", "Sunny Rework"},
@@ -523,7 +528,7 @@ function HVThemeOptionsLines()
 	-- Logical grouping of theme options
 	local l = table.concat({
 		-- General / Visual
-		"HV_BGAnimIntensity", "HV_Parallax", "HV_BackgroundEffect", "HV_Particles", "HV_EnableGlow", "HV_QuotesMode",
+		"HV_BGAnimIntensity", "HV_Parallax", "HV_BackgroundEffect", "HV_Particles", "HV_EnableGlow", "HV_QuotesMode", "HV_EnableDanCalculator", "HV_DanCalculatorMode",
 		"HV_SongBackgroundBrightness",
 		
 		-- Music Select
@@ -533,7 +538,7 @@ function HVThemeOptionsLines()
 		-- Gameplay HUD
 		"HV_MinimalisticMode", "HV_ShowJudgment", "HV_EmulateRidiculous", "HV_JudgmentAnimation", "HV_RecentJudgmentDisplay", "HV_PrioritizeLowerJudgements", "HV_DisplayLowerJudgementOffset", "HV_OffsetDisplayJudgement", "HV_ShowCombo", "HV_ComboAnimation", "HV_ShowCurrentWife",
 			"HV_ShowJudgeCounter", "HV_JudgeCounterMode", "HV_ShowNGIndicator",
-		"HV_ShowPlayerInfo", "HV_ProgressBarPosition", "HV_ShowInGameLeaderboard", "HV_EnableDanCalculator",
+		"HV_ShowPlayerInfo", "HV_ProgressBarPosition", "HV_ShowInGameLeaderboard",
 		
 		-- Gameplay Tools
 		"HV_ShowNPS", "HV_NPSWindowSize", "HV_ShowNPSGraph", "HV_ErrorBarMode",
@@ -639,6 +644,10 @@ end
 
 function OptionRowEnableDanCalculator()
 	return HVThemePrefRow("HV_EnableDanCalculator", "Dan Calculator")
+end
+
+function OptionRowDanCalculatorMode()
+	return HVThemePrefRow("HV_DanCalculatorMode", "Dan Calculator Type")
 end
 
 function OptionRowOsuManiaStarRating()

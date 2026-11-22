@@ -27,6 +27,7 @@ local currentView = VIEW_LOCAL
 local SORT_SSR = 1
 local SORT_WIFE = 2
 local currentSort = SORT_SSR
+local pendingReplayAction = nil
 
 -- Data
 local localScores = {}
@@ -215,6 +216,7 @@ local function ViewScore(score)
 	HV.ViewingHistoricalEvaluationScore = true
 	HV.OnlineEvaluationActive = (currentView == VIEW_ONLINE)
 	HV.OnlineEvaluationName = HV.OnlineEvaluationActive and GetScoreDisplayName(ss) or nil
+	MESSAGEMAN:Broadcast("HideSelectMusicOutro")
 	local screen = SCREENMAN:GetTopScreen()
 	-- ShowEvalScreenForScore is a standard Etterna ScreenSelectMusic method for viewing historical scores
 	if screen and screen.ShowEvalScreenForScore then
@@ -225,6 +227,16 @@ local function ViewScore(score)
 			STATSMAN:GetCurStageStats():GetPlayerStageStats():SetHighScore(ss)
 			SCREENMAN:SetNewScreen("ScreenEvaluation")
 		end
+	end
+end
+
+local function PlayReplayWithTransition(score)
+	if not score then return end
+	HV.SuppressSelectMusicOutForReplay = true
+	MESSAGEMAN:Broadcast("ReplayTransitionOut")
+	pendingReplayAction = function()
+		local screen = SCREENMAN:GetTopScreen()
+		if screen and screen.PlayReplay then screen:PlayReplay(score) end
 	end
 end
 
@@ -578,6 +590,20 @@ local t = Def.ActorFrame {
 	},
 }
 
+-- PlayReplay switches screens directly and skips ScreenSelectMusic's usual
+-- outgoing transition. Run the same expanding circle here, then start playback.
+t[#t + 1] = Def.Sprite {
+	Name = "ReplayTransitionCircle",
+	Texture = THEME:GetPathG("", "_thick circle"),
+	InitCommand = function(self)
+		self:Center():diffuse(color("0,0,0,1")):zoom(0):visible(false):draworder(10000)
+	end,
+	ReplayTransitionOutMessageCommand = function(self)
+		-- Replays use the shared ScreenSelectMusic circle outro below.
+		self:visible(false)
+	end,
+}
+
 -- Score rows
 for i = 1, pageSize do
 	t[#t + 1] = Def.ActorFrame {
@@ -925,7 +951,7 @@ t[#t + 1] = Def.ActorFrame {
 								HV.OnlineReplayName = nil
 								HV.OnlineEvaluationName = nil
 								if ss:HasReplayData() then
-									SCREENMAN:GetTopScreen():PlayReplay(ss)
+									PlayReplayWithTransition(ss)
 								end
 							else
 								-- Online Replay: Request data first, then play
@@ -939,7 +965,7 @@ t[#t + 1] = Def.ActorFrame {
 									ss,
 									function()
 										if ss:GetReplay():HasReplayData() then
-											SCREENMAN:GetTopScreen():PlayReplay(ss)
+											PlayReplayWithTransition(ss)
 										else
 											ms.ok("Replay not available")
 										end

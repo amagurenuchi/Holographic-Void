@@ -296,41 +296,47 @@ subMetaGroup[#subMetaGroup + 1] = LoadFont("Common Normal") .. {
 }
 
 -- Dynamic divider lines flanking version badge
-local lineOffset = (themeCommitDate and themeCommitDate ~= "") and 115 or 72
+local textGap = 14
+local lineWidth = 50
+local approxHalfWidth = (#versionLabel * 8.5) / 2
 
 -- Left fine line
 subMetaGroup[#subMetaGroup + 1] = Def.Quad {
 	InitCommand = function(self)
-		self:x(-lineOffset):zoomto(0, 1):diffuse(accent):diffusealpha(0.5)
+		self:halign(1):x(-(approxHalfWidth + textGap)):zoomto(0, 1):diffuse(accent):diffusealpha(0.5)
 	end,
 	OnCommand = function(self)
 		local parent = self:GetParent()
 		local badge = parent and parent:GetChild("VersionBadge")
+		local halfW = approxHalfWidth
 		if badge and badge.GetZoomedWidth then
 			local w = badge:GetZoomedWidth()
 			if w and w > 0 then
-				self:x(-(w / 2 + 18))
+				halfW = w / 2
 			end
 		end
-		self:sleep(0.75):decelerate(0.4):zoomto(50, 1)
+		self:x(-(halfW + textGap))
+		self:sleep(0.75):decelerate(0.4):zoomto(lineWidth, 1)
 	end
 }
 
 -- Right fine line
 subMetaGroup[#subMetaGroup + 1] = Def.Quad {
 	InitCommand = function(self)
-		self:x(lineOffset):zoomto(0, 1):diffuse(accent):diffusealpha(0.5)
+		self:halign(0):x(approxHalfWidth + textGap):zoomto(0, 1):diffuse(accent):diffusealpha(0.5)
 	end,
 	OnCommand = function(self)
 		local parent = self:GetParent()
 		local badge = parent and parent:GetChild("VersionBadge")
+		local halfW = approxHalfWidth
 		if badge and badge.GetZoomedWidth then
 			local w = badge:GetZoomedWidth()
 			if w and w > 0 then
-				self:x(w / 2 + 18)
+				halfW = w / 2
 			end
 		end
-		self:sleep(0.75):decelerate(0.4):zoomto(50, 1)
+		self:x(halfW + textGap)
+		self:sleep(0.75):decelerate(0.4):zoomto(lineWidth, 1)
 	end
 }
 

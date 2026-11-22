@@ -101,6 +101,29 @@ local function getDifficultyInfo(steps)
 	return diffName:upper(), meter, diffColor
 end
 
+local function applyDanTextGradient(actor, text, stops)
+	if not actor or type(stops) ~= "table" or #stops < 2 then return false end
+	actor:ClearAttributes():diffuse(color("#FFFFFF"))
+	local glyphCount = 0
+	for i = 1, #text do
+		local byte = text:byte(i)
+		if byte < 128 or byte >= 192 then glyphCount = glyphCount + 1 end
+	end
+	if glyphCount == 0 then return false end
+	for glyph = 0, glyphCount - 1 do
+		local glyphColor
+		if #stops >= 3 then
+			local band = math.min(#stops, math.floor(((glyph + 0.5) / glyphCount) * #stops) + 1)
+			glyphColor = stops[band]
+		else
+			local position = glyphCount == 1 and 0.5 or glyph / (glyphCount - 1)
+			glyphColor = HV.LerpColor(position, stops[1], stops[2])
+		end
+		actor:AddAttribute(glyph, {Length = 1, Diffuse = glyphColor})
+	end
+	return true
+end
+
 local function broadcastSet(af)
 	if not af or not af.GetChildren then return end
 	for _, c in pairs(af:GetChildren()) do
@@ -119,8 +142,25 @@ end
 local t = Def.ActorFrame {
 	Name = "ScreenSelectMusicOutRoot",
 	StartTransitioningCommand = function(self)
+		-- Evaluation and replay entry use the shared growing-circle transition.
+		-- This custom outgoing screen covers the full display, so remove it before
+		-- the transition starts instead of animating the song-select artwork over it.
+		local nextScreenName = ""
+		local top = SCREENMAN and SCREENMAN:GetTopScreen()
+		if top and top.GetNextScreenName then
+			local ok, value = pcall(function() return top:GetNextScreenName() end)
+			if ok and value then nextScreenName = tostring(value) end
+		end
+		local enteringReplay = HV and HV.SuppressSelectMusicOutForReplay
+		if enteringReplay then HV.SuppressSelectMusicOutForReplay = nil end
+		if nextScreenName == "ScreenEvaluation" or enteringReplay then
+			self:visible(false)
+			return
+		end
 		self:playcommand("Set")
 	end,
+	HideSelectMusicOutroMessageCommand = function(self) self:visible(false) end,
+	ReplayTransitionOutMessageCommand = function(self) self:visible(false) end,
 	ShowPressStartForOptionsCommand = function(self)
 		self:playcommand("Set")
 	end,
@@ -506,6 +546,34 @@ contentAF[#contentAF + 1] = LoadFont("MSD 20px") .. {
 			self:diffuse(HVColor.GetMSDRatingColor(msd))
 		else
 			self:settext("-"):diffuse(dimText)
+		end
+	end
+}
+
+-- Cached Dan estimate shown beneath MSD. This only reads the estimate already
+-- populated by the song-select calculator; it never starts a calculation here.
+contentAF[#contentAF + 1] = LoadFont("MSD 20px") .. {
+	Name = "CachedDanLevel",
+	InitCommand = function(self)
+		self:halign(1):xy(rightMargin, 401):zoom(0.30):diffuse(subText):visible(false)
+	end,
+	SetCommand = function(self)
+		local data = HV and HV.CurrentSongData
+		local estimate = data and data.isorEstimate
+		if HV and HV.GetDanCalculatorEstimate then
+			estimate = HV.GetDanCalculatorEstimate(estimate)
+		end
+		local text = estimate and HV.GetDanCalculatorText and HV.GetDanCalculatorText(estimate) or ""
+		if estimate and estimate.fixedDanChart and not estimate.celestial and text ~= "" then
+			text = text .. " Dan"
+		end
+		if text ~= "" then
+			self:settext(text):visible(true)
+			local stops = estimate.celestial and HV.GetCelestialDanGradient and HV.GetCelestialDanGradient(estimate.group)
+				or HV.GetReformDanGradient and HV.GetReformDanGradient(estimate)
+			if not applyDanTextGradient(self, text, stops) then self:ClearAttributes():diffuse(subText) end
+		else
+			self:settext(""):visible(false)
 		end
 	end
 }

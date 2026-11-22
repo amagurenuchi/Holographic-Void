@@ -62,14 +62,14 @@ local choiceX2 = choiceX1 + choiceColW + choiceGapX
 -- THEME PREFERENCE DATA & OPTION ROWS
 -- =========================================================================
 local categoryOptions = {
-	{"GlobalTheme", "HV_BGAnimIntensity", "HV_Parallax", "HV_MusicWheelSpeed", "HV_BackgroundEffect", "HV_Particles", "HV_EnableGlow", "HV_QuotesMode"},
+	{"GlobalTheme", "HV_BGAnimIntensity", "HV_Parallax", "HV_MusicWheelSpeed", "HV_BackgroundEffect", "HV_Particles", "HV_EnableGlow", "HV_QuotesMode", "HV_EnableDanCalculator", "HV_DanCalculatorMode"},
 	{"HV_SongPreview", "HV_SongSelectBGM", "HV_InstantSearch", "HV_ShowMSD", "HV_OsuManiaStarRating", "HV_ShowProfileStats"},
 	{
 		"HV_MinimalisticMode", "HV_EvaluationScreenToggle", "HV_ShowJudgment", "HV_JudgmentAnimation", "HV_RecentJudgmentDisplay",
 		"HV_PrioritizeLowerJudgements", "HV_DisplayLowerJudgementOffset", "HV_OffsetDisplayJudgement", "HV_ShowCombo",
 		"HV_ComboAnimation", "HV_ShowCurrentWife", "HV_ShowJudgeCounter", "HV_JudgeCounterMode", "HV_ShowNGIndicator",
 		"HV_ShowPlayerInfo", "HV_ProgressBarPosition", "HV_MiniProgressBar", "HV_ShowInGameLeaderboard", "HV_ShowNPS",
-		"HV_ShowSSR", "HV_EnableDanCalculator", "HV_NPSWindowSize", "HV_ShowNPSGraph", "HV_ErrorBarMode", "HV_ErrorBarColoringMode", "HV_ShowMean",
+		"HV_ShowSSR", "HV_NPSWindowSize", "HV_ShowNPSGraph", "HV_ErrorBarMode", "HV_ErrorBarColoringMode", "HV_ShowMean",
 		"HV_ScoreDisplayMode", "HV_CenteredScoreDecimals", "HV_ShowMeasureLines", "HV_ComboBreakHighlight", "HV_ShowPacemakerGraph", "HV_UseCustomGrades",
 	},
 }

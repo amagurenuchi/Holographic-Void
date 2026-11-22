@@ -36,25 +36,7 @@ local mainText = color("0.85,0.85,0.85,1")
 local dimText = color("0.45,0.45,0.45,1")
 local bgCard = color("0.06,0.06,0.06,0.9")
 
-local danRanks = {
-	{"1st Dan", {"X5e0e976dbdaab2f5069442aea7fda6c36a04d762"}},
-	{"2nd Dan", {"X8ab233319206a935ead8b2c7a0e1152f9b9f5b87"}},
-	{"3rd Dan", {"X80a4f4287fa3d8fcf3b641ad8acb8c4488ca201c"}},
-	{"4th Dan", {"Xc53ee08d09d27f898c7ef3d98333e518c669d6db"}},
-	{"5th Dan", {"Xedd50d654858a1ccc7cfbbb3ef36c7ab25d8a2d6"}},
-	{"6th Dan", {"Xeef4999a0ff9e1f63d01dd7ad73d95c369352e88"}},
-	{"7th Dan", {"X210aeea71e81bafb1c802308418f82423c053e58"}},
-	{"8th Dan", {"Xeedf0fdef274f0039729a941fe12c0fbb5ccdf37"}},
-	{"9th Dan", {"X50b734f0149077c01f9f95ad9544c63d630b2153"}},
-	{"10th Dan", {"X6bff4ed380fe33ab39f6f11315312c0a780474cb"}},
-	{"Alpha Dan", {"X4da1deb690aaa50aceabefb94460f2f77f739371"}},
-	{"Beta Dan", {"X6e0fa4c42667d269bbcf29b9abe5a00246c4e4fe"}},
-	{"Gamma Dan", {"X54c8d0da555ad4bd1840d12c5c90d4be1afd3f8c"}},
-	{"Delta Dan", {"X2ff45475a0c724c00515684d6afe7fed21ac9df8"}},
-	{"Epsilon Dan", {"X2e0bef9f4b606f6b3ab84a666ccf623fafa859d5"}},
-	{"Zeta Dan", {"X9a08688242bc7eb9f795bd8e59cfee1f68d683de"}},
-	{"Eta Dan", {"X7ed0e5b112e7b04014e2d8e7b1b84fbda9188f76"}},
-}
+local danRanks = HV.DanChartRanks or {}
 
 
 local danMedalRanks = {"6th Dan", "8th Dan", "10th Dan", "Alpha Dan", "Beta Dan", "Gamma Dan", "Delta Dan", "Epsilon Dan", "Zeta Dan", "Eta Dan"}
@@ -686,6 +668,7 @@ local main_af = Def.ActorFrame {
 		local pending = getenv("HVPendingScoreFromStats")
 		if not pending then return end
 		setenv("HVPendingScoreFromStats", nil)
+		MESSAGEMAN:Broadcast("HideSelectMusicOutro")
 		local screen = SCREENMAN:GetTopScreen()
 		if screen and screen.ShowEvalScreenForScore then
 			screen:ShowEvalScreenForScore(pending)

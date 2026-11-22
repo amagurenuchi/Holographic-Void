@@ -51,7 +51,7 @@ local function getCachedChartEstimate(steps, rate)
 	if not steps or not steps.GetChartKey then return nil end
 	local chartKey = tostring(steps:GetChartKey())
 	local rateKey = string.format("%.8f", tonumber(rate) or 1)
-	local entry = chartRatingCache["isor-dp-v5|" .. chartKey .. "|" .. rateKey]
+	local entry = chartRatingCache["isor-dp-v6|" .. chartKey .. "|" .. rateKey] or chartRatingCache["isor-dp-v5|" .. chartKey .. "|" .. rateKey]
 	if type(entry) ~= "table" then entry = chartRatingCache["isor-dp-v2|" .. chartKey .. "|" .. rateKey] end
 	if type(entry) ~= "table" then
 		entry = chartRatingCache["isor-dp-v1|" .. chartKey .. "|" .. rateKey]
@@ -264,16 +264,19 @@ local t = Def.ActorFrame {
 				pages[#pages + 1] = {text = string.format("%5.2f", meter), color = HVColor.GetMSDRatingColor(meter)}
 			end
 			if entry then
-				local danName = formatDanName(entry.dan)
+				entry = HV.GetDanCalculatorEstimate and HV.GetDanCalculatorEstimate(entry) or entry
+				local chartKey = steps.GetChartKey and steps:GetChartKey()
+				entry = HV.GetFixedDanChartEstimate and HV.GetFixedDanChartEstimate(entry, chartKey, getCurRateValue()) or entry
+				local danName = entry.danLabel or formatDanName(entry.dan)
 				local sublevel = type(entry.sublevel) == "string" and entry.sublevel or ""
-				pages[#pages + 1] = {text = danName .. (sublevel ~= "" and (" " .. sublevel) or ""), color = (HV.GetReformDanColor and HV.GetReformDanColor(entry)) or HVColor.GetMSDRatingColor(tonumber(entry.dp) or 1)}
+				pages[#pages + 1] = {text = danName .. (sublevel ~= "" and (" " .. sublevel) or ""), estimate = entry, color = (HV.GetReformDanColor and HV.GetReformDanColor(entry)) or HVColor.GetMSDRatingColor(tonumber(entry.dp) or 1)}
 			end
 			self.hvRatingPages = pages
 			self.hvRatingPage = 1
 			local showRating = HV.ShowMSD() and (meter > 0 or entry ~= nil)
 			self:visible(showRating)
 			if showRating then
-				self:settext(pages[1].text):diffuse(pages[1].color)
+				HV.SetDanRatingText(self, pages[1].text, pages[1].estimate, pages[1].color)
 				if #pages > 1 then self:sleep(3):queuecommand("CycleRating") end
 			else
 				self:settext("")
@@ -283,7 +286,8 @@ local t = Def.ActorFrame {
 			if not self.hvRatingPages or #self.hvRatingPages < 2 or not self:GetVisible() then return end
 			self.hvRatingPage = self.hvRatingPage % #self.hvRatingPages + 1
 			local page = self.hvRatingPages[self.hvRatingPage]
-			self:settext(page.text):diffuse(page.color):sleep(3):queuecommand("CycleRating")
+			HV.SetDanRatingText(self, page.text, page.estimate, page.color)
+			self:sleep(3):queuecommand("CycleRating")
 		end,
 		CurrentRateChangedMessageCommand = function(self) self:queuecommand("Set") end,
 	},

@@ -18,21 +18,25 @@ local footerH = 40
 
 -- Dan charts use osu!mania scoring for the PB score shown in song select.
 local danChartOD = {}
-local danChartGroups = {
-	{7.5, {"X5e0e976dbdaab2f5069442aea7fda6c36a04d762", "X8ab233319206a935ead8b2c7a0e1152f9b9f5b87", "X80a4f4287fa3d8fcf3b641ad8acb8c4488ca201c"}},
-	{8, {"Xc53ee08d09d27f898c7ef3d98333e518c669d6db", "Xedd50d654858a1ccc7cfbbb3ef36c7ab25d8a2d6", "Xeef4999a0ff9e1f63d01dd7ad73d95c369352e88"}},
-	{8.5, {"X210aeea71e81bafb1c802308418f82423c053e58", "Xeedf0fdef274f0039729a941fe12c0fbb5ccdf37", "X50b734f0149077c01f9f95ad9544c63d630b2153", "X6bff4ed380fe33ab39f6f11315312c0a780474cb"}},
-	{9, {"X4da1deb690aaa50aceabefb94460f2f77f739371", "X6e0fa4c42667d269bbcf29b9abe5a00246c4e4fe", "X54c8d0da555ad4bd1840d12c5c90d4be1afd3f8c", "X2ff45475a0c724c00515684d6afe7fed21ac9df8", "X2e0bef9f4b606f6b3ab84a666ccf623fafa859d5", "X9a08688242bc7eb9f795bd8e59cfee1f68d683de", "X7ed0e5b112e7b04014e2d8e7b1b84fbda9188f76"}}
-}
-for _, group in ipairs(danChartGroups) do
-	for _, key in ipairs(group[2]) do danChartOD[string.lower(key):gsub("^x", "")] = group[1] end
+local danChartTierByKey = {}
+local function normalizeDanChartKey(key)
+	return string.lower(tostring(key or "")):gsub("^x", "")
+end
+for tier, rank in ipairs(HV.DanChartRanks or {}) do
+	local od = tier <= 3 and 7.5 or (tier <= 6 and 8 or (tier <= 10 and 8.5 or 9))
+	local danName = rank[1]:gsub(" Dan$", "")
+	for _, key in ipairs(rank[2]) do
+		local normalizedKey = normalizeDanChartKey(key)
+		danChartOD[normalizedKey] = od
+		danChartTierByKey[normalizedKey] = danName
+	end
 end
 
 local function getDanChartOD(score)
 	if not score then return nil end
 	local ok, chartKey = pcall(score.GetChartKey, score)
 	if not ok or not chartKey then return nil end
-	return danChartOD[string.lower(tostring(chartKey)):gsub("^x", "")]
+	return danChartOD[normalizeDanChartKey(chartKey)]
 end
 
 local function getDanOsuManiaAccuracy(score)
@@ -3299,67 +3303,104 @@ local danGreekByNumber = {
 	[19] = "iota", [20] = "kappa",
 }
 
-local function getDanDisplayData(estimate, currentAccent)
+local danTierNames = {
+	"1st", "2nd", "3rd", "4th", "5th", "6th", "7th", "8th", "9th", "10th",
+	"Alpha", "Beta", "Gamma", "Delta", "Epsilon", "Zeta", "Eta", "Theta", "Iota", "Kappa"
+}
+
+local function getDanDisplayData(estimate)
 	if not estimate or type(estimate.dan) ~= "string" then return nil end
-	local accent = currentAccent or HVColor.Accent or color("#5ABAFF")
-	local redColor = color("#FF3333")
-	local darkRedColor = color("#9E1B1B")
-	local whiteColor = color("1,1,1,1")
-
+	if estimate.celestial then
+		local gradient = HV.GetCelestialDanGradient and HV.GetCelestialDanGradient(estimate.group)
+			or {color("#A8E8FF"), color("#FFFFFF")}
+		return estimate.category, tostring(estimate.sublevel or ""), gradient, nil, estimate.group
+	end
 	local danStr = tostring(estimate.dan)
-	if estimate.belowFirst or danStr == "0" then return "0", "", color("#808080") end
-	if estimate.aboveKappa or danStr == "∞" then return "∞", "", color("#404040") end
-	local num = tonumber(danStr:match("^(%d+)"))
-	local iconText = ""
-	local danColor = accent
+	if estimate.belowFirst or danStr == "0" then
+		local gray = color("#808080")
+		return "0", "", {gray, gray}, nil
+	end
+	local infinity = string.char(226, 136, 158)
+	if estimate.aboveKappa or (not estimate.fixedDanChart and (tonumber(estimate.dp) or 0) >= 21) or danStr == infinity then
+		local gray = color("#404040")
+		return infinity, "", {gray, gray}, nil
+	end
 
+	local num = tonumber(danStr:match("^(%d+)"))
+	local gradient = HV.GetReformDanGradient and HV.GetReformDanGradient(estimate)
+	local greekKey = num and danGreekByNumber[num]
+		or string.lower(danStr):gsub("%s*dan$", ""):gsub("^%s+", ""):gsub("%s+$", "")
+	local tierName = num and danTierNames[num]
+		or (greekKey ~= "" and (greekKey:sub(1, 1):upper() .. greekKey:sub(2)))
+	local iconText
 	if num then
-		if num >= 1 and num <= 10 then
-			iconText = tostring(num)
-			danColor = accent
-		elseif num >= 11 and danGreekByNumber[num] then
-			local key = danGreekByNumber[num]
-			local g = danGreekMap[key]
+		if num >= 11 and danGreekByNumber[num] then
+			local g = danGreekMap[danGreekByNumber[num]]
 			iconText = g and g.letter or tostring(num)
-			if g and g.white then
-				danColor = whiteColor
-			elseif g and g.darkRed then
-				danColor = darkRedColor
-			elseif g and g.step then
-				danColor = HV.LerpColor(g.step / 7, accent, redColor)
-			end
 		else
 			iconText = tostring(num)
-			danColor = accent
 		end
 	else
 		local key = string.lower(danStr):gsub("%s*dan$", ""):gsub("^%s+", ""):gsub("%s+$", "")
 		local g = danGreekMap[key]
-		if g then
-			iconText = g.letter
-			if g.white then
-				danColor = whiteColor
-			elseif g.darkRed then
-				danColor = darkRedColor
-			elseif g.step then
-				danColor = HV.LerpColor(g.step / 7, accent, redColor)
-			end
-		else
-			iconText = danStr
-			danColor = accent
-		end
+		iconText = g and g.letter or danStr
 	end
 
-	local sublevelText = tostring(estimate.sublevel or "")
-	return iconText, sublevelText, danColor
+	return iconText, tostring(estimate.sublevel or ""), gradient or {color("#FFFFFF"), color("#FFFFFF")}, tierName
 end
 
-local function applyDanColor(actor, c)
-	if not actor or not c then return end
-	if type(c) == "table" then
-		actor:diffuse(c[1] or c.r or 1, c[2] or c.g or 1, c[3] or c.b or 1, c[4] or c.a or 1)
-	else
-		actor:diffuse(c)
+local function applyDanGradient(actor, text, stops)
+	if not actor or type(stops) ~= "table" or #stops < 2 then return end
+	actor:ClearAttributes():diffuse(color("#FFFFFF"))
+	local glyphCount = 0
+	local value = tostring(text or "")
+	for i = 1, #value do
+		local byte = value:byte(i)
+		if byte < 128 or byte >= 192 then glyphCount = glyphCount + 1 end
+	end
+	if glyphCount == 0 then return end
+	for glyph = 0, glyphCount - 1 do
+		local glyphColor
+		if #stops >= 3 then
+			local band = math.min(#stops, math.floor(((glyph + 0.5) / glyphCount) * #stops) + 1)
+			glyphColor = stops[band]
+		else
+			local at = glyphCount == 1 and 0.5 or glyph / (glyphCount - 1)
+			glyphColor = HV.LerpColor(at, stops[1], stops[2])
+		end
+		actor:AddAttribute(glyph, {Length = 1, Diffuse = glyphColor})
+	end
+end
+
+local function applyDanIconGradient(frame, text, stops, tierName, celestialTier)
+	if not frame or type(stops) ~= "table" then return end
+	local glyph = frame:GetChild("Glyph")
+	local selectedRaster = type(tierName) == "string" and ("Dan" .. tierName .. "GradientGlyph") or nil
+	local selectedCelestial = type(celestialTier) == "string" and ("Celestial" .. celestialTier .. "Glyph") or nil
+	local reformImage = frame:GetChild("ReformGraphic")
+	local celestialImage = frame:GetChild("CelestialGraphic")
+	if reformImage then reformImage:visible(false) end
+	if celestialImage then celestialImage:visible(false) end
+	if selectedCelestial then
+		if celestialImage then
+			celestialImage:Load(THEME:GetPathG("", "Signicial/" .. celestialTier .. ".png"))
+			celestialImage:draworder(1):xy(0, 8):zoom(0.22):diffuse(stops[1]):visible(true)
+		end
+		if glyph then glyph:draworder(2):settext(text):visible(true):diffuse(stops[2] or color("#FFFFFF")):xy(22, 31):zoom(0.5) end
+		return
+	end
+	if selectedRaster then
+		if reformImage then
+			reformImage:Load(THEME:GetPathG("", "DanGradients/" .. tierName .. ".png"))
+			reformImage:draworder(1):xy(0, 5):zoom(0.55):visible(true)
+		end
+		if glyph then glyph:settext(""):visible(false) end
+		return
+	end
+	if glyph then
+		glyph:draworder(2):xy(0, 0):zoom(0.8):settext(text):visible(true)
+		local solid = #stops >= 3 and stops[2] or HV.LerpColor(0.5, stops[1], stops[2])
+		glyph:diffuse(solid)
 	end
 end
 
@@ -3418,13 +3459,17 @@ t[#t + 1] = Def.ActorFrame {
 			if isHovering and selectedData.steps then
 				local rate = tonumber(getCurRateValue()) or tonumber(selectedData.rate) or 1
 				local chartKey = selectedData.steps.GetChartKey and selectedData.steps:GetChartKey()
-				local diskKey = chartKey and chartRatingCacheKey("isor-dp-v5", chartKey, rate)
+				local fixedDan = ThemePrefs.Get("HV_DanCalculatorMode") ~= "Celestial" and chartKey and danChartTierByKey[normalizeDanChartKey(chartKey)]
+				local diskKey = chartKey and chartRatingCacheKey("isor-dp-v6", chartKey, rate)
 				local estimate = selectedData.isorEstimate or (diskKey and persistentChartRatingCache[diskKey])
-				if estimate and type(estimate.dan) == "string" then
+				estimate = HV.GetDanCalculatorEstimate and HV.GetDanCalculatorEstimate(estimate) or estimate
+				if fixedDan or (estimate and type(estimate.dan) == "string") then
 					local mx, my = INPUTFILTER:GetMouseX(), INPUTFILTER:GetMouseY()
 					danTooltipActor:visible(true):xy(mx + 12, my + 12)
 
-					local desc = string.format("DP %.2f", estimate.dp or 0)
+					local desc = fixedDan and (fixedDan .. " Dan")
+						or (estimate.celestial and ((estimate.tier or "Celestial") .. "\n") or "")
+							.. string.format("DP %.2f", estimate.dp or 0)
 
 					local txt = danTooltipActor:GetChild("Text")
 					local bg = danTooltipActor:GetChild("Bg")
@@ -3464,8 +3509,8 @@ t[#t + 1] = Def.ActorFrame {
 			self:visible(false)
 			local icon = self:GetChild("Icon")
 			local sublevel = self:GetChild("Sublevel")
-			if icon then icon:settext("") end
-			if sublevel then sublevel:settext("") end
+			if icon then applyDanIconGradient(icon, "", {color("#FFFFFF"), color("#FFFFFF")}) end
+			if sublevel then sublevel:settext(""):visible(false) end
 			return
 		end
 		local rate = tonumber(getCurRateValue()) or tonumber(data.rate) or 1
@@ -3473,9 +3518,9 @@ t[#t + 1] = Def.ActorFrame {
 		if rate <= 0 then rate = 1 end
 		local chartKey = data.steps and data.steps.GetChartKey and data.steps:GetChartKey()
 		local function calculateEstimateAtRate(targetRate)
-			local diskKey = chartKey and chartRatingCacheKey("isor-dp-v5", chartKey, targetRate)
+			local diskKey = chartKey and chartRatingCacheKey("isor-dp-v6", chartKey, targetRate)
 			local estimate = diskKey and persistentChartRatingCache[diskKey]
-			if type(estimate) ~= "table" or type(estimate.dp) ~= "number" or type(estimate.dan) ~= "string" then
+			if type(estimate) ~= "table" or type(estimate.dp) ~= "number" or type(estimate.dan) ~= "string" or type(estimate.mod_sr) ~= "number" then
 				estimate = nil
 			end
 			local chartEvents = not estimate and data.song and data.steps and getISORChartData(data.steps, targetRate)
@@ -3528,7 +3573,7 @@ t[#t + 1] = Def.ActorFrame {
 					classification.confidence)
 				if estimate and diskKey then
 					local saved = {dan = estimate.dan, sublevel = estimate.sublevel, dp = estimate.dp,
-						family = estimate.family, confidence = estimate.confidence}
+						family = estimate.family, confidence = estimate.confidence, mod_sr = estimate.mod_sr, sk_key = estimate.sk_key}
 					storeChartRatingCache(diskKey, saved)
 				end
 			end
@@ -3545,6 +3590,10 @@ t[#t + 1] = Def.ActorFrame {
 			local anchor = calculateEstimateAtRate(anchorRate)
 			if anchor and type(anchor.dp) == "number" then
 				estimate.dp = rate > 0.75 and math.max(estimate.dp, anchor.dp) or math.min(estimate.dp, anchor.dp)
+				if tonumber(estimate.mod_sr) and tonumber(anchor.mod_sr) then
+					estimate.mod_sr = rate > 0.75 and math.max(estimate.mod_sr, anchor.mod_sr)
+						or math.min(estimate.mod_sr, anchor.mod_sr)
+				end
 				if estimate.dp < 1 then
 					estimate.dan, estimate.sublevel = "0", ""
 				elseif estimate.dp >= 21 then
@@ -3555,30 +3604,39 @@ t[#t + 1] = Def.ActorFrame {
 					estimate.dan = ({"1st", "2nd", "3rd", "4th", "5th", "6th", "7th", "8th", "9th", "10th", "Alpha", "Beta", "Gamma", "Delta", "Epsilon", "Zeta", "Eta", "Theta", "Iota", "Kappa"})[tier + 1]
 					estimate.sublevel = frac < 0.20 and "Low" or frac < 0.40 and "Mid-Low" or frac < 0.60 and "Mid" or frac < 0.80 and "Mid-High" or "High"
 				end
-				local diskKey = chartKey and chartRatingCacheKey("isor-dp-v5", chartKey, rate)
+				local diskKey = chartKey and chartRatingCacheKey("isor-dp-v6", chartKey, rate)
 				if diskKey then storeChartRatingCache(diskKey, {dan = estimate.dan, sublevel = estimate.sublevel,
-					dp = estimate.dp, family = estimate.family, confidence = estimate.confidence}) end
+						dp = estimate.dp, family = estimate.family, confidence = estimate.confidence, mod_sr = estimate.mod_sr, sk_key = estimate.sk_key}) end
 			end
 		end
 		estimate = data.song and data.steps and estimate or nil
+		local calculatorMode = ThemePrefs.Get("HV_DanCalculatorMode")
+		if calculatorMode ~= "Celestial" and type(estimate) == "table" and math.abs(rate - 1.0) < 0.0005 then
+			local fixedDan = danChartTierByKey[normalizeDanChartKey(chartKey)]
+			if fixedDan then
+				-- Use the official Dan chart's fixed rank at 1x, without mutating
+				-- the cached Reform estimate shared with other rate lookups.
+				estimate = {dan = fixedDan, sublevel = "", dp = estimate.dp, position = 0.5, fixedDanChart = true}
+			end
+		end
 		data.isorEstimate = estimate
-		self:visible(estimate ~= nil)
+		local displayEstimate = HV.GetDanCalculatorEstimate and HV.GetDanCalculatorEstimate(estimate) or estimate
+		data.isorCelestialEstimate = displayEstimate and displayEstimate.celestial and displayEstimate or nil
+		self:visible(displayEstimate ~= nil)
 		local iconActor = self:GetChild("Icon")
 		local sublevelActor = self:GetChild("Sublevel")
-		if not estimate then
-			if iconActor then iconActor:settext("") end
-			if sublevelActor then sublevelActor:settext("") end
+		if not displayEstimate then
+			if iconActor then applyDanIconGradient(iconActor, "", {color("#FFFFFF"), color("#FFFFFF")}) end
+			if sublevelActor then sublevelActor:settext(""):visible(false) end
 			return
 		end
 
-		local currentAccent = HVColor.Accent or accentColor
-		local iconText, sublevelText, danColor = getDanDisplayData(estimate, currentAccent)
+		local iconText, sublevelText, danGradient, tierName, celestialTier = getDanDisplayData(displayEstimate)
 
-		iconActor:settext(iconText)
-		applyDanColor(iconActor, danColor)
+		applyDanIconGradient(iconActor, iconText, danGradient, tierName, celestialTier)
 
-		sublevelActor:settext(sublevelText)
-		applyDanColor(sublevelActor, danColor)
+		sublevelActor:settext(sublevelText):visible(sublevelText ~= "")
+		applyDanGradient(sublevelActor, sublevelText, danGradient)
 
 		self:xy(diffSelectorX + diffTabW + 34, diffSelectorTopY + 16)
 	end,
@@ -3586,16 +3644,19 @@ t[#t + 1] = Def.ActorFrame {
 	CurrentRateChangedMessageCommand = function(self) self:playcommand("Set") end,
 	MSDModeChangedMessageCommand = function(self) self:playcommand("Set") end,
 	ThemePrefChangedMessageCommand = function(self, params)
-		if not params or params.Name == "HV_ShowMSD" or params.Name == "HV_EnableDanCalculator" or params.Name == "HV_AccentColor" then
+		if not params or params.Name == "HV_ShowMSD" or params.Name == "HV_EnableDanCalculator" or params.Name == "HV_DanCalculatorMode" or params.Name == "HV_AccentColor" then
 			self:playcommand("Set")
 		end
 	end,
 
-	LoadFont("MSD 20px") .. {
+	Def.ActorFrame {
 		Name = "Icon",
 		InitCommand = function(self)
-			self:halign(0.5):valign(0):xy(0, 0):zoom(0.95)
-		end
+			self:xy(0, -8):zoom(0.95)
+		end,
+		Def.Sprite {Name = "ReformGraphic", OnCommand = function(self) self:halign(0.5):valign(0):visible(false) end},
+		Def.Sprite {Name = "CelestialGraphic", OnCommand = function(self) self:halign(0.5):valign(0):visible(false) end},
+		LoadFont("MSD 20px") .. {Name = "Glyph", InitCommand = function(self) self:draworder(2):halign(0.5):valign(0):zoom(0.8) end},
 	},
 	LoadFont("MSD 20px") .. {
 		Name = "Sublevel",
