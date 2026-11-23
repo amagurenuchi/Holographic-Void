@@ -32,6 +32,7 @@ local function loadValuesTable()
 	MovableValues.ComboZoom = size("ComboZoom")
 	MovableValues.MiniProgressBarX = coord("MiniProgressBarX")
 	MovableValues.MiniProgressBarY = coord("MiniProgressBarY")
+	MovableValues.MiniProgressBarZoom = size("MiniProgressBarZoom")
 	MovableValues.ErrorBarX = coord("ErrorBarX")
 	MovableValues.ErrorBarY = coord("ErrorBarY")
 	MovableValues.TargetTrackerX = coord("TargetTrackerX")
@@ -68,6 +69,8 @@ local function loadValuesTable()
 	MovableValues.LifeP1Rotation = coord("LifeP1Rotation")
 	MovableValues.PracticeCDGraphX = coord("PracticeCDGraphX")
 	MovableValues.PracticeCDGraphY = coord("PracticeCDGraphY")
+	MovableValues.PracticeLoopAttemptsX = coord("PracticeLoopAttemptsX")
+	MovableValues.PracticeLoopAttemptsY = coord("PracticeLoopAttemptsY")
 	MovableValues.BPMTextX = coord("BPMTextX")
 	MovableValues.BPMTextY = coord("BPMTextY")
 	MovableValues.BPMTextZoom = size("BPMTextZoom")
@@ -240,15 +243,17 @@ function SelectGameplayCustomizationEntry(entry)
 		if border then
 			local matches = entry ~= nil and candidate.key == entry.key
 			borders[border] = borders[border] or matches
-			if matches then
-				selectedBorder = border
-			end
 		end
 	end
 	for border, selected in pairs(borders) do
 		-- Borders are rendered by the editor's screen-level outline. Keeping
 		-- embedded borders hidden lets the outline work for hidden HUD actors.
-		border:visible(false):diffusealpha(selected and 1 or 0)
+		local ok = pcall(function()
+			border:visible(false):diffusealpha(selected and 1 or 0)
+		end)
+		-- Practice-mode reloads can destroy and recreate their actors while the
+		-- customization menu still holds the previous border reference.
+		if selected and ok then selectedBorder = border end
 	end
 	GameplayCustomizationSelectedBorder = selectedBorder
 	MESSAGEMAN:Broadcast("MovableUpdated", {button = entry and entry.button})
@@ -670,6 +675,11 @@ Movable = {
 		DeviceButton_up = { property = "AddY", inc = -3 }, DeviceButton_down = { property = "AddY", inc = 3 },
 		DeviceButton_left = { property = "AddX", inc = -5 }, DeviceButton_right = { property = "AddX", inc = 5 }
 	},
+	DeviceButton_e = {
+		name = "MiniProgressBar", textHeader = "Mini Progress Bar Zoom:",
+		element = {}, properties = {"Zoom"}, elementTree = "GameplaySizes",
+		DeviceButton_up = { property = "Zoom", inc = 0.05 }, DeviceButton_down = { property = "Zoom", inc = -0.05 }
+	},
 	DeviceButton_w = {
 		name = "DisplayPercent",
 		textHeader = "Current Percent Position:",
@@ -1042,6 +1052,13 @@ Movable = {
 			property = "AddX",
 			inc = 5
 		}
+	},
+	DeviceButton_F1 = {
+		name = "PracticeLoopAttempts",
+		textHeader = "Loop Attempt Graph Position:",
+		element = {}, properties = {"X", "Y"}, elementTree = "GameplayXYCoordinates",
+		DeviceButton_up = {property = "AddY", inc = -5}, DeviceButton_down = {property = "AddY", inc = 5},
+		DeviceButton_left = {property = "AddX", inc = -5}, DeviceButton_right = {property = "AddX", inc = 5}
 	},
 	DeviceButton_x = {
 		name = "BPMText",

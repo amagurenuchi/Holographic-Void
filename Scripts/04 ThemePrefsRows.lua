@@ -1016,6 +1016,11 @@ function OptionRowMiniProgressBar()
 end
 _G["OptionRowMiniProgressBar"] = OptionRowMiniProgressBar
 
+function OptionRowMiniProgressBarType()
+	return HVThemePrefRow("HV_MiniProgressBarType", "Mini Progress Bar Type")
+end
+_G["OptionRowMiniProgressBarType"] = OptionRowMiniProgressBarType
+
 -- Practice Mode toggle (used in ScreenPlayerOptions)
 function PracticeMode()
 	return {

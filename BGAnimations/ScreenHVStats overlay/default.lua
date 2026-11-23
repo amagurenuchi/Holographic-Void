@@ -389,8 +389,8 @@ skillPredictionModeButtons = {
 }
 
 perHandModeButtons = {
-	{mode = perHandModes.Ratio, left = sessionPanelX + 24, top = sessionPanelY + 48, width = 160, label = "Hand Distribution"},
-	{mode = perHandModes.Graph, left = sessionPanelX + 194, top = sessionPanelY + 48, width = 180, label = "Bias Distribution"}
+	{mode = perHandModes.Ratio, left = sessionPanelX + 24, top = sessionPanelY + 48, width = 160, label = "Overview"},
+	{mode = perHandModes.Graph, left = sessionPanelX + 194, top = sessionPanelY + 48, width = 180, label = "Distribution across Difficulty"}
 }
 
 function getPerHandModeAtPosition(mouseX, mouseY)
@@ -2918,7 +2918,7 @@ function playcountPanel()
 			Def.Quad{Name="BG",InitCommand=function(self)self:halign(0):valign(0):zoomto(140,24)end},
 			Def.Quad{Name="Border",InitCommand=function(self)self:halign(0):valign(0):zoomto(140,24):diffusealpha(0.15)end},
 			Def.Quad{Name="Indicator",InitCommand=function(self)self:halign(0):valign(0):zoomto(3,24):visible(false)end},
-			LoadFont("Common Normal") .. {Name="Label",InitCommand=function(self)self:xy(70,12):halign(0.5):valign(0.5):zoom(0.28):settext("Monthly Timeline")end}
+			LoadFont("Common Normal") .. {Name="Label",InitCommand=function(self)self:xy(70,12):halign(0.5):valign(0.5):zoom(0.28):settext("Playcount by Month")end}
 		},
 		Def.ActorFrame {
 			Name="PlaycountActiveButton",
@@ -2936,7 +2936,7 @@ function playcountPanel()
 			Def.Quad{Name="BG",InitCommand=function(self)self:halign(0):valign(0):zoomto(180,24)end},
 			Def.Quad{Name="Border",InitCommand=function(self)self:halign(0):valign(0):zoomto(180,24):diffusealpha(0.15)end},
 			Def.Quad{Name="Indicator",InitCommand=function(self)self:halign(0):valign(0):zoomto(3,24):visible(false)end},
-			LoadFont("Common Normal") .. {Name="Label",InitCommand=function(self)self:xy(90,12):halign(0.5):valign(0.5):zoom(0.28):settext("Weekly Hourly Matrix")end}
+			LoadFont("Common Normal") .. {Name="Label",InitCommand=function(self)self:xy(90,12):halign(0.5):valign(0.5):zoom(0.28):settext("Most Active Times")end}
 		},
 		Def.ActorMultiVertex {
 			Name="PlaycountLine",

@@ -33,6 +33,8 @@ local defaultGameplayCoordinates = {
 	LifeP1Rotation = 0,
 	PracticeCDGraphX = 10,
 	PracticeCDGraphY = 85,
+	PracticeLoopAttemptsX = 107.5,
+	PracticeLoopAttemptsY = 151,
 	BPMTextX = SCREEN_CENTER_X,
 	BPMTextY = SCREEN_BOTTOM - 30,
 	RecentJudgmentDisplayX = -160,
@@ -64,7 +66,8 @@ local defaultGameplaySizes = {
 	NotefieldWidth = 1.0,
 	NotefieldHeight = 1.0,
 	NotefieldSpacing = 0.0,
-	ErrorBarScale = 1.0
+	ErrorBarScale = 1.0,
+	MiniProgressBarZoom = 1.0
 }
 
 local defaultConfig = {

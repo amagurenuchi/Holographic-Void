@@ -476,6 +476,7 @@ local HVPrefs = {
 	-- 	Values = {"Off", "Mean", "TapOffset", "StdDev", "J4", "MARatio", "DeltaHand"}
 	-- },
 	HV_MiniProgressBar = { Default = true, Choices = {"Off", "On"}, Values = {false, true} },
+	HV_MiniProgressBarType = { Default = "Bar", Choices = {"Bar", "Pie"}, Values = {"Bar", "Pie"} },
 
 	-- Gameplay: Show Hit Mean Display
 	HV_ShowMean = {

@@ -38,6 +38,9 @@ local peakNPS = 0
 local curNPS = 0
 local lastMusicSeconds = nil
 local npsReferenceSeconds = nil
+local verts = {{{0, 0, 0}, Color.White}}
+local total = 1
+local graphPeakNPS = initialPeak
 
 -- Cached UI references
 local npsTextActor = nil
@@ -64,6 +67,8 @@ end
 local function resetNPSWindow()
 	noteTable = {}
 	noteSum = 0
+	curNPS = 0
+	peakNPS = 0
 	lastMusicSeconds = nil
 	npsReferenceSeconds = nil
 end
@@ -83,20 +88,20 @@ local function getCurrentMusicSeconds()
 end
 
 local function removeNote()
-	local exit = false
-	while not exit do
-		if #noteTable >= 1 then
-			-- Calculate time since start (mimicking GetTimeSinceStart for gameplay)
-			local currentTime = getCurrentMusicSeconds()
-			local noteTime = noteTable[1][1]
-			if noteTime + npsWindow < currentTime then
-				noteSum = noteSum - noteTable[1][2]
-				table.remove(noteTable, 1)
-			else
-				exit = true
-			end
+	-- Check the clock first: a backward seek resets noteTable from inside
+	-- getCurrentMusicSeconds(). Checking it after the queue length could leave
+	-- this function indexing an entry from the old queue after that reset.
+	local currentTime = getCurrentMusicSeconds()
+	while #noteTable > 0 do
+		local note = noteTable[1]
+		if not note then
+			-- Keep the queue dense if it was disturbed by a reset/seek.
+			table.remove(noteTable, 1)
+		elseif note[1] + npsWindow < currentTime then
+			noteSum = noteSum - note[2]
+			table.remove(noteTable, 1)
 		else
-			exit = true
+			break
 		end
 	end
 end
@@ -191,9 +196,6 @@ t[#t + 1] = Def.ActorFrame {
 }
 
 -- Graph Container
-local verts = {{{0, 0, 0}, Color.White}}
-local total = 1
-local graphPeakNPS = initialPeak
 
 local graphVerts = Def.ActorFrame {
 	Name = "NPSGraph",
@@ -242,8 +244,8 @@ local graphVerts = Def.ActorFrame {
 		BeginCommand = function(self)
 			peakNPS = 0
 			graphPeakNPS = initialPeak
-			self:SetDrawState {First = 1, Num = -1}
 			self:SetVertices(verts)
+			self:visible(false)
 			self:queuecommand("GraphUpdate")
 		end,
 		GraphUpdateCommand = function(self)
@@ -265,8 +267,17 @@ local graphVerts = Def.ActorFrame {
 			self:SetVertices(verts)
 			self:addx(-graphWidth / maxVerts)
 			self:SetDrawState {First = math.max(1, #verts - maxVerts), Num = math.min(maxVerts, #verts)}
+			self:visible(true)
 			self:sleep(graphFreq)
 			self:queuecommand("GraphUpdate")
+		end,
+		PracticeModeReloadMessageCommand = function(self)
+			total = 1
+			graphPeakNPS = initialPeak
+			verts = {{{0, 0, 0}, Color.White}}
+			self:SetVertices(verts)
+			-- A line strip needs at least two vertices; wait for the next sample.
+			self:visible(false)
 		end
 	},
 	MovableBorder(graphWidth, graphHeight, 1, graphWidth / 2, graphHeight / 2)

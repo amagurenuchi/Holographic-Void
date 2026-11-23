@@ -1,9 +1,6 @@
 --- Holographic Void: Offset Plot Graph
 -- Ported from spawncamping-wallhack OffsetGraph.lua
--- Shows timing offsets as colored dots on a time axis with judgment threshold lines.
--- Supports judge rescoring via OffsetPlotModification messages.
--- Supports hand-specific highlighting via ToggleHands.
--- Supports hover tooltip showing running score/stats at cursor position.
+
 
 local tst = ms.JudgeScalers
 local judge = (PREFSMAN:GetPreference("SortBySSRNormPercent") and 4 or GetTimingDifficulty())

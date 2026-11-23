@@ -183,7 +183,11 @@ local t = Def.ActorFrame {
 					local gx = getActorLeft(self)
 					local p = math.max(0, math.min((mx - gx) / wodth, 1))
 					local time = p * getChartLastSecond(song, GAMESTATE:GetCurrentSteps())
-					SCREENMAN:GetTopScreen():SetSongPosition(time)
+					if GAMESTATE:IsPracticeMode() and HV and HV.SeekPracticeSongPosition then
+						HV.SeekPracticeSongPosition(time, false)
+					else
+						SCREENMAN:GetTopScreen():SetSongPosition(time)
+					end
 				end
 			end
 		end

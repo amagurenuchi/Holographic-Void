@@ -60,6 +60,11 @@ local function getScoreFinalWifePercent(score)
 end
 
 local function getGoalTrackerTargetWife()
+	local loopActive = tonumber(HV and HV.PracticeLoopStart) and tonumber(HV.PracticeLoopEnd)
+		and HV.PracticeLoopEnd > HV.PracticeLoopStart
+	if loopActive then
+		return tonumber(HV.PracticeLoopBestScore) or tonumber(HV.PracticeLoopCurrentScore) or 0
+	end
 	local mode = ThemePrefs.Get("HV_GoalTargetType") or "Target"
 	if mode == "PB" or mode == "PBReplay" then
 		local best = GetDisplayScore()
@@ -157,12 +162,18 @@ local function recomputeScoresFromMessage(msg)
 		diff = tonumber(msg.WifeDifferential)
 	end
 	if diff == nil then diff = 0 end
-	targetPoints = current - diff
-
 	-- Current accuracy percent (normalized to passed notes)
 	local curMaxPts = computeCurrentMaxPoints()
 	if curMaxPts > 0 then
 		curPct = math.min((current / curMaxPts) * 100, 100)
+	end
+	local loopActive = tonumber(HV and HV.PracticeLoopStart) and tonumber(HV.PracticeLoopEnd)
+		and HV.PracticeLoopEnd > HV.PracticeLoopStart
+	if loopActive then
+		local loopTarget = tonumber(HV.PracticeLoopBestScore) or tonumber(HV.PracticeLoopCurrentScore)
+		targetPoints = loopTarget and (loopTarget / 100 * curMaxPts) or current
+	else
+		targetPoints = current - diff
 	end
 
 	-- Incremental percent (normalized to full chart points) for "Grade X cleared" thresholds.
@@ -275,7 +286,23 @@ local t = Def.ActorFrame {
 	end,
 	RefreshTargetCommand = function(self)
 		targetWife = getGoalTrackerTargetWife()
+		local loopActive = tonumber(HV and HV.PracticeLoopStart) and tonumber(HV.PracticeLoopEnd)
+			and HV.PracticeLoopEnd > HV.PracticeLoopStart
+		if loopActive then
+			local loopTarget = tonumber(HV.PracticeLoopBestScore) or tonumber(HV.PracticeLoopCurrentScore)
+			local maxPts = computeCurrentMaxPoints()
+			targetPoints = loopTarget and (loopTarget / 100 * maxPts) or wifePoints
+		end
 		self:playcommand("Update")
+	end,
+	PracticeLoopChangedMessageCommand = function(self)
+		self:playcommand("RefreshTarget")
+	end,
+	PracticeLoopBestChangedMessageCommand = function(self)
+		self:playcommand("RefreshTarget")
+	end,
+	PracticeLoopScoreUpdatedMessageCommand = function(self)
+		self:playcommand("RefreshTarget")
 	end,
 	JudgmentMessageCommand = function(self, msg)
 		if msg.Judgment == "TapNoteScore_W1" or

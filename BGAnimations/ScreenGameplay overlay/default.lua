@@ -4,11 +4,46 @@ local isSync = lScreen:find("Sync") ~= nil
 local isCustomizeGameplay = playerConfig:get_data(pn_to_profile_slot(PLAYER_1)).CustomizeGameplay
 local HV_PointsLost = 0
 local HV_MaxPoints = 1 -- Placeholder, will be set in BeginCommand
+local HV_LastGoalDifferential = 0
+local HV_LastPBGoalDifferential = 0
+local HV_PracticeGoalDifferentialBase = 0
+local HV_PracticePBGoalDifferentialBase = 0
 local HV_PBThreshold = 0
 local HV_JudgeScale = 1.0
 local HV_AutoFailJudgeCounts = { W2 = 0, W3 = 0, W4 = 0, W5 = 0, Miss = 0 }
 local HV_RidiculousCount = 0
 local HV_AutoFailStopped = false
+local practiceStatsBase = { taps = {}, holds = {}, rolls = {}, wifePoints = 0, maxCombo = 0 }
+
+local function capturePracticeStatsBase()
+	local stageStats = STATSMAN:GetCurStageStats()
+	local pss = stageStats and stageStats:GetPlayerStageStats(pn)
+	if not pss then return end
+	for _, score in ipairs({"TapNoteScore_W1", "TapNoteScore_W2", "TapNoteScore_W3", "TapNoteScore_W4", "TapNoteScore_W5", "TapNoteScore_Miss", "TapNoteScore_HitMine"}) do
+		practiceStatsBase.taps[score] = pss:GetTapNoteScores(score) or 0
+	end
+	for _, score in ipairs({"HoldNoteScore_Held", "HoldNoteScore_LetGo", "HoldNoteScore_MissedHold"}) do
+		practiceStatsBase.holds[score] = pss:GetHoldNoteScores(score) or 0
+	end
+	if pss.GetRollNoteScores then
+		for _, score in ipairs({"RollNoteScore_Held", "RollNoteScore_LetGo", "RollNoteScore_MissedRoll"}) do
+			practiceStatsBase.rolls[score] = pss:GetRollNoteScores(score) or 0
+		end
+	end
+	if pss.GetWifePoints then
+		local ok, value = pcall(pss.GetWifePoints, pss)
+		practiceStatsBase.wifePoints = ok and (tonumber(value) or 0) or 0
+	end
+	practiceStatsBase.maxCombo = pss.MaxCombo and pss:MaxCombo() or 0
+end
+
+local function practiceCount(pss, kind, score)
+	local current = 0
+	if kind == "taps" then current = pss:GetTapNoteScores(score) or 0
+	elseif kind == "holds" then current = pss:GetHoldNoteScores(score) or 0
+	elseif kind == "rolls" and pss.GetRollNoteScores then current = pss:GetRollNoteScores(score) or 0 end
+	return math.max(0, current - ((practiceStatsBase[kind] or {})[score] or 0))
+end
 local failSfxPath = THEME:GetPathS("", "ScreenGameplay failed")
 local failSfxPlayed = false
 -- Check the theme's actual files directly. GetPathG("side") can resolve a
@@ -345,11 +380,21 @@ local t = Def.ActorFrame {
 			end
 		end
 	end,
+	PracticeModeReloadMessageCommand = function(self)
+		capturePracticeStatsBase()
+		HV_PracticeGoalDifferentialBase = HV_LastGoalDifferential
+		HV_PracticePBGoalDifferentialBase = HV_LastPBGoalDifferential
+		HV_PointsLost = 0
+		HV_RidiculousCount = 0
+		HV_AutoFailJudgeCounts = { W2 = 0, W3 = 0, W4 = 0, W5 = 0, Miss = 0 }
+	end,
 	
 	-- Shared PointsLost Accumulator (Wife3 Adherent)
 	-- Fully compliant with Etterna's internal wife3 scoring and evaluation mechanics
 	JudgmentMessageCommand = function(self, params)
 		if params.Player ~= PLAYER_1 then return end
+		if tonumber(params.WifeDifferential) then HV_LastGoalDifferential = tonumber(params.WifeDifferential) end
+		if tonumber(params.WifePBDifferential) then HV_LastPBGoalDifferential = tonumber(params.WifePBDifferential) end
 		if HV_AutoFailStopped then return end
 		
 		-- Exclude non-tap judgements that don't affect points
@@ -469,7 +514,7 @@ end
 
 local function getGameplayJudgmentCount(pss, judgeName)
 	if judgeName == "Ridiculous" then return HV_RidiculousCount end
-	local count = pss:GetTapNoteScores(judgeName)
+	local count = practiceCount(pss, "taps", judgeName)
 	if judgeName == "TapNoteScore_W1" and HV.EmulateRidiculousEnabled() then
 		count = count - HV_RidiculousCount
 	end
@@ -681,6 +726,10 @@ end -- End progress bar visibility check
 -- Compact progress bar and remaining time, positioned below the combo by default.
 local miniProgressBarEnabled = ThemePrefs.Get("HV_MiniProgressBar") ~= false
 local miniBarW, miniBarH = 50, 4
+local miniProgressBarType = ThemePrefs.Get("HV_MiniProgressBarType") or "Bar"
+local miniProgressBarZoom = gameplaySize("MiniProgressBarZoom")
+local isMiniPie = miniProgressBarType == "Pie"
+if isMiniPie then miniBarW, miniBarH = 24, 24 else miniBarW = miniBarW * miniProgressBarZoom end
 local miniSongLen = 0
 local function setMiniSongLen()
 	miniSongLen = getChartLastSecond(GAMESTATE:GetCurrentSong(), GAMESTATE:GetCurrentSteps())
@@ -697,17 +746,26 @@ if miniProgressBarEnabled and not isSync then
 			self:SetUpdateFunction(function(self) self:playcommand("UpdateMiniBar") end)
 		end,
 		CurrentSongChangedMessageCommand = function(self) setMiniSongLen() end,
-		Def.Quad { Name = "Background", InitCommand = function(self) self:zoomto(miniBarW, miniBarH):diffuse(color("0,0,0,0.3")) end },
-		Def.Quad { Name = "Fill", InitCommand = function(self) self:halign(0):x(-miniBarW / 2):zoomto(0, miniBarH):diffuse(accentColor):diffusealpha(0.8) end,
+		(isMiniPie and Def.Sprite or Def.Quad) { Name = "Background", Texture = isMiniPie and THEME:GetPathG("", "_thick circle (doubleres)") or nil, InitCommand = function(self)
+			if isMiniPie then self:zoomto(miniBarW * miniProgressBarZoom, miniBarH * miniProgressBarZoom):diffuse(color("0,0,0,0.3"))
+			else self:zoomto(miniBarW, miniBarH):diffuse(color("0,0,0,0.3")) end
+		end },
+		(isMiniPie and Def.Sprite or Def.Quad) { Name = "Fill", Texture = isMiniPie and THEME:GetPathG("", "_thick circle (doubleres)") or nil, InitCommand = function(self)
+			if isMiniPie then self:zoomto(miniBarW * miniProgressBarZoom, miniBarH * miniProgressBarZoom):diffuse(accentColor):diffusealpha(0.8):rotationz(90)
+			else self:halign(0):x(-miniBarW / 2):zoomto(0, miniBarH):diffuse(accentColor):diffusealpha(0.8) end
+		end,
 			UpdateMiniBarCommand = function(self)
-				if miniSongLen > 0 then self:zoomto(miniBarW * math.max(0, math.min(GAMESTATE:GetSongPosition():GetMusicSeconds() / miniSongLen, 1)), miniBarH) end
+				if miniSongLen <= 0 then return end
+				local progress = math.max(0, math.min(GAMESTATE:GetSongPosition():GetMusicSeconds() / miniSongLen, 1))
+				if isMiniPie then self:cropright(1 - progress)
+				else self:zoomto(miniBarW * progress, miniBarH) end
 			end },
-		LoadFont("Common Normal") .. { Name = "TimeRemaining", InitCommand = function(self) self:y(9):zoom(0.3):halign(0.5):diffuse(dimText) end,
+		LoadFont("Common Normal") .. { Name = "TimeRemaining", InitCommand = function(self) self:y(isMiniPie and 21 or 9):zoom(0.3):halign(0.5):diffuse(dimText) end,
 			UpdateMiniBarCommand = function(self)
 				local remaining = math.max(0, miniSongLen - GAMESTATE:GetSongPosition():GetMusicSeconds()) / getCurRateValue()
 				self:settextf("-%d:%02d", math.floor(remaining / 60), math.floor(remaining % 60))
 			end },
-		MovableBorder(miniBarW, 22, 0.5, 0, 0)
+		MovableBorder(isMiniPie and miniBarW * miniProgressBarZoom or miniBarW, isMiniPie and 30 * miniProgressBarZoom or 22, 0.5, 0, 0)
 	}
 end
 
@@ -890,19 +948,20 @@ t[#t + 1] = Def.ActorFrame {
 					wifePct = 0
 				end
 			elseif isAutoplay and pss then
-				local notesPassed = pss:GetTapNoteScores("TapNoteScore_W1") +
-								   pss:GetTapNoteScores("TapNoteScore_W2") +
-								   pss:GetTapNoteScores("TapNoteScore_W3") +
-								   pss:GetTapNoteScores("TapNoteScore_W4") +
-								   pss:GetTapNoteScores("TapNoteScore_W5") +
-								   pss:GetTapNoteScores("TapNoteScore_Miss")
+				local notesPassed = practiceCount(pss, "taps", "TapNoteScore_W1") +
+								   practiceCount(pss, "taps", "TapNoteScore_W2") +
+								   practiceCount(pss, "taps", "TapNoteScore_W3") +
+								   practiceCount(pss, "taps", "TapNoteScore_W4") +
+								   practiceCount(pss, "taps", "TapNoteScore_W5") +
+								   practiceCount(pss, "taps", "TapNoteScore_Miss")
 				local currentMaxPoints = notesPassed * 2
+				if GAMESTATE:IsPracticeMode() and notesPassed == 0 then wifePct = 0 end
 				if currentMaxPoints > 0 and type(pss.GetWifePoints) == "function" then
 					local ok, value = pcall(pss.GetWifePoints, pss)
-					value = ok and tonumber(value) or nil
+					value = ok and (tonumber(value) - practiceStatsBase.wifePoints) or nil
 					if value then wifePct = math.min((value / currentMaxPoints) * 100, 100) end
 				end
-				if not wifePct and type(pss.GetWifeScore) == "function" then
+				if not wifePct and not GAMESTATE:IsPracticeMode() and type(pss.GetWifeScore) == "function" then
 					local ok, value = pcall(pss.GetWifeScore, pss)
 					value = ok and tonumber(value) or nil
 					if value then wifePct = value * 100 end
@@ -911,17 +970,11 @@ t[#t + 1] = Def.ActorFrame {
 				wifePct = ((HV_MaxPoints - HV_PointsLost) / HV_MaxPoints) * 100
 			else
 				if pss then
-					local notesPassed = pss:GetTapNoteScores("TapNoteScore_W1") +
-						pss:GetTapNoteScores("TapNoteScore_W2") +
-						pss:GetTapNoteScores("TapNoteScore_W3") +
-						pss:GetTapNoteScores("TapNoteScore_W4") +
-						pss:GetTapNoteScores("TapNoteScore_W5") +
-						pss:GetTapNoteScores("TapNoteScore_Miss")
-					local ngCount = pss:GetHoldNoteScores("HoldNoteScore_LetGo") +
-						pss:GetHoldNoteScores("HoldNoteScore_MissedHold")
+					local ngCount = practiceCount(pss, "holds", "HoldNoteScore_LetGo") +
+						practiceCount(pss, "holds", "HoldNoteScore_MissedHold")
 					if type(pss.GetRollNoteScores) == "function" then
-						ngCount = ngCount + pss:GetRollNoteScores("RollNoteScore_LetGo") +
-							pss:GetRollNoteScores("RollNoteScore_MissedRoll")
+						ngCount = ngCount + practiceCount(pss, "rolls", "RollNoteScore_LetGo") +
+							practiceCount(pss, "rolls", "RollNoteScore_MissedRoll")
 					end
 					local currentMaxPoints = self.currScoredTaps * 2
 					if currentMaxPoints > 0 then
@@ -940,6 +993,12 @@ t[#t + 1] = Def.ActorFrame {
 			-- Use standard Etterna grade tiers and theme colors
 			local tier = getEtternaGrade(wifePct)
 			self:diffuse(HVColor.GetGradeColor(tier)):diffusealpha(0.7)
+		end,
+		PracticeModeReloadMessageCommand = function(self)
+			self.currWifePoints, self.currScoredTaps = 0, 0
+			self.emulatedPoints, self.emulatedMaxPoints = 0, 0
+			self.replayWifePoints, self.replayMaxPoints = 0, 0
+			self:playcommand("Update")
 		end,
 
 	}
@@ -986,16 +1045,43 @@ if showGoalTrackerText then
 				self.msg = msg
 				self:queuecommand("Update")
 			end,
+			PracticeLoopChangedMessageCommand = function(self)
+				self.msg = nil
+				local loopActive = tonumber(HV.PracticeLoopEnd) and tonumber(HV.PracticeLoopStart)
+					and HV.PracticeLoopEnd > HV.PracticeLoopStart
+				if loopActive then
+					self:playcommand("Update")
+				else
+					self:settextf("%+5.2f (%5.2f%%)", 0, targetGoalPct)
+					self:diffuse(HVColor.GetGoalTrackerColor("positive"))
+				end
+			end,
+			PracticeLoopBestChangedMessageCommand = function(self)
+				self:playcommand("Update")
+			end,
+			PracticeLoopScoreUpdatedMessageCommand = function(self)
+				self:playcommand("Update")
+			end,
 			UpdateCommand = function(self)
 				local msg = self.msg
-				if not msg then return end
-				local tDiff = msg.WifeDifferential
 				local displayTarget = targetGoalPct
+				local loopActive = tonumber(HV.PracticeLoopEnd) and tonumber(HV.PracticeLoopStart)
+					and HV.PracticeLoopEnd > HV.PracticeLoopStart
+				local tDiff
+				if loopActive then
+					local best = tonumber(HV.PracticeLoopBestScore)
+					local current = tonumber(HV.PracticeLoopCurrentScore)
+					displayTarget = best or current or 0
+					tDiff = current and (current - displayTarget) or 0
+				else
+					if not msg then return end
+					tDiff = (tonumber(msg.WifeDifferential) or 0) - HV_PracticeGoalDifferentialBase
 
-				-- In PB or PB Replay mode, use the PB goal/differential if available
-				if (pacemakerMode == "PB" or pacemakerMode == "PBReplay") and msg.WifePBGoal ~= nil then
-					tDiff = msg.WifePBDifferential
-					displayTarget = msg.WifePBGoal * 100
+					-- In PB or PB Replay mode, use the PB goal/differential if available
+					if (pacemakerMode == "PB" or pacemakerMode == "PBReplay") and msg.WifePBGoal ~= nil then
+						tDiff = (tonumber(msg.WifePBDifferential) or 0) - HV_PracticePBGoalDifferentialBase
+						displayTarget = msg.WifePBGoal * 100
+					end
 				end
 
 				if tDiff and tDiff >= 0 then
@@ -1004,6 +1090,17 @@ if showGoalTrackerText then
 					self:diffuse(HVColor.GetGoalTrackerColor("negative"))
 				end
 				self:settextf("%+5.2f (%5.2f%%)", tDiff or 0, displayTarget)
+			end,
+			PracticeModeReloadMessageCommand = function(self)
+				self.msg = nil
+				local loopActive = tonumber(HV.PracticeLoopEnd) and tonumber(HV.PracticeLoopStart)
+					and HV.PracticeLoopEnd > HV.PracticeLoopStart
+				if loopActive then
+					self:playcommand("Update")
+				else
+					self:settextf("%+5.2f (%5.2f%%)", 0, targetGoalPct)
+					self:diffuse(HVColor.GetGoalTrackerColor("positive"))
+				end
 			end,
 
 		}
@@ -1154,12 +1251,12 @@ t[#t + 1] = Def.ActorFrame {
 				local ps = GAMESTATE:GetPlayerState(pn)
 
 				if self.statType == "J4" then
-					local notesPassed = pss:GetTapNoteScores("TapNoteScore_W1") +
-									   pss:GetTapNoteScores("TapNoteScore_W2") +
-									   pss:GetTapNoteScores("TapNoteScore_W3") +
-									   pss:GetTapNoteScores("TapNoteScore_W4") +
-									   pss:GetTapNoteScores("TapNoteScore_W5") +
-									   pss:GetTapNoteScores("TapNoteScore_Miss")
+					local notesPassed = practiceCount(pss, "taps", "TapNoteScore_W1") +
+									   practiceCount(pss, "taps", "TapNoteScore_W2") +
+									   practiceCount(pss, "taps", "TapNoteScore_W3") +
+									   practiceCount(pss, "taps", "TapNoteScore_W4") +
+									   practiceCount(pss, "taps", "TapNoteScore_W5") +
+									   practiceCount(pss, "taps", "TapNoteScore_Miss")
 					local maxPoints = notesPassed * 2
 					if maxPoints > 0 then
 						local j4 = math.min((self.currWifePoints / maxPoints) * 100, 100)
@@ -1180,8 +1277,8 @@ t[#t + 1] = Def.ActorFrame {
 				        self:settext("0.00ms")
 				    end
 				elseif self.statType == "MARatio" then
-					local marv = pss:GetTapNoteScores("TapNoteScore_W1") or 0
-					local perf = pss:GetTapNoteScores("TapNoteScore_W2") or 0
+					local marv = practiceCount(pss, "taps", "TapNoteScore_W1")
+					local perf = practiceCount(pss, "taps", "TapNoteScore_W2")
 					if perf > 0 then
 						self:settextf("%.2f:1", marv / perf)
 					elseif marv > 0 then
@@ -1248,6 +1345,7 @@ t[#t + 1] = Def.ActorFrame {
 				self.rightOffsetSumMs, self.rightOffsetCount = 0, 0
 				self.middleOffsetSumMs, self.middleOffsetCount = 0, 0
 				self.meansum, self.meancount = 0, 0
+				self.tapcount, self.runningmean, self.runningvariance = 0, 0, 0
 				self:queuecommand("Update")
 			end
 		
@@ -1394,6 +1492,18 @@ t[#t + 1] = Def.ActorFrame {
 			text:visible(false)
 		end
 	end,
+	PracticeModeReloadMessageCommand = function(self)
+		self.comboBreaks = 0
+		local numActor = self:GetChild("ComboNumber")
+		local labelContainer = self:GetChild("ComboLabel")
+		if numActor then numActor:settext("0"):diffuse(dimText):shadowlength(0) end
+		if labelContainer then
+			local graphic = labelContainer:GetChild("ComboGraphic")
+			local text = labelContainer:GetChild("MissesText")
+			if graphic then graphic:visible(true):diffusealpha(0.5) end
+			if text then text:visible(false) end
+		end
+	end,
 
 	GhostTapMessageCommand = function(self)
 		if HV.ComboAnimation and HV.ComboAnimation() then
@@ -1504,13 +1614,50 @@ end -- End combo break highlight
 
 
 t[#t + 1] = Def.ActorFrame {
-	Name = "IndicatorFrame",
+	Name = "PracticeModeModal",
 	InitCommand = function(self)
-		self:xy(SCREEN_CENTER_X, barY + 15):visible(GAMESTATE:IsPracticeMode())
+		local width = 144
+		self:xy(SCREEN_LEFT + 14 + width / 2, SCREEN_TOP + 24)
+			:visible(GAMESTATE:IsPracticeMode())
 	end,
+	Def.Quad {
+		Name = "Border",
+		InitCommand = function(self)
+			self:zoomto(144, 22):diffuse(HVColor.Border or color("0.16,0.18,0.24,0.75"))
+		end
+	},
+	Def.Quad {
+		Name = "Body",
+		InitCommand = function(self)
+			self:zoomto(142, 20):diffuse(color("0.03,0.03,0.05,0.92"))
+		end
+	},
+	Def.Quad {
+		Name = "TopAccent",
+		InitCommand = function(self)
+			self:y(-9.25):zoomto(144, 1.5):diffuse(accentColor):diffusealpha(0.85)
+		end,
+		ThemePrefChangedMessageCommand = function(self)
+			self:diffuse(HVColor.Accent):diffusealpha(0.85)
+		end
+	},
+	Def.Quad {
+		Name = "Pip",
+		InitCommand = function(self)
+			self:x(-62):zoomto(4, 4):diffuse(accentColor)
+		end,
+		ThemePrefChangedMessageCommand = function(self)
+			self:diffuse(HVColor.Accent)
+		end
+	},
 	LoadFont("Common Normal") .. {
-		Text = "** PRACTICE MODE **",
-		InitCommand = function(self) self:zoom(0.35):diffuse(accentColor):diffusealpha(0.8) end
+		Text = "Practice Mode",
+		InitCommand = function(self)
+			self:zoom(0.38):diffuse(accentColor):strokecolor(color("#07110F"))
+		end,
+		ThemePrefChangedMessageCommand = function(self)
+			self:diffuse(HVColor.Accent)
+		end
 	}
 }
 
@@ -1691,6 +1838,18 @@ local showStandard = (ebMode == "Standard" or ebMode == "Both")
 			end
 		end
 	end,
+	PracticeModeReloadMessageCommand = function(self)
+		ewmaValue = 0
+		self.poolIdx = 0
+		local marker = self:GetChild("EWMAMarker")
+		if marker then marker:x(0) end
+		local pool = self:GetChild("Pool")
+		if pool then
+			pool:RunCommandsOnChildren(function(dot)
+				dot:stoptweening():visible(false):diffusealpha(0)
+			end)
+		end
+	end,
 
 	(function()
 		local poolDef = Def.ActorFrame { Name = "Pool" }
@@ -1814,7 +1973,7 @@ t[#t + 1] = Def.ActorFrame {
 				UpdateCommand = function(self)
 					local pss = STATSMAN:GetCurStageStats():GetPlayerStageStats()
 					if pss then
-						local ok = pss:GetHoldNoteScores("HoldNoteScore_Held")
+						local ok = practiceCount(pss, "holds", "HoldNoteScore_Held")
 						self:settext(tostring(ok))
 					end
 				end,
@@ -1840,7 +1999,7 @@ t[#t + 1] = Def.ActorFrame {
 				UpdateCommand = function(self)
 					local pss = STATSMAN:GetCurStageStats():GetPlayerStageStats()
 					if pss then
-						local ng = pss:GetHoldNoteScores("HoldNoteScore_LetGo")
+						local ng = practiceCount(pss, "holds", "HoldNoteScore_LetGo")
 						self:settext(tostring(ng))
 					end
 				end,
@@ -1902,12 +2061,12 @@ t[#t + 1] = Def.ActorFrame {
 			UpdateCommand = function(self)
 				local pss = STATSMAN:GetCurStageStats():GetPlayerStageStats()
 				if pss then
-					local notesPassed = pss:GetTapNoteScores("TapNoteScore_W1") +
-									   pss:GetTapNoteScores("TapNoteScore_W2") +
-									   pss:GetTapNoteScores("TapNoteScore_W3") +
-									   pss:GetTapNoteScores("TapNoteScore_W4") +
-									   pss:GetTapNoteScores("TapNoteScore_W5") +
-									   pss:GetTapNoteScores("TapNoteScore_Miss")
+					local notesPassed = practiceCount(pss, "taps", "TapNoteScore_W1") +
+									   practiceCount(pss, "taps", "TapNoteScore_W2") +
+									   practiceCount(pss, "taps", "TapNoteScore_W3") +
+									   practiceCount(pss, "taps", "TapNoteScore_W4") +
+									   practiceCount(pss, "taps", "TapNoteScore_W5") +
+									   practiceCount(pss, "taps", "TapNoteScore_Miss")
 					
 					local maxPoints = notesPassed * 2
 					if maxPoints > 0 then
@@ -1941,8 +2100,8 @@ t[#t + 1] = Def.ActorFrame {
 			UpdateCommand = function(self)
 				local pss = STATSMAN:GetCurStageStats():GetPlayerStageStats()
 				if pss then
-					local w1 = pss:GetTapNoteScores("TapNoteScore_W1")
-					local w2 = pss:GetTapNoteScores("TapNoteScore_W2")
+					local w1 = practiceCount(pss, "taps", "TapNoteScore_W1")
+					local w2 = practiceCount(pss, "taps", "TapNoteScore_W2")
 					local ratio = 0
 					if w2 > 0 then
 						ratio = w1 / w2
@@ -1977,8 +2136,8 @@ t[#t + 1] = Def.ActorFrame {
 			UpdateCommand = function(self)
 				local pss = STATSMAN:GetCurStageStats():GetPlayerStageStats()
 				if pss then
-					local w2 = pss:GetTapNoteScores("TapNoteScore_W2")
-					local w3 = pss:GetTapNoteScores("TapNoteScore_W3")
+					local w2 = practiceCount(pss, "taps", "TapNoteScore_W2")
+					local w3 = practiceCount(pss, "taps", "TapNoteScore_W3")
 					local ratio = 0
 					if w3 > 0 then
 						ratio = w2 / w3
@@ -2013,7 +2172,7 @@ t[#t + 1] = Def.ActorFrame {
 			UpdateCommand = function(self)
 				local pss = STATSMAN:GetCurStageStats():GetPlayerStageStats()
 				if pss then
-					self:settext(tostring(pss:MaxCombo()))
+					self:settext(tostring(math.max(0, pss:MaxCombo() - practiceStatsBase.maxCombo)))
 				end
 			end,
 			PracticeModeResetMessageCommand = function(self) self:settext("0") end,

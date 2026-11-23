@@ -8,7 +8,7 @@ local currentSSR = 0
 local ssrPollInterval = 0.2
 
 local function canShowSSR()
-	if not HV.ShowMSD() or HV.MinimalisticMode() then return false end
+	if GAMESTATE:IsPracticeMode() or not HV.ShowMSD() or HV.MinimalisticMode() then return false end
 	local steps = GAMESTATE:GetCurrentSteps(pn)
 	if not steps or type(steps.GetMSD) ~= "function" then return false end
 	local ok, msd = pcall(steps.GetMSD, steps, getCurRateValue(), 1)
