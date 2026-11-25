@@ -36,6 +36,17 @@ local subText     = color("0.70,0.74,0.82,1")
 local dimText     = color("0.44,0.47,0.55,1")
 local darkenedBg  = color("0.03,0.03,0.05,0.96")
 
+local function getOsuManiaRatingMode()
+	local mode = ThemePrefs.Get("HV_OsuManiaStarRating") or "Off"
+	if mode == "Sunny Rework" then return mode end
+	return mode == "Off" and "Off" or "Classic"
+end
+
+local function getOsuManiaStars(steps, rate, mode)
+	if HV and HV.GetOsuManiaStars then return HV.GetOsuManiaStars(steps, rate, mode) end
+	return nil
+end
+
 -- Helper accessors for selected chart info
 local function getSelectedSong()
 	if HV and HV.CurrentSongData and HV.CurrentSongData.song then
@@ -524,7 +535,7 @@ contentAF[#contentAF + 1] = LoadFont("Common Normal") .. {
 	end
 }
 
--- Large Overall MSD Rating
+-- Show one rating in the outgoing screen: MSD, osu!mania SR, then chart meter.
 contentAF[#contentAF + 1] = LoadFont("MSD 20px") .. {
 	Name = "OverallMSDValue",
 	InitCommand = function(self)
@@ -532,8 +543,28 @@ contentAF[#contentAF + 1] = LoadFont("MSD 20px") .. {
 			:zoom(0.95):diffuse(brightText)
 	end,
 	SetCommand = function(self)
+		local showMSD = HV and HV.ShowMSD and HV.ShowMSD()
+		local srMode = getOsuManiaRatingMode()
 		local steps = getSelectedSteps()
+		local song = getSelectedSong()
 		local rate = getSelectedRate()
+		local stars
+		if srMode ~= "Off" and song then
+			stars = getOsuManiaStars(steps, rate, srMode)
+		end
+		-- SR takes the MSD slot only when MSD is hidden and SR is enabled.
+		if not showMSD and stars then
+			self:settext(string.format("%.2f★", stars))
+				:diffuse(HV.GetOsuStarTextColor and HV.GetOsuStarTextColor(stars) or brightText)
+				:visible(true)
+			return
+		end
+		if not showMSD then
+			local _, meter, diffColor = getDifficultyInfo(steps)
+			self:settext(steps and tostring(meter) or "-"):diffuse(steps and diffColor or dimText):visible(true)
+			return
+		end
+		self:visible(true)
 		local msd = 0
 		if HV and HV.CurrentSongData and HV.CurrentSongData.skillsetMSDs and HV.CurrentSongData.skillsetMSDs[1] then
 			msd = HV.CurrentSongData.skillsetMSDs[1]
@@ -547,7 +578,10 @@ contentAF[#contentAF + 1] = LoadFont("MSD 20px") .. {
 		else
 			self:settext("-"):diffuse(dimText)
 		end
-	end
+	end,
+	ThemePrefChangedMessageCommand = function(self, params)
+		if not params or params.Name == "HV_ShowMSD" or params.Name == "HV_OsuManiaStarRating" then self:playcommand("Set") end
+	end,
 }
 
 -- Cached Dan estimate shown beneath MSD. This only reads the estimate already

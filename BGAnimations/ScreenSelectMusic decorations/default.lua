@@ -1480,10 +1480,10 @@ local function getOsuStarTextColor(stars)
 	return color("#6563de")
 end
 
-local function getOsuManiaStars(steps, rate)
+local function getOsuManiaStars(steps, rate, requestedMode)
 	local chartKey = steps and steps:GetChartKey()
 	if not chartKey then return nil end
-	local mode = ThemePrefs.Get("HV_OsuManiaStarRating") or "Classic"
+	local mode = requestedMode or ThemePrefs.Get("HV_OsuManiaStarRating") or "Classic"
 	if mode ~= "Sunny Rework" then mode = (mode == "Off") and "Off" or "Classic" end
 	if mode == "Off" then return nil end
 	rate = tonumber(rate) or 1
@@ -1592,12 +1592,19 @@ local function getOsuManiaStars(steps, rate)
 	return stars
 end
 
+-- Shared with the song-select outro, which lives in its own actor file.
+HV.GetOsuManiaStars = getOsuManiaStars
+HV.GetOsuStarTextColor = getOsuStarTextColor
+
 t[#t + 1] = Def.ActorFrame {
 	Name = "MSDFrame",
 	InitCommand = function(self)
 		self:xy(panelX + 16, msdY)
-		local show = ThemePrefs.Get("HV_ShowMSD")
-		self:visible(show == "true" or show == true)
+		self:playcommand("UpdateVisibility")
+	end,
+	UpdateVisibilityCommand = function(self) self:visible(HV.ShowMSD()) end,
+	ThemePrefChangedMessageCommand = function(self, params)
+		if not params or params.Name == "HV_ShowMSD" then self:playcommand("UpdateVisibility") end
 	end,
 
 	LoadFont("Common Normal") .. {
@@ -1624,8 +1631,20 @@ t[#t + 1] = Def.ActorFrame {
 	Name = "MSDRow_Overall",
 	InitCommand = function(self)
 		self:xy(panelX + 16, msdY + 18)
-		local show = ThemePrefs.Get("HV_ShowMSD")
-		self:visible(show == "true" or show == true)
+		self:playcommand("UpdateVisibility")
+	end,
+	UpdateVisibilityCommand = function(self)
+		local showMSD = HV.ShowMSD()
+		-- Keep this left-panel rating slot available for MSD, SR, or the meter.
+		self:visible(true)
+		local skillsets = self:GetChild("TopSkillsetIcons")
+		if skillsets then skillsets:visible(showMSD) end
+	end,
+	ThemePrefChangedMessageCommand = function(self, params)
+		if not params or params.Name == "HV_ShowMSD" or params.Name == "HV_OsuManiaStarRating" then
+			self:playcommand("UpdateVisibility")
+			self:playcommand("Set")
+		end
 	end,
 
 	LoadFont("MSD 20px") .. {
@@ -1634,6 +1653,7 @@ t[#t + 1] = Def.ActorFrame {
 			self:halign(0):valign(0):zoom(0.45):diffuse(mainText)
 		end,
 		SetCommand = function(self)
+			self:visible(HV.ShowMSD())
 			local data = HV.CurrentSongData
 			local msd
 			if msdTooltipMaxSSR and data.steps then
@@ -1657,16 +1677,21 @@ t[#t + 1] = Def.ActorFrame {
 		end,
 		DelayedChartUpdateMessageCommand = function(self) self:playcommand("Set") end,
 		MSDModeChangedMessageCommand = function(self) self:playcommand("Set") end,
+		ThemePrefChangedMessageCommand = function(self, params)
+			if not params or params.Name == "HV_ShowMSD" then self:playcommand("Set") end
+		end,
 	},
 
 	Def.Quad {
 		Name = "OsuManiaStarBackground",
 		InitCommand = function(self)
-			self:halign(0):valign(0):xy(0, 17):zoomto(25, 10):visible(false)
+			self:halign(0):valign(0):xy(0, 0):zoomto(25, 10):visible(false)
 		end,
 		SetCommand = function(self)
 			local data = HV.CurrentSongData
-			local stars = data.song and getOsuManiaStars(data.steps, getCurRateValue() or data.rate or 1)
+			local mode = ThemePrefs.Get("HV_OsuManiaStarRating") or "Off"
+			local stars = not HV.ShowMSD() and mode ~= "Off" and data.song
+				and getOsuManiaStars(data.steps, getCurRateValue() or data.rate or 1)
 			if stars then
 				self:diffuse(getOsuStarDifficultyColor(stars)):visible(true)
 			else
@@ -1677,18 +1702,20 @@ t[#t + 1] = Def.ActorFrame {
 		InstantChartUpdateMessageCommand = function(self) self:playcommand("Set") end,
 		CurrentRateChangedMessageCommand = function(self) self:playcommand("Set") end,
 		ThemePrefChangedMessageCommand = function(self, params)
-			if not params or params.Name == "HV_OsuManiaStarRating" then self:playcommand("Set") end
+			if not params or params.Name == "HV_OsuManiaStarRating" or params.Name == "HV_ShowMSD" then self:playcommand("Set") end
 		end,
 	},
 
 	LoadFont("Common Normal") .. {
 		Name = "OsuManiaStarRating",
 		InitCommand = function(self)
-			self:halign(0):valign(0):xy(3, 20):zoom(0.32):visible(false)
+			self:halign(0):valign(0):xy(3, 0):zoom(0.45):visible(false)
 		end,
 		SetCommand = function(self)
 			local data = HV.CurrentSongData
-			local stars = data.song and getOsuManiaStars(data.steps, getCurRateValue() or data.rate or 1)
+			local mode = ThemePrefs.Get("HV_OsuManiaStarRating") or "Off"
+			local stars = not HV.ShowMSD() and mode ~= "Off" and data.song
+				and getOsuManiaStars(data.steps, getCurRateValue() or data.rate or 1)
 			if stars then
 				self:settext(string.format("%.2f★", stars)):diffuse(getOsuStarTextColor(stars)):visible(true)
 			else
@@ -1699,7 +1726,32 @@ t[#t + 1] = Def.ActorFrame {
 		InstantChartUpdateMessageCommand = function(self) self:playcommand("Set") end,
 		CurrentRateChangedMessageCommand = function(self) self:playcommand("Set") end,
 		ThemePrefChangedMessageCommand = function(self, params)
-			if not params or params.Name == "HV_OsuManiaStarRating" then self:playcommand("Set") end
+			if not params or params.Name == "HV_OsuManiaStarRating" or params.Name == "HV_ShowMSD" then self:playcommand("Set") end
+		end,
+	},
+	LoadFont("MSD 20px") .. {
+		Name = "ChartMeterFallback",
+		InitCommand = function(self)
+			self:halign(0):valign(0):xy(0, 0):zoom(0.45):visible(false)
+		end,
+		SetCommand = function(self)
+			local data = HV.CurrentSongData
+			local mode = ThemePrefs.Get("HV_OsuManiaStarRating") or "Off"
+			local stars = mode ~= "Off" and data.song and data.steps
+				and getOsuManiaStars(data.steps, getCurRateValue() or data.rate or 1)
+			if not HV.ShowMSD() and (mode == "Off" or not stars) then
+				local _, meter, diffColor = getDifficultyInfo(data.steps)
+				self:settext(data.steps and tostring(meter) or "-")
+					:diffuse(data.steps and diffColor or dimText):visible(true)
+			else
+				self:visible(false)
+			end
+		end,
+		DelayedChartUpdateMessageCommand = function(self) self:playcommand("Set") end,
+		InstantChartUpdateMessageCommand = function(self) self:playcommand("Set") end,
+		CurrentRateChangedMessageCommand = function(self) self:playcommand("Set") end,
+		ThemePrefChangedMessageCommand = function(self, params)
+			if not params or params.Name == "HV_ShowMSD" or params.Name == "HV_OsuManiaStarRating" then self:playcommand("Set") end
 		end,
 	},
 	
