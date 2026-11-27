@@ -1591,14 +1591,17 @@ local function getOsuManiaStars(steps, rate)
 	storeChartRatingCache(diskKey, stars)
 	return stars
 end
+HV.GetOsuManiaStars = getOsuManiaStars
 
 t[#t + 1] = Def.ActorFrame {
 	Name = "MSDFrame",
 	InitCommand = function(self)
 		self:xy(panelX + 16, msdY)
-		local show = ThemePrefs.Get("HV_ShowMSD")
-		self:visible(show == "true" or show == true)
+		self:playcommand("Set")
 	end,
+	SetCommand = function(self) self:visible(HV.ShowMSD()) end,
+	MSDModeChangedMessageCommand = function(self) self:playcommand("Set") end,
+	ThemePrefChangedMessageCommand = function(self, params) if not params or params.Name == "HV_ShowMSD" then self:playcommand("Set") end end,
 
 	LoadFont("Common Normal") .. {
 		Name = "MSDRatingsLabel",
@@ -1624,9 +1627,34 @@ t[#t + 1] = Def.ActorFrame {
 	Name = "MSDRow_Overall",
 	InitCommand = function(self)
 		self:xy(panelX + 16, msdY + 18)
-		local show = ThemePrefs.Get("HV_ShowMSD")
-		self:visible(show == "true" or show == true)
+		self:playcommand("Set")
 	end,
+	SetCommand = function(self)
+		self:visible(HV.ShowMSD() or ((ThemePrefs.Get("HV_OsuManiaStarRating") or "Off") ~= "Off"))
+	end,
+	MSDModeChangedMessageCommand = function(self) self:playcommand("Set") end,
+	ThemePrefChangedMessageCommand = function(self, params) if not params or params.Name == "HV_ShowMSD" or params.Name == "HV_OsuManiaStarRating" then self:playcommand("Set") end end,
+
+	Def.Quad {
+		Name = "OsuManiaRatingBacking",
+		InitCommand = function(self) self:halign(0):valign(0):xy(-6, -5):visible(false) end,
+		SetCommand = function(self)
+			local data = HV.CurrentSongData
+			local useSR = not HV.ShowMSD() and (ThemePrefs.Get("HV_OsuManiaStarRating") or "Off") ~= "Off"
+			local stars = useSR and data.song and getOsuManiaStars(data.steps, getCurRateValue() or data.rate or 1)
+			if not stars then self:visible(false); return end
+			local rating = self:GetParent():GetChild("MSD_Overall")
+			self:diffuse(getOsuStarDifficultyColor(stars)):diffusealpha(0.72)
+				:zoomto(rating:GetZoomedWidth() + 12, 29):visible(true)
+		end,
+		DelayedChartUpdateMessageCommand = function(self) self:playcommand("Set") end,
+		InstantChartUpdateMessageCommand = function(self) self:playcommand("Set") end,
+		CurrentRateChangedMessageCommand = function(self) self:playcommand("Set") end,
+		MSDModeChangedMessageCommand = function(self) self:playcommand("Set") end,
+		ThemePrefChangedMessageCommand = function(self, params)
+			if not params or params.Name == "HV_ShowMSD" or params.Name == "HV_OsuManiaStarRating" then self:playcommand("Set") end
+		end,
+	},
 
 	LoadFont("MSD 20px") .. {
 		Name = "MSD_Overall",
@@ -1635,6 +1663,14 @@ t[#t + 1] = Def.ActorFrame {
 		end,
 		SetCommand = function(self)
 			local data = HV.CurrentSongData
+			local useSR = not HV.ShowMSD() and (ThemePrefs.Get("HV_OsuManiaStarRating") or "Off") ~= "Off"
+			if useSR then
+				local stars = data.song and getOsuManiaStars(data.steps, getCurRateValue() or data.rate or 1)
+				if stars then self:settext(string.format("%.2f", stars)):diffuse(getOsuStarTextColor(stars)):visible(true)
+				else self:settext(""):visible(false) end
+				return
+			end
+			self:visible(true)
 			local msd
 			if msdTooltipMaxSSR and data.steps then
 				local ssrs = data.steps:GetSSRs(data.rate or getCurRateValue(), 0.965)
@@ -1657,6 +1693,57 @@ t[#t + 1] = Def.ActorFrame {
 		end,
 		DelayedChartUpdateMessageCommand = function(self) self:playcommand("Set") end,
 		MSDModeChangedMessageCommand = function(self) self:playcommand("Set") end,
+		ThemePrefChangedMessageCommand = function(self, params)
+			if not params or params.Name == "HV_ShowMSD" or params.Name == "HV_OsuManiaStarRating" then self:playcommand("Set") end
+		end,
+	},
+
+	Def.ActorFrame {
+		Name = "OsuManiaStarGraphicsRow",
+		InitCommand = function(self) self:xy(0, 5):visible(false) end,
+		SetCommand = function(self)
+			local data = HV.CurrentSongData
+			local useSR = not HV.ShowMSD() and (ThemePrefs.Get("HV_OsuManiaStarRating") or "Off") ~= "Off"
+			local stars = useSR and data.song and getOsuManiaStars(data.steps, getCurRateValue() or data.rate or 1)
+			if stars then
+				local rating = self:GetParent():GetChild("MSD_Overall")
+				self:x(rating:GetX() + rating:GetZoomedWidth() + 22)
+				local whole, fraction = math.floor(stars), stars - math.floor(stars)
+				for i = 1, 20 do
+					local amount = i <= whole and 1 or (i == whole + 1 and fraction or 0)
+					local star = self:GetChild("Star" .. i)
+					star:visible(i <= math.ceil(stars)):diffuse(color("White")):diffusealpha(amount > 0 and math.max(0.2, amount) or 0.18)
+				end
+				self:visible(true)
+			else self:visible(false) end
+		end,
+		DelayedChartUpdateMessageCommand = function(self) self:playcommand("Set") end,
+		InstantChartUpdateMessageCommand = function(self) self:playcommand("Set") end,
+		CurrentRateChangedMessageCommand = function(self) self:playcommand("Set") end,
+		MSDModeChangedMessageCommand = function(self) self:playcommand("Set") end,
+		ThemePrefChangedMessageCommand = function(self, params)
+			if not params or params.Name == "HV_ShowMSD" or params.Name == "HV_OsuManiaStarRating" then self:playcommand("Set") end
+		end,
+		Def.Sprite { Name = "Star1", Texture = THEME:GetPathG("", "round_star"), InitCommand = function(self) self:x(0):zoom(0.18):visible(false) end },
+		Def.Sprite { Name = "Star2", Texture = THEME:GetPathG("", "round_star"), InitCommand = function(self) self:x(16):zoom(0.18):visible(false) end },
+		Def.Sprite { Name = "Star3", Texture = THEME:GetPathG("", "round_star"), InitCommand = function(self) self:x(32):zoom(0.18):visible(false) end },
+		Def.Sprite { Name = "Star4", Texture = THEME:GetPathG("", "round_star"), InitCommand = function(self) self:x(48):zoom(0.18):visible(false) end },
+		Def.Sprite { Name = "Star5", Texture = THEME:GetPathG("", "round_star"), InitCommand = function(self) self:x(64):zoom(0.18):visible(false) end },
+		Def.Sprite { Name = "Star6", Texture = THEME:GetPathG("", "round_star"), InitCommand = function(self) self:x(80):zoom(0.18):visible(false) end },
+		Def.Sprite { Name = "Star7", Texture = THEME:GetPathG("", "round_star"), InitCommand = function(self) self:x(96):zoom(0.18):visible(false) end },
+		Def.Sprite { Name = "Star8", Texture = THEME:GetPathG("", "round_star"), InitCommand = function(self) self:x(112):zoom(0.18):visible(false) end },
+		Def.Sprite { Name = "Star9", Texture = THEME:GetPathG("", "round_star"), InitCommand = function(self) self:x(128):zoom(0.18):visible(false) end },
+		Def.Sprite { Name = "Star10", Texture = THEME:GetPathG("", "round_star"), InitCommand = function(self) self:x(144):zoom(0.18):visible(false) end },
+		Def.Sprite { Name = "Star11", Texture = THEME:GetPathG("", "round_star"), InitCommand = function(self) self:x(160):zoom(0.18):visible(false) end },
+		Def.Sprite { Name = "Star12", Texture = THEME:GetPathG("", "round_star"), InitCommand = function(self) self:x(176):zoom(0.18):visible(false) end },
+		Def.Sprite { Name = "Star13", Texture = THEME:GetPathG("", "round_star"), InitCommand = function(self) self:x(192):zoom(0.18):visible(false) end },
+		Def.Sprite { Name = "Star14", Texture = THEME:GetPathG("", "round_star"), InitCommand = function(self) self:x(208):zoom(0.18):visible(false) end },
+		Def.Sprite { Name = "Star15", Texture = THEME:GetPathG("", "round_star"), InitCommand = function(self) self:x(224):zoom(0.18):visible(false) end },
+		Def.Sprite { Name = "Star16", Texture = THEME:GetPathG("", "round_star"), InitCommand = function(self) self:x(240):zoom(0.18):visible(false) end },
+		Def.Sprite { Name = "Star17", Texture = THEME:GetPathG("", "round_star"), InitCommand = function(self) self:x(256):zoom(0.18):visible(false) end },
+		Def.Sprite { Name = "Star18", Texture = THEME:GetPathG("", "round_star"), InitCommand = function(self) self:x(272):zoom(0.18):visible(false) end },
+		Def.Sprite { Name = "Star19", Texture = THEME:GetPathG("", "round_star"), InitCommand = function(self) self:x(288):zoom(0.18):visible(false) end },
+		Def.Sprite { Name = "Star20", Texture = THEME:GetPathG("", "round_star"), InitCommand = function(self) self:x(304):zoom(0.18):visible(false) end },
 	},
 
 	Def.Quad {
@@ -1666,7 +1753,7 @@ t[#t + 1] = Def.ActorFrame {
 		end,
 		SetCommand = function(self)
 			local data = HV.CurrentSongData
-			local stars = data.song and getOsuManiaStars(data.steps, getCurRateValue() or data.rate or 1)
+			local stars = HV.ShowMSD() and data.song and getOsuManiaStars(data.steps, getCurRateValue() or data.rate or 1)
 			if stars then
 				self:diffuse(getOsuStarDifficultyColor(stars)):visible(true)
 			else
@@ -1688,7 +1775,7 @@ t[#t + 1] = Def.ActorFrame {
 		end,
 		SetCommand = function(self)
 			local data = HV.CurrentSongData
-			local stars = data.song and getOsuManiaStars(data.steps, getCurRateValue() or data.rate or 1)
+			local stars = HV.ShowMSD() and data.song and getOsuManiaStars(data.steps, getCurRateValue() or data.rate or 1)
 			if stars then
 				self:settext(string.format("%.2f★", stars)):diffuse(getOsuStarTextColor(stars)):visible(true)
 			else
@@ -1733,6 +1820,7 @@ t[#t + 1] = Def.ActorFrame {
 		},
 		
 		SetCommand = function(self)
+			if not HV.ShowMSD() then return end
 			local c1 = self:GetChild("IconContainer1")
 			local c2 = self:GetChild("IconContainer2")
 			local c3 = self:GetChild("IconContainer3")

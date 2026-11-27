@@ -179,8 +179,11 @@ t[#t+1] = LoadFont("MSD 20px") .. {
 		if steps then
 			local diff = ToEnumShortString(steps:GetDifficulty())
 			local diffName = getDifficulty(steps:GetDifficulty())
-			local meter = steps:GetMSD(getCurRateValue(), 1)
-			local msdStr = meter > 0 and string.format(" [%.2f]", meter) or ""
+			local msdStr = ""
+			if HV and HV.ShowMSD and HV.ShowMSD() then
+				local meter = steps:GetMSD(getCurRateValue(), 1)
+				if meter and meter > 0 then msdStr = string.format(" [%.2f]", meter) end
+			end
 			self:settext(diffName .. msdStr)
 			self:diffuse(HVColor.GetDifficultyColor(diff))
 		end

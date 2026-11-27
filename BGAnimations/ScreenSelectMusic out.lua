@@ -9,19 +9,9 @@
 --    - Slanted Banner
 --    - BPM
 --    - Song Title, Subtitle, Artist, Pack
---    - Difficulty Label (without meter) directly above Overall MSD
---    - Overall MSD rating (no 'Overall MSD' text, no skillsets)
---    - Press Start for Options text (bigger, farther from corner, NO background card)
--- 5. Animation:
---    - Smooth decelerated entry sliding in from the left.
---    - Slowed continuous slide to the right for the entire duration of the screen.
---    - No exit animation.
---
--- Engine broadcasts:
---   ShowPressStartForOptionsCommand
---   ShowEnteringOptionsCommand
---   HidePressStartForOptionsCommand
-
+--    - Difficulty Label directly above rating
+--    - Overall rating value and optional star row
+--    - Press Start for Options text
 local translated_info = {
 	PressStart = THEME:GetString("ScreenSelectMusic", "PressStartForOptions"),
 	EnteringOptions = THEME:GetString("ScreenSelectMusic", "EnteringOptions"),
@@ -65,6 +55,19 @@ local function getSelectedRate()
 		return getCurRateValue()
 	end
 	return 1.0
+end
+
+local function showRatingPanel()
+	local showMSD = HV and HV.ShowMSD and HV.ShowMSD()
+	local srMode = ThemePrefs.Get("HV_OsuManiaStarRating") or "Off"
+	return showMSD or srMode ~= "Off"
+end
+
+local function getSelectedOsuSR()
+	local steps = getSelectedSteps()
+	if not steps or not HV or not HV.GetOsuManiaStars then return nil end
+	local ok, value = pcall(HV.GetOsuManiaStars, steps, getSelectedRate())
+	return ok and tonumber(value) or nil
 end
 
 local function formatBPM(song, rate)
@@ -503,7 +506,7 @@ contentAF[#contentAF + 1] = Def.Quad {
 	InitCommand = function(self)
 		self:halign(1):xy(rightMargin, 322)
 			:zoomto(bannerW, 1)
-			:diffuse(color("0.16, 0.18, 0.24, 0.7")):skewx(bannerSkew)
+			:diffuse(color("0.16, 0.18, 0.24, 0.7")):skewx(bannerSkew):visible(showRatingPanel())
 	end
 }
 
@@ -515,9 +518,10 @@ contentAF[#contentAF + 1] = LoadFont("Common Normal") .. {
 	Name = "DifficultyLabel",
 	InitCommand = function(self)
 		self:halign(1):xy(rightMargin, 344)
-			:zoom(0.48)
+			:zoom(0.48):visible(showRatingPanel())
 	end,
 	SetCommand = function(self)
+		self:visible(showRatingPanel())
 		local steps = getSelectedSteps()
 		local diffName, _, diffColor = getDifficultyInfo(steps)
 		self:settext(diffName):diffuse(diffColor)
@@ -529,9 +533,19 @@ contentAF[#contentAF + 1] = LoadFont("MSD 20px") .. {
 	Name = "OverallMSDValue",
 	InitCommand = function(self)
 		self:halign(1):xy(rightMargin, 376)
-			:zoom(0.95):diffuse(brightText)
+			:zoom(0.95):diffuse(brightText):visible(showRatingPanel())
 	end,
 	SetCommand = function(self)
+		local showMSD = HV and HV.ShowMSD and HV.ShowMSD()
+		local srMode = ThemePrefs.Get("HV_OsuManiaStarRating") or "Off"
+		if not showMSD and srMode ~= "Off" then
+			local stars = getSelectedOsuSR()
+			if stars then self:settext("★" .. string.format("%.2f", stars)):diffuse(color("#ffd966")):visible(true)
+			else self:settext(""):visible(false) end
+			return
+		end
+		self:visible(showMSD)
+		if not showMSD then self:settext(""); return end
 		local steps = getSelectedSteps()
 		local rate = getSelectedRate()
 		local msd = 0
@@ -547,8 +561,19 @@ contentAF[#contentAF + 1] = LoadFont("MSD 20px") .. {
 		else
 			self:settext("-"):diffuse(dimText)
 		end
+	end,
+	CurrentRateChangedMessageCommand = function(self) self:playcommand("Set") end,
+	InstantChartUpdateMessageCommand = function(self) self:playcommand("Set") end,
+	DelayedChartUpdateMessageCommand = function(self) self:playcommand("Set") end,
+	MSDModeChangedMessageCommand = function(self) self:playcommand("Set") end,
+	ThemePrefChangedMessageCommand = function(self, params)
+		if not params or params.Name == "HV_ShowMSD" or params.Name == "HV_OsuManiaStarRating" then self:playcommand("Set") end
 	end
 }
+
+
+
+
 
 -- Cached Dan estimate shown beneath MSD. This only reads the estimate already
 -- populated by the song-select calculator; it never starts a calculation here.
