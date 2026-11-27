@@ -728,8 +728,21 @@ local miniProgressBarEnabled = ThemePrefs.Get("HV_MiniProgressBar") ~= false
 local miniBarW, miniBarH = 50, 4
 local miniProgressBarType = ThemePrefs.Get("HV_MiniProgressBarType") or "Bar"
 local miniProgressBarZoom = gameplaySize("MiniProgressBarZoom")
-local isMiniPie = miniProgressBarType == "Pie"
+local isMiniPie = miniProgressBarType == "Circle"
 if isMiniPie then miniBarW, miniBarH = 24, 24 else miniBarW = miniBarW * miniProgressBarZoom end
+local function miniPieVertices(progress)
+	local vertices = {{ {0, 0, 0}, {0.5, 0.5}, {1, 1, 1, 1} }}
+	local segments = math.max(1, math.ceil(progress * 64))
+	for i = 0, segments do
+		local angle = -math.pi / 2 + (math.pi * 2 * progress * i / segments)
+		vertices[#vertices + 1] = {
+			{math.cos(angle) * miniBarW / 2, math.sin(angle) * miniBarH / 2, 0},
+			{0.5 + math.cos(angle) * 0.5, 0.5 + math.sin(angle) * 0.5},
+			{1, 1, 1, 1}
+		}
+	end
+	return vertices
+end
 local miniSongLen = 0
 local function setMiniSongLen()
 	miniSongLen = getChartLastSecond(GAMESTATE:GetCurrentSong(), GAMESTATE:GetCurrentSteps())
@@ -750,14 +763,17 @@ if miniProgressBarEnabled and not isSync then
 			if isMiniPie then self:zoomto(miniBarW * miniProgressBarZoom, miniBarH * miniProgressBarZoom):diffuse(color("0,0,0,0.3"))
 			else self:zoomto(miniBarW, miniBarH):diffuse(color("0,0,0,0.3")) end
 		end },
-		(isMiniPie and Def.Sprite or Def.Quad) { Name = "Fill", Texture = isMiniPie and THEME:GetPathG("", "_thick circle (doubleres)") or nil, InitCommand = function(self)
-			if isMiniPie then self:zoomto(miniBarW * miniProgressBarZoom, miniBarH * miniProgressBarZoom):diffuse(accentColor):diffusealpha(0.8):rotationz(90)
+		(isMiniPie and Def.ActorMultiVertex or Def.Quad) { Name = "Fill", Texture = isMiniPie and THEME:GetPathG("", "_thick circle (doubleres)") or nil, InitCommand = function(self)
+			if isMiniPie then
+				self:SetDrawState({Mode = "DrawMode_Fan"})
+				self:SetVertices(miniPieVertices(0))
+				self:zoom(miniProgressBarZoom):diffuse(accentColor):diffusealpha(0.8)
 			else self:halign(0):x(-miniBarW / 2):zoomto(0, miniBarH):diffuse(accentColor):diffusealpha(0.8) end
 		end,
 			UpdateMiniBarCommand = function(self)
 				if miniSongLen <= 0 then return end
 				local progress = math.max(0, math.min(GAMESTATE:GetSongPosition():GetMusicSeconds() / miniSongLen, 1))
-				if isMiniPie then self:cropright(1 - progress)
+				if isMiniPie then self:SetVertices(miniPieVertices(progress))
 				else self:zoomto(miniBarW * progress, miniBarH) end
 			end },
 		LoadFont("Common Normal") .. { Name = "TimeRemaining", InitCommand = function(self) self:y(isMiniPie and 21 or 9):zoom(0.3):halign(0.5):diffuse(dimText) end,

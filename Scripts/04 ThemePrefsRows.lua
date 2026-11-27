@@ -288,6 +288,16 @@ local HVPrefRows = {
 		Choices = {"Top", "Bottom", "Off"},
 		Values = {"Top", "Bottom", "Off"},
 	},
+	HV_MiniProgressBar = {
+		Default = true,
+		Choices = {"Off", "On"},
+		Values = {false, true},
+	},
+	HV_MiniProgressBarType = {
+		Default = "Bar",
+		Choices = {"Bar", "Circle"},
+		Values = {"Bar", "Circle"},
+	},
 	HV_ShowInGameLeaderboard = {
 		Default = "Off",
 		Choices = {"Off", "Local", "Online"},

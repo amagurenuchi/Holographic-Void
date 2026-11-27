@@ -68,7 +68,7 @@ local categoryOptions = {
 		"HV_MinimalisticMode", "HV_EvaluationScreenToggle", "HV_ShowJudgment", "HV_JudgmentAnimation", "HV_RecentJudgmentDisplay",
 		"HV_PrioritizeLowerJudgements", "HV_DisplayLowerJudgementOffset", "HV_OffsetDisplayJudgement", "HV_ShowCombo",
 		"HV_ComboAnimation", "HV_ShowCurrentWife", "HV_ShowJudgeCounter", "HV_JudgeCounterMode", "HV_ShowNGIndicator",
-		"HV_ShowPlayerInfo", "HV_ProgressBarPosition", "HV_MiniProgressBar", "HV_ShowInGameLeaderboard", "HV_ShowNPS",
+		"HV_ShowPlayerInfo", "HV_ProgressBarPosition", "HV_MiniProgressBar", "HV_MiniProgressBarType", "HV_ShowInGameLeaderboard", "HV_ShowNPS",
 		"HV_ShowSSR", "HV_NPSWindowSize", "HV_ShowNPSGraph", "HV_ErrorBarMode", "HV_ErrorBarColoringMode", "HV_ShowMean",
 		"HV_ScoreDisplayMode", "HV_CenteredScoreDecimals", "HV_ShowMeasureLines", "HV_ComboBreakHighlight", "HV_ShowPacemakerGraph", "HV_UseCustomGrades",
 	},
