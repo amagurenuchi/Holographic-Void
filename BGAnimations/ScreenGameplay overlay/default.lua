@@ -731,14 +731,14 @@ local miniProgressBarZoom = gameplaySize("MiniProgressBarZoom")
 local isMiniPie = miniProgressBarType == "Circle"
 if isMiniPie then miniBarW, miniBarH = 24, 24 else miniBarW = miniBarW * miniProgressBarZoom end
 local function miniPieVertices(progress)
-	local vertices = {{ {0, 0, 0}, {0.5, 0.5}, {1, 1, 1, 1} }}
+	local white = {1, 1, 1, 1}
+	local vertices = {{{0, 0, 0}, white}}
 	local segments = math.max(1, math.ceil(progress * 64))
 	for i = 0, segments do
 		local angle = -math.pi / 2 + (math.pi * 2 * progress * i / segments)
 		vertices[#vertices + 1] = {
 			{math.cos(angle) * miniBarW / 2, math.sin(angle) * miniBarH / 2, 0},
-			{0.5 + math.cos(angle) * 0.5, 0.5 + math.sin(angle) * 0.5},
-			{1, 1, 1, 1}
+			white
 		}
 	end
 	return vertices
@@ -763,7 +763,7 @@ if miniProgressBarEnabled and not isSync then
 			if isMiniPie then self:zoomto(miniBarW * miniProgressBarZoom, miniBarH * miniProgressBarZoom):diffuse(color("0,0,0,0.3"))
 			else self:zoomto(miniBarW, miniBarH):diffuse(color("0,0,0,0.3")) end
 		end },
-		(isMiniPie and Def.ActorMultiVertex or Def.Quad) { Name = "Fill", Texture = isMiniPie and THEME:GetPathG("", "_thick circle (doubleres)") or nil, InitCommand = function(self)
+		(isMiniPie and Def.ActorMultiVertex or Def.Quad) { Name = "Fill", InitCommand = function(self)
 			if isMiniPie then
 				self:SetDrawState({Mode = "DrawMode_Fan"})
 				self:SetVertices(miniPieVertices(0))
